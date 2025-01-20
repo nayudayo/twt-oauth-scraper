@@ -1,10 +1,9 @@
-import { chromium, type Cookie, type Page } from 'playwright'
+import { chromium, type Cookie, type Page, type ElementHandle } from 'playwright'
 import fs from 'fs/promises'
 import path from 'path'
 import type { Tweet } from '@/types/scraper'
 
 const COOKIES_PATH = process.env.COOKIES_PATH || './data/cookies.json'
-const OUTPUT_PATH = './output/tweets.json'
 
 const SELECTORS = {
   twitterEmailInput: 'input[name="text"]',
@@ -97,38 +96,207 @@ async function handleLogin(page: Page, username: string, password: string) {
   }
 }
 
-// Add human-like behavior functions
-async function humanScroll(page: Page) {
-  // Random scroll speed and distance
-  const speed = Math.floor(Math.random() * (100 - 50) + 50)
-  const distance = Math.floor(Math.random() * (800 - 400) + 400)
-  await page.mouse.wheel(0, distance)
-  await page.waitForTimeout(speed)
+async function extractTweetTimestamp(tweet: ElementHandle): Promise<string | null> {
+  try {
+    const timestamp = await tweet.$eval('div.css-175oi2r.r-18u37iz.r-1wbh5a2.r-1ez5h0i > div > div.css-175oi2r.r-18u37iz.r-1q142lx > a > time', el => el.getAttribute('datetime'))
+    return timestamp
+  } catch {
+    return null
+  }
 }
 
-async function humanDelay() {
-  // Random delay between actions (0.5 to 2 seconds)
-  const delay = Math.floor(Math.random() * (2000 - 500) + 500)
-  await new Promise(resolve => setTimeout(resolve, delay))
+async function scrapeTweets(page: Page, username: string, isRepliesTab = false): Promise<Tweet[]> {
+  const tweets: Tweet[] = []
+  const seenTweetIds = new Set()
+  let lastHeight = 0
+  let noNewContentCount = 0
+  const MAX_NO_NEW_CONTENT_RETRIES = 5
+
+  console.log(`\nStarting tweet collection in ${isRepliesTab ? 'replies' : 'posts'} tab`)
+
+  while (noNewContentCount < MAX_NO_NEW_CONTENT_RETRIES) {
+    // Get all tweet containers with exact selector
+    const baseSelector = '#react-root > div > div > div.css-175oi2r.r-1f2l425.r-13qz1uu.r-417010.r-18u37iz > main > div > div > div > div.css-175oi2r.r-kemksi.r-1kqtdi0.r-1ua6aaf.r-th6na.r-1phboty.r-16y2uox.r-184en5c.r-1abdc3e.r-1lg4w6u.r-f8sm7e.r-13qz1uu.r-1ye8kvj > div > div:nth-child(3) > div > div > section > div > div'
+    const tweetElements = await page.$$(`${baseSelector} > div`)
+    
+    console.log(`\nFound ${tweetElements.length} tweet elements`)
+    const initialTweetCount = tweets.length
+    
+    for (const tweet of tweetElements) {
+      try {
+        // Log the HTML structure we're looking at
+        const html = await tweet.evaluate(el => el.outerHTML)
+        console.log('\nExamining tweet element:', html.substring(0, 500) + '...')
+
+        // Try to get tweet ID from either regular tweet or retweet
+        let tweetId = null
+        try {
+          console.log('Trying regular tweet selector: article')
+          const articleEl = await tweet.$('article')
+          if (articleEl) {
+            const articleHtml = await articleEl.evaluate(el => el.outerHTML)
+            console.log('Found article element:', articleHtml.substring(0, 200) + '...')
+            tweetId = await articleEl.getAttribute('aria-labelledby')
+            console.log('Found tweet ID:', tweetId)
+          }
+        } catch (error) {
+          console.log('Failed to get regular tweet ID:', error instanceof Error ? error.message : 'Unknown error')
+          // Try retweet selector
+          try {
+            console.log('Trying retweet selector: div.css-175oi2r.r-1adg3ll.r-1ny4l3l > div > article')
+            const retweetEl = await tweet.$('div.css-175oi2r.r-1adg3ll.r-1ny4l3l > div > article')
+            if (retweetEl) {
+              const retweetHtml = await retweetEl.evaluate(el => el.outerHTML)
+              console.log('Found retweet element:', retweetHtml.substring(0, 200) + '...')
+              tweetId = await retweetEl.getAttribute('aria-labelledby')
+              console.log('Found retweet ID:', tweetId)
+            }
+          } catch (error) {
+            console.log('Failed to get retweet ID:', error instanceof Error ? error.message : 'Unknown error')
+            continue
+          }
+        }
+
+        if (!tweetId || seenTweetIds.has(tweetId)) {
+          console.log('Skipping - no ID or duplicate tweet')
+          continue
+        }
+        seenTweetIds.add(tweetId)
+
+        // Extract tweet text with improved selector
+        const text = await tweet.evaluate((el) => {
+          const tweetTextDiv = el.querySelector('div[data-testid="tweetText"]')
+          if (!tweetTextDiv) return null
+
+          const parts = []
+          // Process all direct children
+          for (const child of tweetTextDiv.children) {
+            if (child.tagName === 'SPAN') {
+              // Handle regular text spans
+              if (child.classList.contains('css-1jxf684')) {
+                parts.push(child.textContent)
+              }
+              // Handle hashtag/mention links
+              const link = child.querySelector('a')
+              if (link) {
+                parts.push(link.textContent)
+              }
+            } else if (child.tagName === 'IMG') {
+              // Handle emojis
+              parts.push(child.getAttribute('alt') || '🔄')
+            }
+          }
+          return parts.join(' ').trim()
+        }).catch(() => null)
+
+        console.log('Extracted text:', text)
+
+        // Get handle for filtering replies
+        const handle = await tweet.evaluate(el => {
+          const handleSpan = el.querySelector('div.css-175oi2r.r-18u37iz.r-1wbh5a2.r-1ez5h0i > div > div.css-175oi2r.r-1wbh5a2.r-dnmrzs > a > div > span')
+          return handleSpan?.textContent || null
+        })
+        console.log('Tweet handle:', handle)
+
+        // Only process tweets from the user in replies tab
+        if (isRepliesTab && handle !== `@${username}`) {
+          console.log('Skipping - not a user reply')
+          continue
+        }
+
+        // Get timestamp
+        const timestamp = await extractTweetTimestamp(tweet)
+        console.log('Tweet timestamp:', timestamp)
+
+        tweets.push({
+          id: tweetId,
+          text,
+          metrics: {
+            likes: null,
+            retweets: null,
+            views: null
+          },
+          images: [],
+          timestamp,
+          isReply: isRepliesTab
+        })
+        console.log('Successfully processed tweet\n---')
+      } catch (error) {
+        console.error('Error processing tweet:', error instanceof Error ? error.message : 'Unknown error')
+        continue
+      }
+    }
+
+    // Check if we got any new tweets
+    if (tweets.length === initialTweetCount) {
+      noNewContentCount++
+      console.log(`No new tweets found. Retry attempt ${noNewContentCount}/${MAX_NO_NEW_CONTENT_RETRIES}`)
+    } else {
+      noNewContentCount = 0
+    }
+
+    // Scroll down to load more tweets
+    await page.evaluate(() => window.scrollBy(0, 1000))
+    await page.waitForTimeout(3000) // Wait longer for content to load
+
+    // Get the new page height
+    const newHeight = await page.evaluate(() => document.documentElement.scrollHeight)
+    if (newHeight === lastHeight && noNewContentCount >= MAX_NO_NEW_CONTENT_RETRIES) {
+      console.log('Reached the end of the timeline - no more scrolling possible')
+      break
+    }
+    lastHeight = newHeight
+
+    console.log(`Collected ${tweets.length} tweets so far...`)
+  }
+
+  console.log(`\nFinished collecting tweets in ${isRepliesTab ? 'replies' : 'posts'} tab`)
+  console.log(`Total unique tweets collected: ${tweets.length}`)
+  return tweets
 }
 
-async function moveMouseRandomly(page: Page) {
-  const x = Math.floor(Math.random() * 800)
-  const y = Math.floor(Math.random() * 600)
-  await page.mouse.move(x, y, { steps: 5 })
-}
-
-// Add new function to save simplified tweet data
-async function saveSimplifiedTweets(username: string, tweets: Tweet[]) {
-  const simplifiedTweets = tweets.map(tweet => ({
-    text: tweet.text,
-    timestamp: tweet.timestamp
-  }))
+async function navigateToReplies(page: Page) {
+  console.log('Navigating to replies tab...')
+  const repliesTabSelector = '#react-root > div > div > div.css-175oi2r.r-1f2l425.r-13qz1uu.r-417010.r-18u37iz > main > div > div > div > div > div > div:nth-child(3) > div > div > div:nth-child(2) > nav > div > div.css-175oi2r.r-1adg3ll.r-16y2uox.r-1wbh5a2.r-1pi2tsx > div > div:nth-child(2) > a > div > div'
   
-  const outputPath = `./output/${username}_tweets.json`
-  await fs.mkdir(path.dirname(outputPath), { recursive: true })
-  await fs.writeFile(outputPath, JSON.stringify(simplifiedTweets, null, 2))
-  console.log(`Simplified tweets saved to ${outputPath}`)
+  await page.waitForSelector(repliesTabSelector)
+  await page.click(repliesTabSelector)
+  await page.waitForTimeout(2000) // Wait for content to load
+}
+
+export async function scrapeUserContent(page: Page, username: string): Promise<Tweet[]> {
+  console.log('Scraping posts...')
+  const posts = await scrapeTweets(page, username, false)
+  
+  // Then navigate to replies tab
+  await navigateToReplies(page)
+  
+  // Reset scroll position
+  await page.evaluate(() => window.scrollTo(0, 0))
+  
+  // Now scrape replies
+  console.log('Scraping replies...')
+  const replies = await scrapeTweets(page, username, true)
+  
+  // Combine posts and replies
+  return [...posts, ...replies]
+}
+
+export async function scrapeProfile(page: Page) {
+  try {
+    console.log('Starting profile scrape...')
+    
+    // Get profile info
+    const name = await page.$eval('[data-testid="primaryColumn"] [data-testid="UserName"]', (el: HTMLElement) => el.textContent).catch(() => null)
+    const bio = await page.$eval('[data-testid="UserDescription"]', (el: HTMLElement) => el.textContent).catch(() => null)
+    const followersCount = await page.$eval('[data-testid="primaryColumn"] [href$="/followers"]', (el: HTMLElement) => el.textContent).catch(() => null)
+    const followingCount = await page.$eval('[data-testid="primaryColumn"] [href$="/following"]', (el: HTMLElement) => el.textContent).catch(() => null)
+    
+    return { name, bio, followersCount, followingCount }
+  } catch (error) {
+    console.error('Error in scrapeProfile:', error)
+    throw error
+  }
 }
 
 export async function initScraper() {
@@ -223,222 +391,6 @@ export async function initScraper() {
     }
   } catch (error) {
     console.error('Fatal error in initScraper:', error)
-    throw error
-  }
-}
-
-export async function scrapeProfile(page: Page) {
-  try {
-    console.log('Starting profile scrape...')
-    
-    // Get profile info
-    const name = await page.$eval('[data-testid="primaryColumn"] [data-testid="UserName"]', (el: HTMLElement) => el.textContent).catch(() => null)
-    const bio = await page.$eval('[data-testid="UserDescription"]', (el: HTMLElement) => el.textContent).catch(() => null)
-    const followersCount = await page.$eval('[data-testid="primaryColumn"] [href$="/followers"]', (el: HTMLElement) => el.textContent).catch(() => null)
-    const followingCount = await page.$eval('[data-testid="primaryColumn"] [href$="/following"]', (el: HTMLElement) => el.textContent).catch(() => null)
-    
-    return { name, bio, followersCount, followingCount }
-  } catch (error) {
-    console.error('Error in scrapeProfile:', error)
-    throw error
-  }
-}
-
-export async function scrapeTweets(
-  page: Page,
-  onProgress?: (processed: number) => Promise<void>
-) {
-  try {
-    console.log('Starting tweet scrape...')
-    const tweets = []
-    const seenTweetIds = new Set()
-    let lastHeight = 0
-    let processedCount = 0
-    let noNewContentCount = 0
-    const MAX_NO_NEW_CONTENT_RETRIES = 5
-
-    // Get username from URL
-    const username = page.url().split('/').pop()
-    if (!username) {
-      throw new Error('Could not determine username from URL')
-    }
-
-    // Ensure output directory exists
-    await fs.mkdir(path.dirname(OUTPUT_PATH), { recursive: true })
-
-    while (true) {
-      // Add random mouse movement
-      await moveMouseRandomly(page)
-      await humanDelay()
-
-      // Get all tweet containers
-      const baseSelector = '#react-root > div > div > div.css-175oi2r.r-1f2l425.r-13qz1uu.r-417010.r-18u37iz > main > div > div > div > div.css-175oi2r.r-kemksi.r-1kqtdi0.r-1ua6aaf.r-th6na.r-1phboty.r-16y2uox.r-184en5c.r-1abdc3e.r-1lg4w6u.r-f8sm7e.r-13qz1uu.r-1ye8kvj > div > div:nth-child(3) > div > div > section > div > div'
-      
-      // Get current tweets on the page
-      const tweetElements = await page.$$(`${baseSelector} > div`)
-      const initialTweetCount = tweets.length
-      
-      for (const tweet of tweetElements) {
-        try {
-          // Log the HTML structure we're looking at
-          const html = await tweet.evaluate(el => el.outerHTML)
-          console.log('\nExamining tweet element:', html.substring(0, 500) + '...')
-
-          // Try to get tweet ID from either regular tweet or retweet
-          let tweetId = null
-          try {
-            // Try regular tweet first
-            console.log('Trying regular tweet selector: article')
-            const articleEl = await tweet.$('article')
-            if (articleEl) {
-              const articleHtml = await articleEl.evaluate(el => el.outerHTML)
-              console.log('Found article element:', articleHtml.substring(0, 200) + '...')
-              tweetId = await articleEl.getAttribute('aria-labelledby')
-              console.log('Found tweet ID:', tweetId)
-            } else {
-              console.log('No article element found')
-            }
-          } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-            console.log('Failed to get regular tweet ID:', errorMessage)
-            // If that fails, try retweet selector
-            try {
-              console.log('Trying retweet selector: div.css-175oi2r.r-1adg3ll.r-1ny4l3l > div > article')
-              const retweetEl = await tweet.$('div.css-175oi2r.r-1adg3ll.r-1ny4l3l > div > article')
-              if (retweetEl) {
-                const retweetHtml = await retweetEl.evaluate(el => el.outerHTML)
-                console.log('Found retweet element:', retweetHtml.substring(0, 200) + '...')
-                tweetId = await retweetEl.getAttribute('aria-labelledby')
-                console.log('Found retweet ID:', tweetId)
-              } else {
-                console.log('No retweet element found')
-              }
-            } catch (error: unknown) {
-              const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-              console.log('Failed to get retweet ID:', errorMessage)
-              console.log('Could not find tweet ID - skipping')
-              continue
-            }
-          }
-
-          if (seenTweetIds.has(tweetId)) continue
-          seenTweetIds.add(tweetId)
-
-          // Extract tweet content with exact selectors based on the HTML structure
-          const tweetData = {
-            id: tweetId,
-            text: await tweet.evaluate((el) => {
-              // Find the div with data-testid="tweetText"
-              const tweetTextDiv = el.querySelector('div[data-testid="tweetText"]')
-              if (!tweetTextDiv) return null
-
-              const parts = []
-              // Process all direct children
-              for (const child of tweetTextDiv.children) {
-                if (child.tagName === 'SPAN') {
-                  // Handle regular text spans with css-1jxf684 class
-                  if (child.classList.contains('css-1jxf684')) {
-                    parts.push(child.textContent)
-                  }
-                  // Handle hashtag/mention links
-                  const link = child.querySelector('a')
-                  if (link) {
-                    parts.push(link.textContent)
-                  }
-                } else if (child.tagName === 'IMG') {
-                  // Handle emojis
-                  parts.push(child.getAttribute('alt') || '🔄')
-                }
-              }
-              return parts.join(' ').trim()
-            }).catch(() => null),
-            images: await tweet.evaluate((el) => {
-              const images = el.querySelectorAll('div.r-1p0dtai img[src*="/media/"]')
-              return Array.from(images).map(img => (img as HTMLImageElement).src)
-            }).catch(() => []),
-            timestamp: await tweet.$eval('time', el => el.getAttribute('datetime')).catch(() => null),
-            metrics: {
-              likes: await tweet.$eval('[data-testid="like"]', el => el.getAttribute('aria-label')).catch(() => '0'),
-              retweets: await tweet.$eval('[data-testid="retweet"]', el => el.getAttribute('aria-label')).catch(() => '0'),
-              views: await tweet.$eval('[data-testid="app-text-transition-container"]', el => el.textContent).catch(() => '0')
-            }
-          }
-
-          tweets.push(tweetData)
-          processedCount++
-          
-          // Report progress
-          if (onProgress) {
-            await onProgress(processedCount)
-          }
-
-          // Save both full and simplified data
-          await fs.writeFile(OUTPUT_PATH, JSON.stringify(tweets, null, 2))
-          await saveSimplifiedTweets(username, tweets)
-
-          // Random delay between processing tweets
-          await humanDelay()
-        } catch (error) {
-          console.error('Error processing tweet:', error)
-          continue
-        }
-      }
-
-      // Check if we got any new tweets in this batch
-      if (tweets.length === initialTweetCount) {
-        noNewContentCount++
-        console.log(`No new tweets found. Retry attempt ${noNewContentCount}/${MAX_NO_NEW_CONTENT_RETRIES}`)
-        
-        if (noNewContentCount >= MAX_NO_NEW_CONTENT_RETRIES) {
-          console.log('No new tweets after multiple retries. Assuming we reached the end.')
-          break
-        }
-      } else {
-        // Reset the counter if we found new tweets
-        noNewContentCount = 0
-      }
-
-      // Perform multiple small scrolls instead of one large scroll
-      for (let i = 0; i < 3; i++) {
-        await humanScroll(page)
-        await page.waitForTimeout(1000) // Wait between small scrolls
-      }
-      
-      // Wait longer for content to load
-      await page.waitForTimeout(3000)
-
-      // Get the new page height
-      const newHeight = await page.evaluate(() => document.documentElement.scrollHeight)
-      
-      // If we haven't scrolled further after multiple attempts, we've reached the end
-      if (newHeight === lastHeight && noNewContentCount >= MAX_NO_NEW_CONTENT_RETRIES) {
-        console.log('Reached the end of the timeline - no more scrolling possible')
-        break
-      }
-      
-      lastHeight = newHeight
-      
-      // Move mouse to a random tweet (looks more human)
-      if (tweetElements.length > 0) {
-        const randomTweet = tweetElements[Math.floor(Math.random() * tweetElements.length)]
-        const box = await randomTweet.boundingBox()
-        if (box) {
-          await page.mouse.move(
-            box.x + Math.random() * box.width,
-            box.y + Math.random() * box.height,
-            { steps: 10 }
-          )
-        }
-      }
-
-      // Log progress
-      console.log(`Collected ${tweets.length} tweets so far...`)
-    }
-
-    console.log(`Finished scraping. Total tweets collected: ${tweets.length}`)
-    return tweets
-  } catch (error) {
-    console.error('Error in scrapeTweets:', error)
     throw error
   }
 } 

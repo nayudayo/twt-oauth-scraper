@@ -17,9 +17,22 @@ export interface Tweet {
   timestamp: string | null
   metrics: TweetMetrics
   images: (string | null)[]
+  isReply: boolean
 }
 
 export interface ScrapedData {
   profile: TwitterProfile
   tweets: Tweet[]
+}
+
+export interface EventData {
+  error?: string
+  progress?: number
+  status?: string
+  data?: ScrapedData
+}
+
+export interface WorkerMessage {
+  type: 'progress' | 'error' | 'complete'
+  data: EventData
 } 

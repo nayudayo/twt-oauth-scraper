@@ -1,4 +1,4 @@
-import NextAuth, { AuthOptions } from "next-auth"
+import NextAuth from "next-auth"
 import TwitterProvider from "next-auth/providers/twitter"
 import { JWT } from "next-auth/jwt"
 import { Account, Profile } from "next-auth"
@@ -23,7 +23,7 @@ interface TwitterProfile extends Profile {
   }
 }
 
-export const authOptions: AuthOptions = {
+const handler = NextAuth({
   providers: [
     TwitterProvider({
       clientId: process.env.TWITTER_CLIENT_ID!,
@@ -54,8 +54,6 @@ export const authOptions: AuthOptions = {
     },
   },
   debug: true,
-}
-
-const handler = NextAuth(authOptions)
+})
 
 export { handler as GET, handler as POST } 
