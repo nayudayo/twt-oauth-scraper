@@ -10,6 +10,11 @@ const playwright_1 = require("playwright");
 const promises_1 = __importDefault(require("fs/promises"));
 const path_1 = __importDefault(require("path"));
 const COOKIES_PATH = process.env.COOKIES_PATH || './data/cookies.json';
+// Add output directory constants
+const OUTPUT_DIR = './output';
+const LOGS_DIR = `${OUTPUT_DIR}/logs`;
+const DATA_DIR = `${OUTPUT_DIR}/data`;
+const STATS_DIR = `${OUTPUT_DIR}/stats`;
 const SELECTORS = {
     twitterEmailInput: 'input[name="text"]',
     twitterUsernameInput: '#id__wdc4n7hrju',
@@ -104,7 +109,142 @@ async function extractTweetTimestamp(tweet) {
         return null;
     }
 }
-async function scrapeTweets(page, username, isRepliesTab = false) {
+async function countTotalTweets(page, username) {
+    console.log('Starting pre-scan to count total tweets...');
+    const counts = { posts: 0, replies: 0 };
+    const seenTweetIds = new Set();
+    // Count posts first
+    console.log('Counting posts...');
+    let lastHeight = 0;
+    let noNewContentCount = 0;
+    while (noNewContentCount < 3) {
+        const tweetElements = await page.$$('article[data-testid="tweet"]');
+        let newTweetsFound = 0;
+        for (const tweet of tweetElements) {
+            const tweetId = await tweet.getAttribute('data-testid');
+            if (tweetId && !seenTweetIds.has(tweetId)) {
+                seenTweetIds.add(tweetId);
+                newTweetsFound++;
+            }
+        }
+        counts.posts = seenTweetIds.size;
+        console.log(`Found ${counts.posts} unique posts so far...`);
+        // Quick scroll
+        await page.evaluate(() => window.scrollBy(0, 1000));
+        await page.waitForTimeout(1000);
+        const newHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+        if (newHeight === lastHeight && newTweetsFound === 0) {
+            noNewContentCount++;
+        }
+        else {
+            noNewContentCount = 0;
+        }
+        lastHeight = newHeight;
+    }
+    // Navigate to replies
+    await navigateToReplies(page);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    // Reset counters
+    lastHeight = 0;
+    noNewContentCount = 0;
+    seenTweetIds.clear(); // Reset for replies
+    // Count replies
+    console.log('Counting replies...');
+    while (noNewContentCount < 3) {
+        const replyElements = await page.$$('article[data-testid="tweet"]');
+        let newRepliesFound = 0;
+        for (const reply of replyElements) {
+            const replyId = await reply.getAttribute('data-testid');
+            if (replyId && !seenTweetIds.has(replyId)) {
+                seenTweetIds.add(replyId);
+                newRepliesFound++;
+            }
+        }
+        counts.replies = seenTweetIds.size;
+        console.log(`Found ${counts.replies} unique replies so far...`);
+        // Quick scroll
+        await page.evaluate(() => window.scrollBy(0, 1000));
+        await page.waitForTimeout(1000);
+        const newHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+        if (newHeight === lastHeight && newRepliesFound === 0) {
+            noNewContentCount++;
+        }
+        else {
+            noNewContentCount = 0;
+        }
+        lastHeight = newHeight;
+    }
+    // Return to posts tab
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.goto(`https://twitter.com/${username}`, { waitUntil: 'domcontentloaded' });
+    console.log('Pre-scan complete:', counts);
+    return counts;
+}
+// Add output handling functions
+async function ensureOutputDirs() {
+    await promises_1.default.mkdir(OUTPUT_DIR, { recursive: true });
+    await promises_1.default.mkdir(LOGS_DIR, { recursive: true });
+    await promises_1.default.mkdir(DATA_DIR, { recursive: true });
+    await promises_1.default.mkdir(STATS_DIR, { recursive: true });
+}
+async function saveScrapedData(username, data, stats) {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    // Save full data
+    const dataPath = path_1.default.join(DATA_DIR, `${username}_${timestamp}.json`);
+    await promises_1.default.writeFile(dataPath, JSON.stringify(data, null, 2));
+    // Save simplified data
+    const simplifiedData = data.map(tweet => ({
+        text: tweet.text,
+        timestamp: tweet.timestamp,
+        isReply: tweet.isReply
+    }));
+    const simplePath = path_1.default.join(DATA_DIR, `${username}_${timestamp}_simple.json`);
+    await promises_1.default.writeFile(simplePath, JSON.stringify(simplifiedData, null, 2));
+    // Save stats
+    const statsPath = path_1.default.join(STATS_DIR, `${username}_${timestamp}_stats.json`);
+    await promises_1.default.writeFile(statsPath, JSON.stringify(stats, null, 2));
+    return {
+        dataPath,
+        simplePath,
+        statsPath
+    };
+}
+// Modify scrapeUserContent to use new output handling
+async function scrapeUserContent(page, username) {
+    await ensureOutputDirs();
+    const startTime = Date.now();
+    // Get total counts first
+    const totals = await countTotalTweets(page, username);
+    console.log(`Starting scrape for ${totals.posts} posts and ${totals.replies} replies...`);
+    // Scrape posts (Phase 1)
+    console.log('Phase 1: Scraping posts...');
+    const posts = await scrapeTweets(page, username, false, {
+        total: totals.posts,
+        phase: 'posts'
+    });
+    // Navigate to replies tab
+    await navigateToReplies(page);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    // Scrape replies (Phase 2)
+    console.log('Phase 2: Scraping replies...');
+    const replies = await scrapeTweets(page, username, true, {
+        total: totals.replies,
+        phase: 'replies'
+    });
+    const allTweets = [...posts, ...replies];
+    // Save data with stats
+    const stats = {
+        username,
+        totalPosts: posts.length,
+        totalReplies: replies.length,
+        duration: Date.now() - startTime,
+        timestamp: new Date().toISOString()
+    };
+    const paths = await saveScrapedData(username, allTweets, stats);
+    console.log('Data saved:', paths);
+    return allTweets;
+}
+async function scrapeTweets(page, username, isRepliesTab = false, progress) {
     const tweets = [];
     const seenTweetIds = new Set();
     let lastHeight = 0;
@@ -239,6 +379,10 @@ async function scrapeTweets(page, username, isRepliesTab = false) {
     }
     console.log(`\nFinished collecting tweets in ${isRepliesTab ? 'replies' : 'posts'} tab`);
     console.log(`Total unique tweets collected: ${tweets.length}`);
+    // Add progress logging
+    if (progress) {
+        console.log(`Progress: ${tweets.length}/${progress.total} ${progress.phase}`);
+    }
     return tweets;
 }
 async function navigateToReplies(page) {
@@ -247,19 +391,6 @@ async function navigateToReplies(page) {
     await page.waitForSelector(repliesTabSelector);
     await page.click(repliesTabSelector);
     await page.waitForTimeout(2000); // Wait for content to load
-}
-async function scrapeUserContent(page, username) {
-    console.log('Scraping posts...');
-    const posts = await scrapeTweets(page, username, false);
-    // Then navigate to replies tab
-    await navigateToReplies(page);
-    // Reset scroll position
-    await page.evaluate(() => window.scrollTo(0, 0));
-    // Now scrape replies
-    console.log('Scraping replies...');
-    const replies = await scrapeTweets(page, username, true);
-    // Combine posts and replies
-    return [...posts, ...replies];
 }
 async function scrapeProfile(page) {
     try {
