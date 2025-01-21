@@ -1,0 +1,9 @@
+---
+description: ui component handling
+globs: 
+---
+# do not alter the ui components anymore
+- should be in [page.tsx](mdc:src/app/page.tsx) and [layout.tsx](mdc:src/app/layout.tsx)
+
+# do not remove too much of the code unless it is necessary. and if it is necessary, ask for permission first
+- you are notorious in removing 90% of the code and replacing it without checking the context
