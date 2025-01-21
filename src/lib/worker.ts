@@ -1,5 +1,6 @@
 import { parentPort, workerData } from 'worker_threads'
 import { initScraper, scrapeProfile, scrapeUserContent } from './scraper'
+import { analyzePersonality } from './openai'
 
 if (!parentPort) {
   throw new Error('This file must be run as a worker thread')
@@ -22,11 +23,11 @@ async function runScraper() {
     page = scraper.page
     console.log('✅ Browser initialized')
     
-    parentPort!.postMessage({ progress: 15, status: 'Browser ready' })
+    parentPort!.postMessage({ progress: 20, status: 'Browser ready' })
 
     // Navigate to profile
     console.log('🔄 Navigating to profile:', username)
-    parentPort!.postMessage({ progress: 25, status: 'Navigating to profile...' })
+    parentPort!.postMessage({ progress: 30, status: 'Navigating to profile...' })
     
     // Try both twitter.com and x.com domains
     try {
@@ -35,7 +36,7 @@ async function runScraper() {
       await page.goto(`https://x.com/${username}`, { waitUntil: 'domcontentloaded' })
     }
     
-    parentPort!.postMessage({ progress: 35, status: 'Waiting for page load...' })
+    parentPort!.postMessage({ progress: 40, status: 'Waiting for page load...' })
     console.log('⏳ Waiting for page load...')
     
     // Wait for essential profile elements
@@ -44,33 +45,73 @@ async function runScraper() {
 
     // Get profile data
     console.log('📊 Extracting profile data...')
-    parentPort!.postMessage({ progress: 45, status: 'Extracting profile data...' })
+    parentPort!.postMessage({ progress: 50, status: 'Extracting profile data...' })
     const profile = await scrapeProfile(page)
     console.log('✅ Profile data extracted:', profile)
-    parentPort!.postMessage({ progress: 60, status: 'Profile data extracted' })
 
     // Get tweets and replies
     console.log('🐦 Starting content collection...')
-    parentPort!.postMessage({ progress: 65, status: 'Collecting posts...' })
+    parentPort!.postMessage({ 
+      progress: 60, 
+      status: 'Starting content collection...',
+      phase: 'posts',
+      scanProgress: { phase: 'posts', count: 0 }
+    })
+    
     const tweets = await scrapeUserContent(page, username)
-    console.log(`✅ Collected ${tweets.length} items (${tweets.filter(t => !t.isReply).length} posts, ${tweets.filter(t => t.isReply).length} replies)`)
-    parentPort!.postMessage({ progress: 90, status: 'Content collected' })
+    
+    // Calculate final stats
+    const postsCount = tweets.filter(t => !t.isReply).length
+    const repliesCount = tweets.filter(t => t.isReply).length
+    console.log(`✅ Collected ${tweets.length} items (${postsCount} posts, ${repliesCount} replies)`)
+    
+    parentPort!.postMessage({ 
+      progress: 90, 
+      status: 'Content collection complete',
+      scanProgress: { phase: 'complete', count: tweets.length }
+    })
 
     // Clean up
     console.log('🧹 Cleaning up...')
-    parentPort!.postMessage({ progress: 95, status: 'Cleaning up...' })
+    parentPort!.postMessage({ 
+      progress: 95, 
+      status: 'Cleaning up...',
+      scanProgress: { phase: 'complete', count: tweets.length }
+    })
     await browser.close()
     console.log('✅ Browser closed')
     
     // Send final data
     console.log('🏁 Sending final data...')
+    
+    // Perform personality analysis
+    console.log('🧠 Analyzing personality...')
+    parentPort!.postMessage({ 
+      progress: 95, 
+      status: 'Analyzing personality...',
+      scanProgress: { phase: 'analysis', count: tweets.length }
+    })
+    
+    const analysis = await analyzePersonality(tweets, profile)
+    
     parentPort!.postMessage({ 
       progress: 100,
       status: 'Complete',
+      type: 'complete',
+      tweets: tweets,
       data: {
         profile,
-        tweets
-      }
+        tweets,
+        analysis
+      },
+      scanProgress: { phase: 'complete', count: tweets.length }
+    })
+
+    // Add explicit completion message
+    parentPort!.postMessage({
+      type: 'done',
+      progress: 100,
+      status: 'Scraping and analysis completed'
     })
 
   } catch (error) {

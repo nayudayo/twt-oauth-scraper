@@ -30,6 +30,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  let jobId: string | undefined;
+
   try {
     console.log('🔑 Getting auth token...')
     const token = await getToken({ req })
@@ -42,7 +44,17 @@ export async function POST(req: NextRequest) {
     console.log('✅ Token found for user:', token.username)
 
     // Create a unique job ID
-    const jobId = `${token.username}-${Date.now()}`
+    jobId = `${token.username}-${Date.now()}`
+
+    // Handle request abortion
+    req.signal.addEventListener('abort', async () => {
+      console.log('Request aborted, cleaning up job:', jobId)
+      if (jobId) {
+        await workerPool.terminateJob(jobId)
+      }
+      await send({ error: 'Operation cancelled by user', progress: 0 })
+      await writer.close()
+    })
 
     // Add the job to the worker pool
     await workerPool.addJob({
@@ -59,6 +71,9 @@ export async function POST(req: NextRequest) {
 
   } catch (error) {
     console.error('❌ Error:', error)
+    if (jobId) {
+      await workerPool.terminateJob(jobId)
+    }
     await send({ 
       error: error instanceof Error ? error.message : 'Failed to start scraping',
       progress: 0

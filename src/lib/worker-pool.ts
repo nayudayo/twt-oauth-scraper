@@ -111,4 +111,29 @@ export class WorkerPool {
       activeJobs: Array.from(this.activeJobs.keys())
     }
   }
+
+  public async terminateJob(jobId: string): Promise<void> {
+    // Find the active job
+    const activeJob = this.activeJobs.get(jobId)
+    if (activeJob) {
+      console.log(`Terminating job ${jobId}`)
+      const { worker } = activeJob
+      
+      // Terminate the worker
+      await worker.terminate()
+      
+      // Clean up
+      this.workers = this.workers.filter(w => w !== worker)
+      this.activeJobs.delete(jobId)
+      
+      // Remove from queue if present
+      this.queue = this.queue.filter(job => job.id !== jobId)
+      
+      console.log(`Job ${jobId} terminated`)
+    } else {
+      // If job is in queue, remove it
+      this.queue = this.queue.filter(job => job.id !== jobId)
+      console.log(`Job ${jobId} removed from queue`)
+    }
+  }
 } 
