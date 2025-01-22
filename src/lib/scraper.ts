@@ -425,12 +425,21 @@ export async function initScraper() {
       throw new Error('Scraper credentials not found in environment variables')
     }
 
-    console.log('Launching browser in headful mode...')
+    console.log('Launching browser in headless mode...')
     const browser = await chromium.launch({ 
-      headless: false,
+      headless: true,
       args: [
         '--disable-blink-features=AutomationControlled',
         '--disable-features=IsolateOrigins,site-per-process',
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu',
+        '--hide-scrollbars',
+        '--mute-audio'
       ]
     })
     console.log('Browser launched successfully')
@@ -446,7 +455,13 @@ export async function initScraper() {
       hasTouch: false,
       locale: 'en-US',
       timezoneId: 'America/New_York',
-      permissions: ['geolocation']
+      permissions: ['geolocation'],
+      colorScheme: 'dark',
+      isMobile: false,
+      javaScriptEnabled: true,
+      bypassCSP: true,
+      ignoreHTTPSErrors: true,
+      acceptDownloads: false
     })
     console.log('Browser context created')
 

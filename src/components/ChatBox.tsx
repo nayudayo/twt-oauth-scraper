@@ -170,6 +170,11 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
       
       const data = await response.json()
       setAnalysis(data)
+      
+      // Save to localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`analysis_${profile.name}`, JSON.stringify(data))
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {

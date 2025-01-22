@@ -42,15 +42,40 @@ Tweet History:
 ${tweetTexts}
 
 Create a personality analysis in the following format:
-1. A brief summary of the person
-2. Key personality traits (with scores 1-10 and brief explanations)
-3. Main interests and topics they engage with
-4. Communication style analysis
-5. Recurring topics and themes
-6. Overall emotional tone
-7. Personalized recommendations for engagement
 
-Focus on being insightful but respectful. Avoid making assumptions about personal details not evident in the data.`;
+1. Summary:
+A brief summary of the person (2-3 sentences)
+
+2. Personality Traits:
+List 4-6 key traits with scores and explanations
+Example format:
+Openness 8/10 - Shows high curiosity and interest in new ideas
+Enthusiasm 7/10 - Frequently expresses excitement about topics
+
+3. Interests & Topics:
+List 5-8 clear interests/topics they frequently engage with
+Format each interest on a new line with a bullet point
+Example:
+- Cryptocurrency Trading
+- NFT Collections
+- Blockchain Technology
+
+4. Communication Style:
+Describe their typical way of expressing themselves (2-3 sentences)
+
+5. Topics & Themes:
+List recurring topics/themes in their tweets
+Format as bullet points
+
+6. Emotional Tone:
+Describe their emotional expression style (1-2 sentences)
+
+7. Recommendations:
+List 3-4 specific ways to engage with this person
+Format as bullet points
+
+Focus on being insightful but respectful. Avoid making assumptions about personal details not evident in the data.
+Ensure each section is clearly formatted and separated by newlines.`;
     try {
         const completion = await openai.chat.completions.create({
             model: "gpt-4o-mini",
@@ -65,7 +90,7 @@ Focus on being insightful but respectful. Avoid making assumptions about persona
                 }
             ],
             temperature: 0.7,
-            max_tokens: 1000
+            max_tokens: 1500
         });
         const response = completion.choices[0].message.content;
         if (!response) {

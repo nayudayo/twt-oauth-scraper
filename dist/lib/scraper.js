@@ -366,9 +366,9 @@ async function initScraper() {
             console.error('Missing credentials:', { username: !!username, password: !!password });
             throw new Error('Scraper credentials not found in environment variables');
         }
-        console.log('Launching browser in headful mode...');
+        console.log('Launching browser in headless mode...');
         const browser = await playwright_1.chromium.launch({
-            headless: false,
+            headless: true,
             args: [
                 '--disable-blink-features=AutomationControlled',
                 '--disable-features=IsolateOrigins,site-per-process',
