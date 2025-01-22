@@ -185,26 +185,29 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
   return (
     <>
       {/* Fine Tuning Panel - Left Side */}
-      <div className="fixed top-0 left-0 h-screen w-[500px] bg-black border-r-2 border-red-500/30 shadow-2xl flex flex-col">
-        <div className="border-b border-red-500/30 p-4">
+      <div className="fixed top-0 left-0 h-screen w-[500px] bg-black/40 backdrop-blur-md border-r border-red-500/10 shadow-2xl flex flex-col">
+        <div className="border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-red-500"></div>
-            <h3 className="text-lg font-bold text-red-500 tracking-wider">PERSONALITY FINE-TUNING</h3>
+            <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+            <h3 className="text-sm font-bold text-red-500/90 tracking-wider">PERSONALITY FINE-TUNING</h3>
           </div>
         </div>
-        
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6">
+
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6 backdrop-blur-sm bg-black/20">
           {analysis ? (
             <>
               {/* Trait Adjustments */}
               <div className="space-y-4">
-                <h4 className="text-red-500 uppercase tracking-wider text-sm">Personality Traits</h4>
+                <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                  Personality Traits
+                </h4>
                 <div className="space-y-3">
                   {analysis.traits.map((trait: { name: string; score: number }) => (
                     <div key={trait.name} className="space-y-1">
-                      <div className="flex justify-between">
-                        <span className="text-red-500/90">{trait.name}</span>
-                        <span className="text-red-500/70">
+                      <div className="flex justify-between text-xs text-red-400/70">
+                        <span>{trait.name}</span>
+                        <span>
                           Base: {trait.score}/10 | Adjusted: {Math.max(0, Math.min(10, trait.score + (tuning.traitModifiers[trait.name] || 0)))}/10
                         </span>
                       </div>
@@ -215,7 +218,7 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                         step="1"
                         value={Math.round(tuning.traitModifiers[trait.name] || 0)}
                         onChange={(e) => handleTraitAdjustment(trait.name, parseInt(e.target.value))}
-                        className="w-full h-2 bg-red-500/20 rounded-sm appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-red-500"
+                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
                       />
                     </div>
                   ))}
@@ -224,7 +227,10 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
 
               {/* Interest Weights */}
               <div className="space-y-4">
-                <h4 className="text-red-500 uppercase tracking-wider text-sm">Interests & Topics</h4>
+                <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                  Interests & Topics
+                </h4>
                 
                 {/* Add Custom Interest */}
                 <form onSubmit={handleAddCustomInterest} className="flex gap-2">
@@ -233,11 +239,11 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                     value={newInterest}
                     onChange={(e) => setNewInterest(e.target.value)}
                     placeholder="Add custom interest..."
-                    className="flex-1 bg-black border border-red-500/30 text-red-500 px-3 py-2 rounded-sm focus:outline-none focus:border-red-500 placeholder:text-red-500/30"
+                    className="flex-1 bg-black/40 text-red-400/90 placeholder-red-500/30 px-3 py-1.5 text-xs rounded border border-red-500/20 focus:border-red-500/40 focus:outline-none focus:ring-1 focus:ring-red-500/20"
                   />
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-red-500/10 text-red-500 border border-red-500 rounded-sm hover:bg-red-500/20 transition-colors uppercase tracking-wider text-sm"
+                    className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded text-xs hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Add
                   </button>
@@ -247,18 +253,18 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                   {/* Original Interests */}
                   {analysis.interests.map((interest: string) => (
                     <div key={interest} className="space-y-1">
-                      <div className="flex justify-between items-center">
-                        <span className={`text-red-500/90 flex items-center gap-2 ${tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}`}>
+                      <div className="flex justify-between items-center text-xs text-red-400/70">
+                        <span className={tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}>
                           {interest}
                           <button
                             onClick={() => handleInterestWeight(interest, 0)}
-                            className="text-red-500/50 hover:text-red-500"
+                            className="ml-2 text-red-500/50 hover:text-red-500/70"
                             title="Disable interest"
                           >
                             ×
                           </button>
                         </span>
-                        <span className="text-red-500/70">
+                        <span>
                           {tuning.interestWeights[interest] === 0 ? 'Disabled' :
                            tuning.interestWeights[interest] <= 25 ? 'Low' :
                            tuning.interestWeights[interest] <= 50 ? 'Medium' :
@@ -273,7 +279,7 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                         step="25"
                         value={Math.round(tuning.interestWeights[interest] / 25) * 25}
                         onChange={(e) => handleInterestWeight(interest, parseInt(e.target.value))}
-                        className={`w-full h-2 bg-red-500/20 rounded-sm appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-red-500 ${
+                        className={`w-full accent-red-500/50 bg-red-500/10 rounded h-1 ${
                           tuning.interestWeights[interest] === 0 ? 'opacity-50' : ''
                         }`}
                       />
@@ -283,18 +289,18 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                   {/* Custom Interests */}
                   {tuning.customInterests.map((interest) => (
                     <div key={interest} className="space-y-1">
-                      <div className="flex justify-between items-center">
-                        <span className={`text-red-500/90 flex items-center gap-2 ${tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}`}>
+                      <div className="flex justify-between items-center text-xs text-red-400/70">
+                        <span className={tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}>
                           {interest}
                           <button
                             onClick={() => handleRemoveCustomInterest(interest)}
-                            className="text-red-500/50 hover:text-red-500"
+                            className="ml-2 text-red-500/50 hover:text-red-500/70"
                             title="Remove custom interest"
                           >
                             ×
                           </button>
                         </span>
-                        <span className="text-red-500/70">
+                        <span>
                           {tuning.interestWeights[interest] === 0 ? 'Disabled' :
                            tuning.interestWeights[interest] <= 25 ? 'Low' :
                            tuning.interestWeights[interest] <= 50 ? 'Medium' :
@@ -309,7 +315,7 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                         step="25"
                         value={Math.round(tuning.interestWeights[interest] / 25) * 25}
                         onChange={(e) => handleInterestWeight(interest, parseInt(e.target.value))}
-                        className={`w-full h-2 bg-red-500/20 rounded-sm appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-red-500 ${
+                        className={`w-full accent-red-500/50 bg-red-500/10 rounded h-1 ${
                           tuning.interestWeights[interest] === 0 ? 'opacity-50' : ''
                         }`}
                       />
@@ -320,12 +326,15 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
 
               {/* Communication Style */}
               <div className="space-y-4">
-                <h4 className="text-red-500 uppercase tracking-wider text-sm">Communication Style</h4>
+                <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                  Communication Style
+                </h4>
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-red-500/90">Formality</span>
-                      <span className="text-red-500/70">
+                    <div className="flex justify-between text-xs text-red-400/70">
+                      <span>Formality</span>
+                      <span>
                         {tuning.communicationStyle.formality < 21 ? 'Very Casual' :
                          tuning.communicationStyle.formality < 41 ? 'Casual' :
                          tuning.communicationStyle.formality < 61 ? 'Balanced' :
@@ -340,14 +349,14 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                       step="20"
                       value={tuning.communicationStyle.formality}
                       onChange={(e) => handleStyleAdjustment('formality', parseInt(e.target.value))}
-                      className="w-full h-2 bg-red-500/20 rounded-sm appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-red-500"
+                      className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-red-500/90">Enthusiasm</span>
-                      <span className="text-red-500/70">
+                    <div className="flex justify-between text-xs text-red-400/70">
+                      <span>Enthusiasm</span>
+                      <span>
                         {tuning.communicationStyle.enthusiasm < 21 ? 'Minimal' :
                          tuning.communicationStyle.enthusiasm < 41 ? 'Mild' :
                          tuning.communicationStyle.enthusiasm < 61 ? 'Moderate' :
@@ -362,14 +371,14 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                       step="20"
                       value={tuning.communicationStyle.enthusiasm}
                       onChange={(e) => handleStyleAdjustment('enthusiasm', parseInt(e.target.value))}
-                      className="w-full h-2 bg-red-500/20 rounded-sm appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-red-500"
+                      className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-red-500/90">Technical Level</span>
-                      <span className="text-red-500/70">
+                    <div className="flex justify-between text-xs text-red-400/70">
+                      <span>Technical Level</span>
+                      <span>
                         {tuning.communicationStyle.technicalLevel < 21 ? 'Simple' :
                          tuning.communicationStyle.technicalLevel < 41 ? 'Basic' :
                          tuning.communicationStyle.technicalLevel < 61 ? 'Mixed' :
@@ -384,14 +393,14 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                       step="20"
                       value={tuning.communicationStyle.technicalLevel}
                       onChange={(e) => handleStyleAdjustment('technicalLevel', parseInt(e.target.value))}
-                      className="w-full h-2 bg-red-500/20 rounded-sm appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-red-500"
+                      className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-red-500/90">Emoji Usage</span>
-                      <span className="text-red-500/70">
+                    <div className="flex justify-between text-xs text-red-400/70">
+                      <span>Emoji Usage</span>
+                      <span>
                         {tuning.communicationStyle.emojiUsage < 21 ? 'None' :
                          tuning.communicationStyle.emojiUsage < 41 ? 'Minimal (1)' :
                          tuning.communicationStyle.emojiUsage < 61 ? 'Moderate (1-2)' :
@@ -406,7 +415,7 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                       step="20"
                       value={tuning.communicationStyle.emojiUsage}
                       onChange={(e) => handleStyleAdjustment('emojiUsage', parseInt(e.target.value))}
-                      className="w-full h-2 bg-red-500/20 rounded-sm appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-red-500"
+                      className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
                     />
                   </div>
                 </div>
@@ -423,15 +432,24 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
       {/* Main Chat and Analysis - Right Side */}
       <div className="fixed top-0 right-0 h-screen w-[500px] grid grid-rows-2">
         {/* Chat Interface */}
-        <div className="row-span-1 bg-black border-l-2 border-red-500/30 shadow-2xl flex flex-col">
-          <div className="border-b border-red-500/30 p-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-red-500"></div>
-              <h3 className="text-lg font-bold text-red-500 tracking-wider">CHAT INTERFACE</h3>
+        <div className="row-span-1 bg-black/40 backdrop-blur-md border-l border-red-500/10 shadow-2xl flex flex-col">
+          <div className="border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                <h3 className="text-sm font-bold text-red-500/90 tracking-wider">CHAT INTERFACE</h3>
+              </div>
+              <button
+                onClick={onClose}
+                className="text-red-500/70 hover:text-red-500/90"
+              >
+                <span className="sr-only">Close</span>
+                ×
+              </button>
             </div>
           </div>
           
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4 backdrop-blur-sm bg-black/20">
             {!analysis ? (
               <div className="text-red-500/70 italic text-center">
                 Start personality analysis to begin chat interaction
@@ -443,11 +461,11 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                   className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}
                 >
                   <div 
-                    className={`max-w-[80%] p-3 rounded-sm ${
-                      msg.isUser 
-                        ? 'bg-red-500/10 border border-red-500/30' 
-                        : 'bg-red-500/5 border border-red-500/20'
-                    }`}
+                    className={`max-w-[80%] rounded backdrop-blur-sm border border-red-500/10 shadow-lg
+                      ${msg.isUser 
+                        ? 'bg-red-500/5 text-red-400/90' 
+                        : 'bg-black/40 text-red-300/90'
+                      } px-4 py-2 text-sm`}
                   >
                     <p className="text-red-500/90">{msg.text}</p>
                   </div>
@@ -456,18 +474,18 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
             )}
             {loading && (
               <div className="flex justify-start">
-                <div className="bg-red-500/5 border border-red-500/20 p-2 rounded-sm">
+                <div className="flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded px-4 py-2 text-red-400/70 border border-red-500/10">
                   <div className="flex items-center gap-1">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-100"></div>
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-200"></div>
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20"></div>
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-100 shadow-lg shadow-red-500/20"></div>
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-200 shadow-lg shadow-red-500/20"></div>
                   </div>
                 </div>
               </div>
             )}
           </div>
 
-          <form onSubmit={handleSubmit} className="border-t border-red-500/30 p-4">
+          <form onSubmit={handleSubmit} className="border-t border-red-500/10 p-4 bg-black/40 backdrop-blur-sm">
             <div className="flex gap-2">
               <input
                 type="text"
@@ -475,12 +493,12 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={analysis ? "Chat with the analyzed personality..." : "Run analysis first..."}
                 disabled={!analysis || loading}
-                className="flex-1 bg-black border border-red-500/30 text-red-500 px-3 py-2 rounded-sm focus:outline-none focus:border-red-500 placeholder:text-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 bg-black/40 text-red-400/90 placeholder-red-500/30 px-4 py-2 rounded border border-red-500/20 focus:border-red-500/40 focus:outline-none focus:ring-1 focus:ring-red-500/20 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <button
                 type="submit"
                 disabled={!analysis || loading}
-                className="px-4 py-2 bg-red-500/10 text-red-500 border border-red-500 rounded-sm hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors uppercase tracking-wider text-sm"
+                className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Send
               </button>
@@ -489,24 +507,17 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
         </div>
 
         {/* Personality Analysis */}
-        <div className="row-span-1 bg-black border-l-2 border-t-2 border-red-500/30 shadow-2xl flex flex-col">
-          <div className="border-b border-red-500/30 p-4">
+        <div className="row-span-1 bg-black/40 backdrop-blur-md border-l border-t border-red-500/10 shadow-2xl flex flex-col">
+          <div className="border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                <h3 className="text-lg font-bold text-red-500 tracking-wider">PERSONALITY ANALYSIS</h3>
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                <h3 className="text-sm font-bold text-red-500/90 tracking-wider">PERSONALITY ANALYSIS</h3>
               </div>
-              <button
-                onClick={onClose}
-                className="text-red-500/70 hover:text-red-500"
-              >
-                <span className="sr-only">Close</span>
-                ✕
-              </button>
             </div>
           </div>
-          
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-6 backdrop-blur-sm bg-black/20">
             {!analysis ? (
               <div className="text-center">
                 <p className="text-red-500/70 mb-4">
@@ -515,37 +526,43 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                 <button
                   onClick={handleAnalyze}
                   disabled={loading}
-                  className="px-4 py-2 bg-red-500/10 text-red-500 border border-red-500 rounded-sm hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors uppercase tracking-wider text-sm"
+                  className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? 'ANALYZING...' : 'START ANALYSIS'}
                 </button>
               </div>
             ) : (
-              <div className="space-y-6 text-red-500/90">
+              <div className="space-y-6 text-red-400/90">
                 <div>
-                  <h4 className="text-red-500 mb-2 uppercase tracking-wider text-sm">Summary</h4>
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                    Summary
+                  </h4>
                   <ReactMarkdown className="prose prose-red prose-invert">
                     {analysis.summary}
                   </ReactMarkdown>
                 </div>
 
                 <div>
-                  <h4 className="text-red-500 mb-2 uppercase tracking-wider text-sm">Key Traits</h4>
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                    Key Traits
+                  </h4>
                   <div className="space-y-2">
                     {analysis.traits.map((trait: { name: string; score: number; explanation: string }, i: number) => (
                       <div key={i} className="flex items-center gap-4">
                         <div className="flex-1">
-                          <div className="flex justify-between mb-1">
+                          <div className="flex justify-between mb-1 text-xs text-red-400/70">
                             <span>{trait.name}</span>
                             <span>{trait.score}/10</span>
                           </div>
-                          <div className="h-2 bg-red-500/20 rounded-sm overflow-hidden">
+                          <div className="h-1 bg-red-500/10 rounded overflow-hidden">
                             <div 
-                              className="h-full bg-red-500"
+                              className="h-full bg-red-500/50"
                               style={{ width: `${trait.score * 10}%` }}
                             />
                           </div>
-                          <ReactMarkdown className="text-sm mt-1 text-red-500/70 prose prose-red prose-invert">
+                          <ReactMarkdown className="text-sm mt-1 text-red-400/70 prose prose-red prose-invert">
                             {trait.explanation}
                           </ReactMarkdown>
                         </div>
@@ -555,12 +572,15 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                 </div>
                 
                 <div>
-                  <h4 className="text-red-500 mb-2 uppercase tracking-wider text-sm">Interests</h4>
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                    Interests
+                  </h4>
                   <div className="flex flex-wrap gap-2">
                     {analysis.interests.map((interest: string, i: number) => (
                       <span 
                         key={i}
-                        className="px-2 py-1 bg-red-500/10 border border-red-500/30 rounded-sm text-sm"
+                        className="px-2 py-1 bg-red-500/5 border border-red-500/20 rounded text-xs backdrop-blur-sm"
                       >
                         {interest}
                       </span>
@@ -569,15 +589,21 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                 </div>
                 
                 <div>
-                  <h4 className="text-red-500 mb-2 uppercase tracking-wider text-sm">Communication Style</h4>
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                    Communication Style
+                  </h4>
                   <ReactMarkdown className="prose prose-red prose-invert">
                     {analysis.communicationStyle}
                   </ReactMarkdown>
                 </div>
                 
                 <div>
-                  <h4 className="text-red-500 mb-2 uppercase tracking-wider text-sm">Topics & Themes</h4>
-                  <ul className="list-disc list-inside space-y-1">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                    Topics & Themes
+                  </h4>
+                  <ul className="list-disc list-inside space-y-1 text-red-400/70">
                     {analysis.topicsAndThemes.map((topic: string, i: number) => (
                       <li key={i}>{topic}</li>
                     ))}
@@ -585,15 +611,21 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                 </div>
                 
                 <div>
-                  <h4 className="text-red-500 mb-2 uppercase tracking-wider text-sm">Emotional Tone</h4>
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                    Emotional Tone
+                  </h4>
                   <ReactMarkdown className="prose prose-red prose-invert">
                     {analysis.emotionalTone}
                   </ReactMarkdown>
                 </div>
                 
                 <div>
-                  <h4 className="text-red-500 mb-2 uppercase tracking-wider text-sm">Recommendations</h4>
-                  <ul className="list-disc list-inside space-y-1">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                    Recommendations
+                  </h4>
+                  <ul className="list-disc list-inside space-y-1 text-red-400/70">
                     {analysis.recommendations.map((rec: string, i: number) => (
                       <li key={i}>{rec}</li>
                     ))}
@@ -603,7 +635,7 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
             )}
             
             {error && (
-              <div className="mt-4 p-4 bg-red-500/10 border border-red-500 rounded-sm text-red-500">
+              <div className="mt-4 p-4 bg-red-500/5 border border-red-500/20 rounded backdrop-blur-sm text-red-400/90">
                 {error}
               </div>
             )}

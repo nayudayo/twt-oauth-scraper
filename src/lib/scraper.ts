@@ -82,15 +82,8 @@ async function handleLogin(page: Page, username: string, password: string) {
   // Wait for successful login
   console.log('Waiting for login completion...')
   try {
-    // Wait for either twitter.com/home or x.com/home
-    await Promise.race([
-      page.waitForURL('https://twitter.com/home', { timeout: 30000 }),
-      page.waitForURL('https://x.com/home', { timeout: 30000 })
-    ])
-
-    // Additional check to ensure we're actually logged in
-    await page.waitForSelector('[data-testid="AppTabBar_Home_Link"]', { timeout: 10000 })
-    
+    // Just wait for the home link to appear to confirm we're logged in
+    await page.waitForSelector('[data-testid="AppTabBar_Home_Link"]', { timeout: 30000 })
     console.log('Login successful')
     return true
   } catch (error) {
@@ -155,11 +148,41 @@ async function saveScrapedData(username: string, data: Tweet[], stats: Stats) {
   }
 }
 
+async function navigateToReplies(page: Page) {
+  console.log('Navigating to replies tab...')
+  const repliesTabSelector = '#react-root > div > div > div.css-175oi2r.r-1f2l425.r-13qz1uu.r-417010.r-18u37iz > main > div > div > div > div > div > div:nth-child(3) > div > div > div:nth-child(2) > nav > div > div.css-175oi2r.r-1adg3ll.r-16y2uox.r-1wbh5a2.r-1pi2tsx > div > div:nth-child(2) > a > div > div'
+  
+  await page.waitForSelector(repliesTabSelector)
+  await page.click(repliesTabSelector)
+  await page.waitForTimeout(2000) // Wait for content to load
+}
+
+async function waitForProfile(page: Page, username: string) {
+  console.log('Waiting for profile page to load...')
+  
+  // Wait for essential profile elements
+  await Promise.all([
+    page.waitForSelector('[data-testid="primaryColumn"]', { timeout: 30000 }),
+    page.waitForSelector('[data-testid="UserName"]', { timeout: 30000 })
+  ])
+
+  // Verify we're on the correct profile
+  const handle = await page.$eval('[data-testid="UserName"]', el => el.textContent)
+  if (!handle || !handle.toLowerCase().includes(username.toLowerCase())) {
+    throw new Error(`Wrong profile loaded: expected @${username}, got ${handle}`)
+  }
+  
+  console.log('Profile page loaded successfully')
+}
+
 export async function scrapeUserContent(page: Page, username: string): Promise<Tweet[]> {
   await ensureOutputDirs()
   const startTime = Date.now()
   
   console.log('Starting scrape...')
+  
+  // Verify we're on the correct profile page
+  await waitForProfile(page, username)
   
   // Scrape posts first (Phase 1)
   console.log('Phase 1: Scanning and scraping posts...')
@@ -226,13 +249,22 @@ async function scrapeTweets(
   const MAX_NO_NEW_CONTENT_RETRIES = 5
 
   console.log(`\nStarting tweet collection in ${isRepliesTab ? 'replies' : 'posts'} tab`)
+  console.log('Current URL:', await page.url())
 
   while (noNewContentCount < MAX_NO_NEW_CONTENT_RETRIES) {
     // Get all tweet containers with exact selector
     const baseSelector = '#react-root > div > div > div.css-175oi2r.r-1f2l425.r-13qz1uu.r-417010.r-18u37iz > main > div > div > div > div.css-175oi2r.r-kemksi.r-1kqtdi0.r-1ua6aaf.r-th6na.r-1phboty.r-16y2uox.r-184en5c.r-1abdc3e.r-1lg4w6u.r-f8sm7e.r-13qz1uu.r-1ye8kvj > div > div:nth-child(3) > div > div > section > div > div'
-    const tweetElements = await page.$$(`${baseSelector} > div`)
+    console.log('Looking for tweets with selector:', baseSelector)
     
+    const tweetElements = await page.$$(`${baseSelector} > div`)
     console.log(`\nFound ${tweetElements.length} tweet elements`)
+    
+    if (tweetElements.length === 0) {
+      console.log('No tweet elements found, checking page content...')
+      const content = await page.content()
+      console.log('Page content preview:', content.substring(0, 500))
+    }
+    
     const initialTweetCount = tweets.length
     
     for (const tweet of tweetElements) {
@@ -380,15 +412,6 @@ async function scrapeTweets(
   return tweets
 }
 
-async function navigateToReplies(page: Page) {
-  console.log('Navigating to replies tab...')
-  const repliesTabSelector = '#react-root > div > div > div.css-175oi2r.r-1f2l425.r-13qz1uu.r-417010.r-18u37iz > main > div > div > div > div > div > div:nth-child(3) > div > div > div:nth-child(2) > nav > div > div.css-175oi2r.r-1adg3ll.r-16y2uox.r-1wbh5a2.r-1pi2tsx > div > div:nth-child(2) > a > div > div'
-  
-  await page.waitForSelector(repliesTabSelector)
-  await page.click(repliesTabSelector)
-  await page.waitForTimeout(2000) // Wait for content to load
-}
-
 export async function scrapeProfile(page: Page) {
   try {
     console.log('Starting profile scrape...')
@@ -425,9 +448,9 @@ export async function initScraper() {
       throw new Error('Scraper credentials not found in environment variables')
     }
 
-    console.log('Launching browser in headless mode...')
-    const browser = await chromium.launch({ 
-      headless: true,
+    console.log('Launching browser...')
+    const browser = await chromium.launch({
+      headless: false,
       args: [
         '--disable-blink-features=AutomationControlled',
         '--disable-features=IsolateOrigins,site-per-process',
@@ -439,7 +462,8 @@ export async function initScraper() {
         '--no-zygote',
         '--disable-gpu',
         '--hide-scrollbars',
-        '--mute-audio'
+        '--mute-audio',
+        '--window-size=1280,800'
       ]
     })
     console.log('Browser launched successfully')
@@ -461,7 +485,10 @@ export async function initScraper() {
       javaScriptEnabled: true,
       bypassCSP: true,
       ignoreHTTPSErrors: true,
-      acceptDownloads: false
+      acceptDownloads: false,
+      extraHTTPHeaders: {
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
     })
     console.log('Browser context created')
 
@@ -477,21 +504,35 @@ export async function initScraper() {
     const page = await context.newPage()
     console.log('Page created')
 
+    // Set longer timeouts for navigation
+    page.setDefaultTimeout(60000) // 60 seconds
+    page.setDefaultNavigationTimeout(60000)
+
     // Try to load saved cookies
     const savedCookies = await loadCookies()
     if (savedCookies.length > 0) {
       console.log('Found saved cookies, attempting to restore session...')
       await context.addCookies(savedCookies)
-      
-      // Test if cookies are still valid by going to home
-      await page.goto('https://twitter.com/home')
-      const isLoggedIn = await page.evaluate(() => !document.querySelector('a[href="/login"]'))
-      
-      if (isLoggedIn) {
-        console.log('Successfully restored session from cookies')
-        return { browser, page }
+
+      // Test if cookies are still valid with a quick navigation
+      try {
+        // Just do a quick navigation to verify cookies
+        await page.goto('https://twitter.com', { 
+          waitUntil: 'domcontentloaded',
+          timeout: 30000 
+        })
+        
+        const isLoggedIn = await page.evaluate(() => !document.querySelector('a[href="/login"]'))
+        
+        if (isLoggedIn) {
+          console.log('Successfully restored session from cookies')
+          return { browser, page }
+        }
+        console.log('Saved cookies expired, proceeding with login')
+      } catch (error) {
+        console.log('Cookie validation failed:', error)
+        console.log('Proceeding with fresh login')
       }
-      console.log('Saved cookies expired, proceeding with login')
     }
 
     // Login with scraper account

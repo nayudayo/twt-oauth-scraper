@@ -22,11 +22,16 @@ export async function POST(req: NextRequest) {
   })
 
   // Helper function to send events
+  let isStreamClosed = false
+
   const send = async (data: EventData) => {
     try {
-      await writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
+      if (!isStreamClosed) {
+        await writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
+      }
     } catch (error) {
       console.error('Error sending event:', error)
+      isStreamClosed = true
     }
   }
 
