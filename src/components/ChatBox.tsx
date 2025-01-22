@@ -335,16 +335,16 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                     <div className="flex justify-between text-xs text-red-400/70">
                       <span>Formality</span>
                       <span>
-                        {tuning.communicationStyle.formality < 21 ? 'Very Casual' :
-                         tuning.communicationStyle.formality < 41 ? 'Casual' :
-                         tuning.communicationStyle.formality < 61 ? 'Balanced' :
+                        {tuning.communicationStyle.formality === 0 ? 'None' :
+                         tuning.communicationStyle.formality < 41 ? 'Very Casual' :
+                         tuning.communicationStyle.formality < 61 ? 'Casual' :
                          tuning.communicationStyle.formality < 81 ? 'Professional' :
                          'Highly Formal'}
                       </span>
                     </div>
                     <input
                       type="range"
-                      min="10"
+                      min="0"
                       max="90"
                       step="20"
                       value={tuning.communicationStyle.formality}
@@ -357,8 +357,8 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                     <div className="flex justify-between text-xs text-red-400/70">
                       <span>Enthusiasm</span>
                       <span>
-                        {tuning.communicationStyle.enthusiasm < 21 ? 'Minimal' :
-                         tuning.communicationStyle.enthusiasm < 41 ? 'Mild' :
+                        {tuning.communicationStyle.enthusiasm === 0 ? 'None' :
+                         tuning.communicationStyle.enthusiasm < 41 ? 'Minimal' :
                          tuning.communicationStyle.enthusiasm < 61 ? 'Moderate' :
                          tuning.communicationStyle.enthusiasm < 81 ? 'High' :
                          'Extreme'}
@@ -366,7 +366,7 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                     </div>
                     <input
                       type="range"
-                      min="10"
+                      min="0"
                       max="90"
                       step="20"
                       value={tuning.communicationStyle.enthusiasm}
@@ -379,7 +379,7 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                     <div className="flex justify-between text-xs text-red-400/70">
                       <span>Technical Level</span>
                       <span>
-                        {tuning.communicationStyle.technicalLevel < 21 ? 'Simple' :
+                        {tuning.communicationStyle.technicalLevel === 0 ? 'None' :
                          tuning.communicationStyle.technicalLevel < 41 ? 'Basic' :
                          tuning.communicationStyle.technicalLevel < 61 ? 'Mixed' :
                          tuning.communicationStyle.technicalLevel < 81 ? 'Detailed' :
@@ -388,7 +388,7 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                     </div>
                     <input
                       type="range"
-                      min="10"
+                      min="0"
                       max="90"
                       step="20"
                       value={tuning.communicationStyle.technicalLevel}
@@ -401,7 +401,7 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                     <div className="flex justify-between text-xs text-red-400/70">
                       <span>Emoji Usage</span>
                       <span>
-                        {tuning.communicationStyle.emojiUsage < 21 ? 'None' :
+                        {tuning.communicationStyle.emojiUsage === 0 ? 'None' :
                          tuning.communicationStyle.emojiUsage < 41 ? 'Minimal (1)' :
                          tuning.communicationStyle.emojiUsage < 61 ? 'Moderate (1-2)' :
                          tuning.communicationStyle.emojiUsage < 81 ? 'High (2-3)' :
@@ -410,7 +410,7 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                     </div>
                     <input
                       type="range"
-                      min="10"
+                      min="0"
                       max="90"
                       step="20"
                       value={tuning.communicationStyle.emojiUsage}
