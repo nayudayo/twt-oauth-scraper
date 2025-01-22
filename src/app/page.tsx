@@ -25,6 +25,7 @@ export default function Home() {
   const [showComplete, setShowComplete] = useState(false)
   const [abortController, setAbortController] = useState<AbortController | null>(null)
   const [scrapedData, setScrapedData] = useState<ScrapedData | null>(null)
+  const [scanId] = useState(() => Math.random().toString(36).substring(7))
 
   // Load tweets from localStorage on mount
   useEffect(() => {
@@ -80,6 +81,8 @@ export default function Home() {
     setLoading(false)
     setScanProgress(null)
     setShowComplete(false)
+    // Clean up progress data
+    localStorage.removeItem(`scan_progress_${scanId}`)
   }
 
   const startScraping = async () => {
@@ -96,6 +99,9 @@ export default function Home() {
     try {
       const response = await fetch('/api/scrape', {
         method: 'POST',
+        headers: {
+          'X-Scan-ID': scanId
+        },
         signal: controller.signal
       })
 
@@ -124,6 +130,16 @@ export default function Home() {
               }
 
               if (data.progress) {
+                // Store progress with unique scan ID
+                const progressKey = `scan_progress_${scanId}`
+                const currentProgress = JSON.parse(localStorage.getItem(progressKey) || '{}')
+                const newProgress = {
+                  ...currentProgress,
+                  phase: data.phase,
+                  count: data.scanCount
+                }
+                localStorage.setItem(progressKey, JSON.stringify(newProgress))
+                
                 setScanProgress({
                   phase: data.phase,
                   count: data.scanCount
@@ -186,6 +202,22 @@ export default function Home() {
     }
     setShowComplete(false)
   }
+
+  // Add cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Clean up progress data when component unmounts
+      localStorage.removeItem(`scan_progress_${scanId}`)
+    }
+  }, [scanId])
+
+  // Add cleanup when scraping completes
+  useEffect(() => {
+    if (showComplete) {
+      // Clean up progress data when scraping completes
+      localStorage.removeItem(`scan_progress_${scanId}`)
+    }
+  }, [showComplete, scanId])
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-black via-red-950/20 to-black text-red-500 font-mono flex">

@@ -17,8 +17,8 @@ export class WorkerPool {
   private events = new EventEmitter()
   
   constructor(
-    private maxWorkers: number = 3,  // Default to 3 concurrent workers
-    private maxQueueSize: number = 10 // Default to 10 queued jobs
+    private maxWorkers: number = 50,  // Increased from 3 to 50 concurrent workers
+    private maxQueueSize: number = 100 // Increased from 10 to 100 queued jobs
   ) {}
 
   public async addJob(job: ScrapingJob): Promise<void> {
@@ -133,7 +133,7 @@ export class WorkerPool {
     } else {
       // If job is in queue, remove it
       this.queue = this.queue.filter(job => job.id !== jobId)
-      console.log(`Job ${jobId} removed from queue`)
+      console.log(`Job ${jobId} not found in active jobs or queue`)
     }
   }
-} 
+}

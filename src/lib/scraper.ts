@@ -450,7 +450,7 @@ export async function initScraper() {
 
     console.log('Launching browser...')
     const browser = await chromium.launch({
-      headless: false,
+      headless: true,
       args: [
         '--disable-blink-features=AutomationControlled',
         '--disable-features=IsolateOrigins,site-per-process',
