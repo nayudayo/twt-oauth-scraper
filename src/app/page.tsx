@@ -222,20 +222,20 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-gradient-to-br from-black via-red-950/20 to-black text-red-500 font-mono flex">
       <div className="flex-1 flex items-center justify-center p-3">
-        <div className="w-full max-w-4xl h-[96vh] backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl">
+        <div className="w-full max-w-4xl h-[96vh] backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow">
           <div className="flex flex-col h-full bg-transparent">
-            <div className="flex items-center justify-between px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 rounded-t-lg">
+            <div className="flex items-center justify-between px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 rounded-t-lg glow-border">
               {/* Left side */}
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                  <h3 className="text-sm font-bold text-red-500/90 tracking-wider">TERMINAL SESSION</h3>
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+                  <h3 className="text-sm font-bold text-red-500/90 tracking-wider glow-text">TERMINAL SESSION</h3>
                 </div>
 
                 {session && (
                   <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                    <span className="text-xs text-red-500/80">@{session.username}</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+                    <span className="text-xs text-red-500/80 hover-text-glow">@{session.username}</span>
                   </div>
                 )}
 
@@ -244,12 +244,12 @@ export default function Home() {
                   {loading && (
                     <>
                       <div className="flex items-center gap-1">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20"></div>
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-100 shadow-lg shadow-red-500/20"></div>
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-200 shadow-lg shadow-red-500/20"></div>
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20 glow-box"></div>
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-100 shadow-lg shadow-red-500/20 glow-box"></div>
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-200 shadow-lg shadow-red-500/20 glow-box"></div>
                       </div>
                       {scanProgress && (
-                        <span className="uppercase tracking-wider text-xs">
+                        <span className="uppercase tracking-wider text-xs glow-text">
                           {scanProgress.phase === 'posts' ? 'SCANNING POSTS' : 'SCANNING REPLIES'}: {scanProgress.count}
                         </span>
                       )}
@@ -264,7 +264,7 @@ export default function Home() {
                   <>
                     <button
                       onClick={loading ? handleCancelScraping : handleScrape}
-                      className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5"
+                      className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow"
                     >
                       {loading ? 'CANCEL' : 'INITIATE SCRAPE'}
                     </button>
@@ -272,7 +272,7 @@ export default function Home() {
                     {tweets.length > 0 && (
                       <button
                         onClick={handleClearData}
-                        className="px-3 py-1.5 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs"
+                        className="px-3 py-1.5 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs hover-glow"
                       >
                         CLEAR DATA
                       </button>
@@ -280,7 +280,7 @@ export default function Home() {
 
                     <button
                       onClick={() => signOut()}
-                      className="px-3 py-1.5 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs"
+                      className="px-3 py-1.5 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs hover-glow"
                     >
                       TERMINATE SESSION
                     </button>
@@ -288,7 +288,7 @@ export default function Home() {
                 ) : (
                   <button
                     onClick={() => signIn('twitter')}
-                    className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5"
+                    className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow"
                   >
                     ESTABLISH CONNECTION
                   </button>
@@ -297,10 +297,10 @@ export default function Home() {
             </div>
             
             {/* Terminal Content */}
-            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar backdrop-blur-sm bg-black/20">
+            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar backdrop-blur-sm bg-black/20 dynamic-bg">
               <div className="space-y-2">
                 {tweets.length === 0 && !loading && (
-                  <div className="text-red-500/50 italic">
+                  <div className="text-red-500/50 italic glow-text">
                     {'>'} Awaiting data collection initialization...
                   </div>
                 )}
@@ -308,29 +308,29 @@ export default function Home() {
                 {loading && tweets.length === 0 && (
                   <div className="text-red-500/60 flex items-center gap-2">
                     <div className="flex items-center gap-1">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20"></div>
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-100 shadow-lg shadow-red-500/20"></div>
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-200 shadow-lg shadow-red-500/20"></div>
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20 glow-box"></div>
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-100 shadow-lg shadow-red-500/20 glow-box"></div>
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-200 shadow-lg shadow-red-500/20 glow-box"></div>
                     </div>
-                    <span>Initializing Data Stream...</span>
+                    <span className="glow-text">Initializing Data Stream...</span>
                   </div>
                 )}
 
                 {tweets.map((tweet, index) => (
                   <div 
                     key={tweet.id} 
-                    className="text-red-400/80 flex gap-3 hover:bg-red-500/5 transition-all duration-300 py-2 px-3 rounded backdrop-blur-sm border border-transparent hover:border-red-500/10"
+                    className="text-red-400/80 flex gap-3 hover:bg-red-500/5 transition-all duration-300 py-2 px-3 rounded backdrop-blur-sm border border-transparent hover:border-red-500/10 hover-glow float"
                   >
-                    <div className="text-red-500/50 select-none font-bold">[{String(index + 1).padStart(4, '0')}]</div>
+                    <div className="text-red-500/50 select-none font-bold glow-text">[{String(index + 1).padStart(4, '0')}]</div>
                     
                     <div className="flex-1">
-                      <div className="text-red-300/90">{tweet.text}</div>
+                      <div className="text-red-300/90 hover-text-glow">{tweet.text}</div>
                       <div className="text-red-500/40 text-xs flex items-center gap-2 mt-1.5">
                         <span>{tweet.timestamp && new Date(tweet.timestamp).toLocaleString()}</span>
                         {tweet.isReply && (
                           <>
-                            <div className="w-1 h-1 rounded-full bg-red-500/20"></div>
-                            <span>REPLY</span>
+                            <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box"></div>
+                            <span className="glow-text">REPLY</span>
                           </>
                         )}
                       </div>
@@ -339,7 +339,7 @@ export default function Home() {
                 ))}
 
                 {tweets.length > 0 && (
-                  <div className="mt-6 pt-4 border-t border-red-500/10 text-red-500/60 backdrop-blur-sm">
+                  <div className="mt-6 pt-4 border-t border-red-500/10 text-red-500/60 backdrop-blur-sm glow-border">
                     {'>'} Collection Stats: {tweets.filter(t => !t.isReply).length} posts, {tweets.filter(t => t.isReply).length} replies
                   </div>
                 )}
@@ -348,13 +348,13 @@ export default function Home() {
           </div>
 
           {error && (
-            <div className="absolute bottom-0 left-0 right-0 backdrop-blur-md bg-black/40 border-t border-red-500/20 rounded-b-lg overflow-hidden">
+            <div className="absolute bottom-0 left-0 right-0 backdrop-blur-md bg-black/40 border-t border-red-500/20 rounded-b-lg overflow-hidden glow-border">
               <div className="p-3 bg-red-500/5">
                 <div className="flex items-center gap-2">
-                  <div className="animate-pulse w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                  <span className="text-red-500/90 uppercase tracking-wider text-xs">ERROR</span>
+                  <div className="animate-pulse w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+                  <span className="text-red-500/90 uppercase tracking-wider text-xs glow-text">ERROR</span>
                 </div>
-                <div className="mt-1 text-red-400/90 font-normal text-sm">
+                <div className="mt-1 text-red-400/90 font-normal text-sm hover-text-glow">
                   {error}
                 </div>
               </div>
@@ -367,36 +367,37 @@ export default function Home() {
               onClick={handleCloseModal}
             >
               <div 
-                className="bg-black/40 backdrop-blur-md p-8 rounded-lg shadow-2xl w-[500px] border border-red-500/20"
+                className="bg-black/40 backdrop-blur-md p-8 rounded-lg shadow-2xl w-[500px] border border-red-500/20 hover-glow float"
                 onClick={e => e.stopPropagation()}
               >
-                <div className="flex items-center justify-between mb-4 border-b border-red-500/20 pb-4">
+                <div className="flex items-center justify-between mb-4 border-b border-red-500/20 pb-4 glow-border">
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                    <h3 className="text-lg font-bold tracking-wider text-red-500/90">OPERATION COMPLETE</h3>
+                    <div className="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+                    <h3 className="text-lg font-bold tracking-wider text-red-500/90 glow-text">OPERATION COMPLETE</h3>
                   </div>
                   <button
                     onClick={handleCloseModal}
-                    className="px-2 py-1 text-red-500/60 hover:text-red-500/90 transition-colors"
+                    className="text-red-500/70 hover:text-red-500/90 transition-colors hover-text-glow"
                   >
+                    <span className="sr-only">Close</span>
                     ×
                   </button>
                 </div>
-                
+
                 <div className="space-y-4">
                   <div className="text-red-400/90">
-                    <p className="uppercase tracking-wider mb-2">Data Collection Summary:</p>
+                    <p className="uppercase tracking-wider mb-2 glow-text">Data Collection Summary:</p>
                     <ul className="list-disc pl-5 space-y-1 text-red-300/80">
-                      <li>{tweets.filter(t => !t.isReply).length} posts collected</li>
-                      <li>{tweets.filter(t => t.isReply).length} replies collected</li>
-                      <li>Total items: {tweets.length}</li>
+                      <li className="hover-text-glow">{tweets.filter(t => !t.isReply).length} posts collected</li>
+                      <li className="hover-text-glow">{tweets.filter(t => t.isReply).length} replies collected</li>
+                      <li className="hover-text-glow">Total items: {tweets.length}</li>
                     </ul>
                   </div>
                   
                   <div className="flex justify-end">
                     <button
                       onClick={handleCloseModal}
-                      className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5"
+                      className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow"
                     >
                       Close Terminal
                     </button>
@@ -415,36 +416,36 @@ export default function Home() {
               }}
             >
               <div 
-                className="bg-black/40 backdrop-blur-md p-8 rounded-lg shadow-2xl w-[500px] border border-red-500/20"
+                className="bg-black/40 backdrop-blur-md p-8 rounded-lg shadow-2xl w-[500px] border border-red-500/20 hover-glow float"
                 onClick={e => e.stopPropagation()}
               >
-                <div className="flex items-center gap-2 mb-4 border-b border-red-500/20 pb-4">
-                  <div className="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                  <h3 className="text-lg font-bold text-red-500/90 tracking-wider">SYSTEM AUTHORIZATION REQUIRED</h3>
+                <div className="flex items-center gap-2 mb-4 border-b border-red-500/20 pb-4 glow-border">
+                  <div className="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+                  <h3 className="text-lg font-bold text-red-500/90 tracking-wider glow-text">SYSTEM AUTHORIZATION REQUIRED</h3>
                 </div>
                 <div className="space-y-4 text-red-400/90">
-                  <p className="uppercase tracking-wider">
+                  <p className="uppercase tracking-wider glow-text">
                     This operation will collect the following data:
                   </p>
                   <ul className="list-disc pl-5 space-y-2 text-red-300/80">
-                    <li>Profile metrics and identifiers</li>
-                    <li>Recent transmission logs</li>
-                    <li>Associated media content</li>
+                    <li className="hover-text-glow">Profile metrics and identifiers</li>
+                    <li className="hover-text-glow">Recent transmission logs</li>
+                    <li className="hover-text-glow">Associated media content</li>
                   </ul>
-                  <p className="text-red-300/80">
+                  <p className="text-red-300/80 hover-text-glow">
                     Estimated operation time: 1-2 minutes. Maintain connection stability during the process.
                   </p>
                 </div>
                 <div className="flex justify-end gap-3 mt-6">
                   <button
                     onClick={() => setShowConsent(false)}
-                    className="px-4 py-2 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs"
+                    className="px-4 py-2 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs hover-glow"
                   >
                     Abort
                   </button>
                   <button
                     onClick={startScraping}
-                    className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5"
+                    className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow"
                   >
                     Authorize
                   </button>

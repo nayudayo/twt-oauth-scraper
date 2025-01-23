@@ -13,18 +13,55 @@ function ensureString(value, defaultValue = 'Not provided') {
 const openai = new openai_1.default({
     apiKey: process.env.OPENAI_API_KEY
 });
+const CHUNK_SIZE = 50; // Fixed chunk size for analysis
+const MIN_WORDS = 5; // Minimum words required for a tweet to be analyzed
+function chunkTweets(tweets) {
+    const chunks = [];
+    let currentChunk = [];
+    for (const tweet of tweets) {
+        if (currentChunk.length >= CHUNK_SIZE) {
+            chunks.push(currentChunk);
+            currentChunk = [];
+        }
+        currentChunk.push(tweet);
+    }
+    if (currentChunk.length > 0) {
+        chunks.push(currentChunk);
+    }
+    return chunks;
+}
+function countWords(text) {
+    if (!text)
+        return 0;
+    return text.trim().split(/\s+/).length;
+}
 async function analyzePersonality(tweets, profile, prompt, context) {
-    // Prepare the content for analysis
-    const validTweets = tweets.filter((t) => typeof t.text === 'string' && t.text.length > 0);
-    const tweetTexts = validTweets.map(t => t.text).join('\n');
-    const profileInfo = `Name: ${ensureString(profile.name)}
+    // Filter out tweets with less than MIN_WORDS words
+    const validTweets = tweets.filter((t) => typeof t.text === 'string' &&
+        t.text.length > 0 &&
+        countWords(t.text) >= MIN_WORDS);
+    // Chunk the tweets for analysis
+    const tweetChunks = chunkTweets(validTweets);
+    let combinedAnalysis = {
+        summary: '',
+        traits: [],
+        interests: [],
+        communicationStyle: '',
+        topicsAndThemes: [],
+        emotionalTone: '',
+        recommendations: []
+    };
+    // Analyze each chunk
+    for (const chunk of tweetChunks) {
+        const tweetTexts = chunk.map(t => t.text).join('\n');
+        const profileInfo = `Name: ${ensureString(profile.name)}
 Bio: ${ensureString(profile.bio)}
 Followers: ${ensureString(profile.followersCount)}
 Following: ${ensureString(profile.followingCount)}`;
-    // If it's a custom prompt, use a different format
-    const promptText = prompt && context ?
-        `Based on the following Twitter profile and tweets, ${prompt.toLowerCase()}
-    
+        // If it's a custom prompt, use a different format
+        const promptText = prompt && context ?
+            `Based on the following Twitter profile and tweets, ${prompt.toLowerCase()}
+      
 Context: ${context}
 
 Profile Information:
@@ -34,7 +71,7 @@ Tweet History:
 ${tweetTexts}
 
 Provide a detailed analysis focusing specifically on this aspect of their personality.` :
-        `Analyze the following Twitter profile and tweets to create a detailed personality analysis. 
+            `Analyze the following Twitter profile and tweets to create a detailed personality analysis. 
 Profile Information:
 ${profileInfo}
 
@@ -76,38 +113,76 @@ Format as bullet points
 
 Focus on being insightful but respectful. Avoid making assumptions about personal details not evident in the data.
 Ensure each section is clearly formatted and separated by newlines.`;
-    try {
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [
-                {
-                    role: "system",
-                    content: "You are an expert personality analyst specializing in social media behavior analysis. Provide detailed, professional, and respectful insights."
-                },
-                {
-                    role: "user",
-                    content: promptText
-                }
-            ],
-            temperature: 0.7,
-            max_tokens: 1500
-        });
-        const response = completion.choices[0].message.content;
-        if (!response) {
-            throw new Error('OpenAI returned empty response');
+        try {
+            const completion = await openai.chat.completions.create({
+                model: "gpt-4o-mini",
+                messages: [
+                    {
+                        role: "system",
+                        content: "You are an expert personality analyst specializing in social media behavior analysis. Provide detailed, professional, and respectful insights."
+                    },
+                    {
+                        role: "user",
+                        content: promptText
+                    }
+                ],
+                temperature: 0.7,
+                max_tokens: 1500
+            });
+            const response = completion.choices[0].message.content;
+            if (!response) {
+                throw new Error('OpenAI returned empty response');
+            }
+            // If it's a custom prompt, return just the response
+            if (prompt && context) {
+                return { response };
+            }
+            // Parse the response and merge with previous chunks
+            const chunkAnalysis = parseAnalysisResponse(response);
+            combinedAnalysis = mergeAnalyses(combinedAnalysis, chunkAnalysis);
         }
-        // If it's a custom prompt, return just the response
-        if (prompt && context) {
-            return { response };
+        catch (error) {
+            console.error('Error analyzing personality:', error);
+            throw error;
         }
-        // Otherwise parse the response into structured format
-        const analysis = parseAnalysisResponse(response);
-        return analysis;
     }
-    catch (error) {
-        console.error('Error analyzing personality:', error);
-        throw error;
+    return combinedAnalysis;
+}
+function mergeAnalyses(a, b) {
+    return {
+        summary: a.summary + (a.summary && b.summary ? ' ' : '') + b.summary,
+        traits: mergeTraits(a.traits, b.traits),
+        interests: [...new Set([...a.interests, ...b.interests])],
+        communicationStyle: a.communicationStyle + (a.communicationStyle && b.communicationStyle ? ' ' : '') + b.communicationStyle,
+        topicsAndThemes: [...new Set([...a.topicsAndThemes, ...b.topicsAndThemes])],
+        emotionalTone: a.emotionalTone + (a.emotionalTone && b.emotionalTone ? ' ' : '') + b.emotionalTone,
+        recommendations: [...new Set([...a.recommendations, ...b.recommendations])]
+    };
+}
+function mergeTraits(a, b) {
+    const traitMap = new Map();
+    // Process all traits
+    for (const trait of [...a, ...b]) {
+        const existing = traitMap.get(trait.name);
+        if (existing) {
+            existing.score += trait.score;
+            existing.count += 1;
+            existing.explanations.push(trait.explanation);
+        }
+        else {
+            traitMap.set(trait.name, {
+                score: trait.score,
+                count: 1,
+                explanations: [trait.explanation]
+            });
+        }
     }
+    // Calculate averages and combine explanations
+    return Array.from(traitMap.entries()).map(([name, data]) => ({
+        name,
+        score: Math.round(data.score / data.count),
+        explanation: data.explanations.join(' ')
+    }));
 }
 function parseAnalysisResponse(response) {
     // Default structure
