@@ -68,6 +68,18 @@ export default function Home() {
     return () => window.removeEventListener('keydown', handleEscape)
   }, [showComplete, showConsent, loading])
 
+  const fetchTweetsFromDB = async (username: string) => {
+    try {
+      const response = await fetch(`/api/tweets?username=${encodeURIComponent(username)}`)
+      if (!response.ok) throw new Error('Failed to fetch tweets')
+      const data = await response.json()
+      setTweets(data.tweets)
+    } catch (error) {
+      console.error('Error fetching tweets:', error)
+      setError(error instanceof Error ? error.message : 'Failed to fetch tweets')
+    }
+  }
+
   const handleScrape = async () => {
     setShowConsent(true)
   }
@@ -160,11 +172,16 @@ export default function Home() {
               // Handle completion
               if (data.type === 'complete' || (data.progress === 100 && data.status === 'Complete')) {
                 console.log('Scraping complete, showing completion modal')
+                
+                // First fetch from DB to ensure we have the saved data
+                await fetchTweetsFromDB(session?.username || '')
+                
+                // Then update local state if we have the direct data
                 if (data.data) {
-                  console.log('Setting final data:', data.data)
+                  console.log('Setting scraped data for reference:', data.data)
                   setScrapedData(data.data)
-                  setTweets(data.data.tweets)
                 }
+                
                 setLoading(false)
                 setScanProgress(null)
                 setShowComplete(true)
