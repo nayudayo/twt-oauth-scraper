@@ -188,17 +188,28 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
       
       const data = await response.json()
       
+      // Initialize tuning with the analysis values
+      const initialTuning: PersonalityTuning = {
+        traitModifiers: Object.fromEntries(data.traits.map((trait: { name: string }) => [trait.name, 0])),
+        interestWeights: {},
+        customInterests: [],
+        communicationStyle: {
+          formality: data.communicationStyle.formality,
+          enthusiasm: data.communicationStyle.enthusiasm,
+          technicalLevel: data.communicationStyle.technicalLevel,
+          emojiUsage: data.communicationStyle.emojiUsage
+        }
+      }
+
       // Initialize interest weights with rounded values
       const initialWeights: { [key: string]: number } = {}
       data.interests.forEach((interest: string) => {
         initialWeights[interest] = 50 // Set default weight to Medium (50)
       })
 
-      setTuning(prev => ({
-        ...prev,
-        interestWeights: initialWeights
-      }))
-      
+      initialTuning.interestWeights = initialWeights
+
+      setTuning(initialTuning)
       setAnalysis(data)
       
       // Save to localStorage
@@ -559,46 +570,44 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
               </div>
             ) : (
               <div className="space-y-6 text-red-400/90">
-                <div>
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-2">
+                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
                     <span className="glow-text">Summary</span>
                   </h4>
-                  <ReactMarkdown className="prose prose-red prose-invert hover-text-glow">
-                    {analysis.summary}
-                  </ReactMarkdown>
+                  <div className="prose prose-red prose-invert max-w-none hover-text-glow">
+                    <ReactMarkdown>{analysis.summary}</ReactMarkdown>
+                  </div>
                 </div>
 
-                <div>
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-2">
+                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
                     <span className="glow-text">Key Traits</span>
                   </h4>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {analysis.traits.map((trait: { name: string; score: number; explanation: string }, i: number) => (
-                      <div key={i} className="flex items-center gap-4 hover-glow">
-                        <div className="flex-1">
-                          <div className="flex justify-between mb-1 text-xs text-red-400/70">
-                            <span className="hover-text-glow">{trait.name}</span>
-                            <span className="hover-text-glow">{trait.score}/10</span>
-                          </div>
-                          <div className="h-1 bg-red-500/10 rounded overflow-hidden glow-box">
-                            <div 
-                              className="h-full bg-red-500/50"
-                              style={{ width: `${trait.score * 10}%` }}
-                            />
-                          </div>
-                          <ReactMarkdown className="text-sm mt-1 text-red-400/70 prose prose-red prose-invert hover-text-glow">
-                            {trait.explanation}
-                          </ReactMarkdown>
+                      <div key={i} className="hover-glow">
+                        <div className="flex justify-between mb-1 text-xs text-red-400/70">
+                          <span className="hover-text-glow font-medium">{trait.name}</span>
+                          <span className="hover-text-glow">{trait.score}/10</span>
+                        </div>
+                        <div className="h-1.5 bg-red-500/10 rounded-full overflow-hidden glow-box mb-2">
+                          <div 
+                            className="h-full bg-red-500/50 rounded-full"
+                            style={{ width: `${trait.score * 10}%` }}
+                          />
+                        </div>
+                        <div className="text-sm text-red-400/70 prose prose-red prose-invert max-w-none hover-text-glow">
+                          <ReactMarkdown>{trait.explanation}</ReactMarkdown>
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
                 
-                <div>
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-2">
+                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
                     <span className="glow-text">Interests</span>
                   </h4>
@@ -606,7 +615,7 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                     {analysis.interests.map((interest: string, i: number) => (
                       <span 
                         key={i}
-                        className="px-2 py-1 bg-red-500/5 border border-red-500/20 rounded text-xs backdrop-blur-sm hover-glow hover-text-glow"
+                        className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-lg text-sm backdrop-blur-sm hover-glow hover-text-glow"
                       >
                         {interest}
                       </span>
@@ -614,36 +623,39 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                   </div>
                 </div>
                 
-                <div>
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-2">
+                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
                     <span className="glow-text">Communication Style</span>
                   </h4>
-                  <ReactMarkdown className="prose prose-red prose-invert hover-text-glow">
-                    {analysis.communicationStyle.description}
-                  </ReactMarkdown>
+                  <div className="prose prose-red prose-invert max-w-none hover-text-glow">
+                    <ReactMarkdown>{analysis.communicationStyle.description}</ReactMarkdown>
+                  </div>
                 </div>
                 
-                <div>
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-2">
+                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
                     <span className="glow-text">Topics & Themes</span>
                   </h4>
-                  <ul className="list-disc list-inside space-y-1 text-red-400/70">
+                  <ul className="list-none space-y-2">
                     {analysis.topicsAndThemes.map((topic: string, i: number) => (
-                      <li key={i} className="hover-text-glow">{topic}</li>
+                      <li key={i} className="flex items-center gap-2 text-red-400/70 hover-text-glow">
+                        <div className="w-1 h-1 rounded-full bg-red-500/50"></div>
+                        {topic}
+                      </li>
                     ))}
                   </ul>
                 </div>
                 
-                <div>
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-2">
+                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
                     <span className="glow-text">Emotional Tone</span>
                   </h4>
-                  <ReactMarkdown className="prose prose-red prose-invert hover-text-glow">
-                    {analysis.emotionalTone}
-                  </ReactMarkdown>
+                  <div className="prose prose-red prose-invert max-w-none hover-text-glow">
+                    <ReactMarkdown>{analysis.emotionalTone}</ReactMarkdown>
+                  </div>
                 </div>
               </div>
             )}

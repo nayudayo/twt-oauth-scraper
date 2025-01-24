@@ -97,10 +97,8 @@ async function runScraper() {
                 scanProgress: { phase: 'posts', count: 0 }
             });
             const tweets = await (0, scraper_1.scrapeUserContent)(page, targetUsername);
-            // Calculate final stats
-            const postsCount = tweets.filter(t => !t.isReply).length;
-            const repliesCount = tweets.filter(t => t.isReply).length;
-            console.log(`✅ Collected ${tweets.length} items (${postsCount} posts, ${repliesCount} replies)`);
+            // Log collection complete
+            console.log(`✅ Collected ${tweets.length} items`);
             worker_threads_1.parentPort.postMessage({
                 progress: 90,
                 status: 'Content collection complete',
