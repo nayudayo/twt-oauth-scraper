@@ -81,7 +81,7 @@ export class WorkerPool {
     worker.on('error', (error) => {
       console.error(`Worker error for job ${job.id}:`, error)
       if (job.onProgress) {
-        job.onProgress({ error: error.message })
+        job.onProgress({ error: error.message, progress: 0 })
       }
     })
   }
