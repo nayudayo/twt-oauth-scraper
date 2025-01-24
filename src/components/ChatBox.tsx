@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Tweet, TwitterProfile } from '@/types/scraper'
 import { PersonalityAnalysis } from '@/lib/openai'
 import ReactMarkdown from 'react-markdown'
+import { Spinner } from '@/components/ui/spinner'
 import '@/styles/glow.css'
 
 interface ChatBoxProps {
@@ -25,13 +26,7 @@ interface PersonalityTuning {
 export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
   const [messages, setMessages] = useState<Array<{text: string, isUser: boolean}>>([])
   const [input, setInput] = useState('')
-  const [analysis, setAnalysis] = useState<PersonalityAnalysis | null>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(`analysis_${profile.name}`)
-      return saved ? JSON.parse(saved) : null
-    }
-    return null
-  })
+  const [analysis, setAnalysis] = useState<PersonalityAnalysis | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [tuning, setTuning] = useState<PersonalityTuning>({
@@ -211,11 +206,6 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
 
       setTuning(initialTuning)
       setAnalysis(data)
-      
-      // Save to localStorage
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(`analysis_${profile.name}`, JSON.stringify(data))
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -529,14 +519,19 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Enter your message..."
-                  className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow"
+                  disabled={loading}
+                  className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow disabled:opacity-50"
                 />
                 <button
                   type="submit"
                   disabled={!input.trim() || loading}
-                  className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow"
+                  className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow min-w-[80px]"
                 >
-                  Send
+                  {loading ? (
+                    <Spinner size="sm" />
+                  ) : (
+                    'Send'
+                  )}
                 </button>
               </form>
             </div>
@@ -565,7 +560,14 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                   disabled={loading}
                   className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow"
                 >
-                  {loading ? 'ANALYZING...' : 'START ANALYSIS'}
+                  {loading ? (
+                    <div className="flex items-center gap-2">
+                      <Spinner size="sm" />
+                      <span>ANALYZING PERSONALITY...</span>
+                    </div>
+                  ) : (
+                    'START ANALYSIS'
+                  )}
                 </button>
               </div>
             ) : (

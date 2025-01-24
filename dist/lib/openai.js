@@ -150,13 +150,16 @@ Focus on being accurate and concise. Base all analysis strictly on the provided 
             if (!response) {
                 throw new Error('OpenAI returned empty response');
             }
+            console.log('Raw OpenAI response:', response); // Debug log
             // If it's a custom prompt, return just the response
             if (prompt && context) {
                 return { response };
             }
             // Parse the response and merge with previous chunks
             const chunkAnalysis = parseAnalysisResponse(response);
+            console.log('Parsed analysis:', JSON.stringify(chunkAnalysis, null, 2)); // Debug log
             combinedAnalysis = mergeAnalyses(combinedAnalysis, chunkAnalysis);
+            console.log('Combined analysis:', JSON.stringify(combinedAnalysis, null, 2)); // Debug log
         }
         catch (error) {
             console.error('Error analyzing personality:', error);
@@ -188,15 +191,28 @@ function parseAnalysisResponse(response) {
             }
             else if (section.includes('Core Personality Traits') || section.includes('Key Traits')) {
                 const traitLines = section.split('\n').slice(1);
+                console.log('Found trait section:', section); // Debug log
                 for (const line of traitLines) {
-                    // Support both formats: "Trait 8/10 - Explanation" and "Trait: 8/10 - Explanation"
-                    const match = line.match(/(\w+)(?:\s*:\s*)?(\d+)\/10\s*-\s*(.+)/);
+                    if (!line.trim())
+                        continue; // Skip empty lines
+                    console.log('Processing trait line:', line); // Debug log
+                    // More flexible regex that handles various formats:
+                    // - "Trait 8/10 - Explanation"
+                    // - "Trait: 8/10 - Explanation"
+                    // - "Trait (8/10): Explanation"
+                    // - "Trait - 8/10 - Explanation"
+                    const match = line.match(/([A-Za-z]+(?:\s+[A-Za-z]+)*)[:\s-]*(\d+)\/10[:\s-]*(.+)/);
                     if (match) {
+                        const [, name, score, explanation] = match;
                         analysis.traits.push({
-                            name: match[1],
-                            score: parseInt(match[2]),
-                            explanation: match[3].trim()
+                            name: name.trim(),
+                            score: parseInt(score),
+                            explanation: explanation.trim()
                         });
+                        console.log('Parsed trait:', { name: name.trim(), score, explanation: explanation.trim() }); // Debug log
+                    }
+                    else {
+                        console.log('Failed to parse trait line:', line); // Debug log
                     }
                 }
             }

@@ -3,6 +3,7 @@ import { ApifyClient } from 'apify-client'
 import * as dotenv from 'dotenv'
 import type { Tweet, TwitterProfile } from '@/types/scraper'
 import { analyzePersonality } from './openai'
+import { initDB, saveUserProfile, saveTweets } from './db'
 
 if (!parentPort) {
   throw new Error('This file must be run as a worker thread')
@@ -168,6 +169,12 @@ async function runScraper() {
       followersCount: null,
       followingCount: null
     }
+
+    // Initialize database and save tweets
+    const db = await initDB()
+    await saveUserProfile(db, targetUsername, profile)
+    await saveTweets(db, targetUsername, allTweets)
+    console.log('Tweets saved to database')
 
     // Convert profile for analysis
     const analysisProfile = {

@@ -37,6 +37,7 @@ const worker_threads_1 = require("worker_threads");
 const apify_client_1 = require("apify-client");
 const dotenv = __importStar(require("dotenv"));
 const openai_1 = require("./openai");
+const db_1 = require("./db");
 if (!worker_threads_1.parentPort) {
     throw new Error('This file must be run as a worker thread');
 }
@@ -166,6 +167,11 @@ async function runScraper() {
             followersCount: null,
             followingCount: null
         };
+        // Initialize database and save tweets
+        const db = await (0, db_1.initDB)();
+        await (0, db_1.saveUserProfile)(db, targetUsername, profile);
+        await (0, db_1.saveTweets)(db, targetUsername, allTweets);
+        console.log('Tweets saved to database');
         // Convert profile for analysis
         const analysisProfile = Object.assign(Object.assign({}, profile), { followersCount: (_b = (_a = profile.followersCount) === null || _a === void 0 ? void 0 : _a.toString()) !== null && _b !== void 0 ? _b : null, followingCount: (_d = (_c = profile.followingCount) === null || _c === void 0 ? void 0 : _c.toString()) !== null && _d !== void 0 ? _d : null });
         // Send progress update
