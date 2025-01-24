@@ -36,7 +36,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const worker_threads_1 = require("worker_threads");
 const apify_client_1 = require("apify-client");
 const dotenv = __importStar(require("dotenv"));
-const openai_1 = require("./openai");
 const db_1 = require("./db");
 if (!worker_threads_1.parentPort) {
     throw new Error('This file must be run as a worker thread');
@@ -58,7 +57,6 @@ const client = new apify_client_1.ApifyClient({
     token: process.env.APIFY_API_TOKEN,
 });
 async function runScraper() {
-    var _a, _b, _c, _d;
     try {
         const { username: targetUsername } = worker_threads_1.workerData; // This is the profile we want to scrape
         // Send initialization progress
@@ -172,8 +170,6 @@ async function runScraper() {
         await (0, db_1.saveUserProfile)(db, targetUsername, profile);
         await (0, db_1.saveTweets)(db, targetUsername, allTweets);
         console.log('Tweets saved to database');
-        // Convert profile for analysis
-        const analysisProfile = Object.assign(Object.assign({}, profile), { followersCount: (_b = (_a = profile.followersCount) === null || _a === void 0 ? void 0 : _a.toString()) !== null && _b !== void 0 ? _b : null, followingCount: (_d = (_c = profile.followingCount) === null || _c === void 0 ? void 0 : _c.toString()) !== null && _d !== void 0 ? _d : null });
         // Send progress update
         worker_threads_1.parentPort.postMessage({
             progress: 90,
@@ -182,15 +178,6 @@ async function runScraper() {
             scanProgress: { phase: 'complete', count: allTweets.length },
             tweets: allTweets
         });
-        // Perform personality analysis
-        console.log('🧠 Analyzing personality...');
-        worker_threads_1.parentPort.postMessage({
-            progress: 95,
-            status: 'Analyzing personality...',
-            phase: 'analysis',
-            scanProgress: { phase: 'analysis', count: allTweets.length }
-        });
-        const analysis = await (0, openai_1.analyzePersonality)(allTweets, analysisProfile);
         // Send final data
         worker_threads_1.parentPort.postMessage({
             progress: 100,
@@ -198,15 +185,14 @@ async function runScraper() {
             type: 'complete',
             data: {
                 profile,
-                tweets: allTweets,
-                analysis
+                tweets: allTweets
             }
         });
         // Add explicit completion message
         worker_threads_1.parentPort.postMessage({
             type: 'done',
             progress: 100,
-            status: 'Scraping and analysis completed'
+            status: 'Scraping completed'
         });
     }
     catch (error) {

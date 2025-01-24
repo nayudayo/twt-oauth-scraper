@@ -2,7 +2,6 @@ import { parentPort, workerData } from 'worker_threads'
 import { ApifyClient } from 'apify-client'
 import * as dotenv from 'dotenv'
 import type { Tweet, TwitterProfile } from '@/types/scraper'
-import { analyzePersonality } from './openai'
 import { initDB, saveUserProfile, saveTweets } from './db'
 
 if (!parentPort) {
@@ -176,13 +175,6 @@ async function runScraper() {
     await saveTweets(db, targetUsername, allTweets)
     console.log('Tweets saved to database')
 
-    // Convert profile for analysis
-    const analysisProfile = {
-      ...profile,
-      followersCount: profile.followersCount?.toString() ?? null,
-      followingCount: profile.followingCount?.toString() ?? null
-    }
-
     // Send progress update
     parentPort!.postMessage({
       progress: 90,
@@ -192,17 +184,6 @@ async function runScraper() {
       tweets: allTweets
     })
 
-    // Perform personality analysis
-    console.log('🧠 Analyzing personality...')
-    parentPort!.postMessage({
-      progress: 95,
-      status: 'Analyzing personality...',
-      phase: 'analysis',
-      scanProgress: { phase: 'analysis', count: allTweets.length }
-    })
-
-    const analysis = await analyzePersonality(allTweets, analysisProfile)
-
     // Send final data
     parentPort!.postMessage({
       progress: 100,
@@ -210,8 +191,7 @@ async function runScraper() {
       type: 'complete',
       data: {
         profile,
-        tweets: allTweets,
-        analysis
+        tweets: allTweets
       }
     })
 
@@ -219,7 +199,7 @@ async function runScraper() {
     parentPort!.postMessage({
       type: 'done',
       progress: 100,
-      status: 'Scraping and analysis completed'
+      status: 'Scraping completed'
     })
 
   } catch (error) {

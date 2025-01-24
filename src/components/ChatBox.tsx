@@ -9,6 +9,7 @@ interface ChatBoxProps {
   tweets: Tweet[]
   profile: TwitterProfile
   onClose: () => void
+  onTweetsUpdate: (tweets: Tweet[]) => void
 }
 
 interface PersonalityTuning {
@@ -23,12 +24,21 @@ interface PersonalityTuning {
   }
 }
 
-export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
+interface ScanProgress {
+  phase: 'posts' | 'replies'
+  count: number
+}
+
+export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: ChatBoxProps) {
   const [messages, setMessages] = useState<Array<{text: string, isUser: boolean}>>([])
   const [input, setInput] = useState('')
   const [analysis, setAnalysis] = useState<PersonalityAnalysis | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null)
+  const [showConsent, setShowConsent] = useState(false)
+  const [showComplete, setShowComplete] = useState(false)
+  const [abortController, setAbortController] = useState<AbortController | null>(null)
   const [tuning, setTuning] = useState<PersonalityTuning>({
     traitModifiers: {},
     interestWeights: {},
@@ -41,6 +51,27 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
     }
   })
   const [newInterest, setNewInterest] = useState('')
+  const [isTyping, setIsTyping] = useState(false)
+
+  // Add escape key handler for modals
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showComplete) {
+          setShowComplete(false)
+          if (loading) handleCancelScraping()
+        }
+        if (showConsent) {
+          setShowConsent(false)
+          if (loading) handleCancelScraping()
+        }
+        if (loading) handleCancelScraping()
+      }
+    }
+
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [showComplete, showConsent, loading])
 
   // Add mouse tracking for dynamic glow
   useEffect(() => {
@@ -118,7 +149,9 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
 
   const generatePersonalityResponse = async (userMessage: string) => {
     setLoading(true)
+    setError(null)
     try {
+      setIsTyping(true)
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -138,8 +171,10 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
       }
       
       const data = await response.json()
+      setIsTyping(false)
       return data.response
     } catch (err) {
+      setIsTyping(false)
       setError(err instanceof Error ? err.message : 'Failed to get response')
       return null
     } finally {
@@ -221,6 +256,118 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
     if (roundedWeight <= 50) return 'Medium'
     if (roundedWeight <= 75) return 'High'
     return 'Very High'
+  }
+
+  // Add handlers for terminal session
+  const handleScrape = async () => {
+    setShowConsent(true)
+  }
+
+  const handleCancelScraping = async () => {
+    if (abortController) {
+      console.log('Aborting scraping process...')
+      abortController.abort()
+      setAbortController(null)
+    }
+    setLoading(false)
+    setScanProgress(null)
+    setShowComplete(false)
+  }
+
+  const handleClearData = () => {
+    if (profile.name) {
+      localStorage.removeItem(`tweets_${profile.name}`)
+      onTweetsUpdate([]) // Clear tweets in parent component
+      onClose() // Close the interface after clearing data
+    }
+  }
+
+  const handleCloseModal = () => {
+    if (loading) {
+      console.log('Closing modal and cancelling scraping...')
+      handleCancelScraping()
+    }
+    setShowComplete(false)
+  }
+
+  const startScraping = async () => {
+    setShowConsent(false)
+    setLoading(true)
+    setError(null)
+    setShowComplete(false)
+
+    // Create new AbortController for this scraping session
+    const controller = new AbortController()
+    setAbortController(controller)
+
+    try {
+      const response = await fetch('/api/scrape', {
+        method: 'POST',
+        signal: controller.signal
+      })
+
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error('Failed to start scraping')
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        // Parse the SSE data
+        const text = new TextDecoder().decode(value)
+        const lines = text.split('\n')
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+              console.log('Received:', data)
+
+              if (data.error) {
+                setError(data.error)
+                setLoading(false)
+                setAbortController(null)
+                return
+              }
+
+              if (data.progress) {
+                setScanProgress({
+                  phase: data.phase || 'posts',
+                  count: data.scanProgress?.count || 0
+                })
+              }
+
+              // Update tweets when new data is received
+              if (data.tweets) {
+                onTweetsUpdate(data.tweets)
+              }
+
+              // Handle completion
+              if (data.type === 'complete' || (data.progress === 100 && data.status === 'Complete')) {
+                console.log('Scraping complete, showing completion modal')
+                if (data.data?.tweets) {
+                  onTweetsUpdate(data.data.tweets)
+                }
+                setLoading(false)
+                setScanProgress(null)
+                setShowComplete(true)
+              }
+            } catch (err) {
+              console.error('Failed to parse:', line, err)
+            }
+          }
+        }
+      }
+    } catch (error: unknown) {
+      console.error('Scraping error:', error)
+      if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') {
+        setError('Scraping cancelled by user')
+      } else {
+        setError(error instanceof Error ? error.message : 'Failed to start scraping')
+      }
+      setLoading(false)
+      setAbortController(null)
+    }
   }
 
   return (
@@ -466,86 +613,116 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
         </div>
       </div>
 
-      {/* Main Chat and Analysis - Right Side */}
-      <div className="fixed top-0 right-0 h-screen w-[500px] grid grid-rows-2">
-        {/* Chat Interface */}
-        <div className="row-span-1 bg-black/40 backdrop-blur-md border-l border-red-500/10 shadow-2xl flex flex-col hover-glow">
-          <div className="border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm glow-border">
-            <div className="flex items-center justify-between">
+      {/* Right Side Panels */}
+      <div className="fixed top-0 right-0 h-screen w-[500px] flex flex-col">
+        {/* ARCHIVES - Top Half */}
+        <div className="h-1/2 bg-black/40 backdrop-blur-md border-l border-red-500/10 shadow-2xl flex flex-col hover-glow">
+          <div className="flex items-center justify-between px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 glow-border">
+            {/* Left side */}
+            <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                <h3 className="text-sm font-bold text-red-500/90 tracking-wider glow-text">CHAT INTERFACE</h3>
+                <h3 className="text-sm font-bold text-red-500/90 tracking-wider glow-text">ARCHIVES </h3>
               </div>
+
+              {profile.name && (
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+                  <span className="text-xs text-red-500/80 hover-text-glow">@{profile.name}</span>
+                </div>
+              )}
+
+              {/* Progress Status */}
+              <div className="h-6 flex items-center gap-2 text-red-500/60 min-w-[200px]">
+                {loading && (
+                  <>
+                    <div className="flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20 glow-box"></div>
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-100 shadow-lg shadow-red-500/20 glow-box"></div>
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-200 shadow-lg shadow-red-500/20 glow-box"></div>
+                    </div>
+                    {scanProgress && (
+                      <span className="uppercase tracking-wider text-xs glow-text">
+                        {scanProgress.phase === 'posts' ? 'SCANNING POSTS' : 'SCANNING REPLIES'}: {scanProgress.count}
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Right side - Action Buttons */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={loading ? handleCancelScraping : handleScrape}
+                className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow"
+              >
+                {loading ? 'CANCEL' : 'INITIATE SCRAPE'}
+              </button>
+
+              {tweets.length > 0 && (
+                <button
+                  onClick={handleClearData}
+                  className="px-3 py-1.5 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs hover-glow"
+                >
+                  CLEAR DATA
+                </button>
+              )}
+
               <button
                 onClick={onClose}
-                className="text-red-500/70 hover:text-red-500/90 hover-text-glow"
+                className="px-3 py-1.5 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs hover-glow"
               >
-                <span className="sr-only">Close</span>
-                ×
+                TERMINATE SESSION
               </button>
             </div>
           </div>
-          
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4 backdrop-blur-sm bg-black/20 dynamic-bg">
-            {!analysis ? (
-              <div className="text-red-500/70 italic text-center glow-text">
-                Start personality analysis to begin chat interaction
-              </div>
-            ) : (
-              messages.map((msg, i) => (
+
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-6 backdrop-blur-sm bg-black/20 dynamic-bg">
+            <div className="space-y-2">
+              {tweets.length === 0 && (
+                <div className="text-red-500/50 italic glow-text">
+                  {'>'} Awaiting data collection initialization...
+                </div>
+              )}
+
+              {tweets.map((tweet, index) => (
                 <div 
-                  key={i}
-                  className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}
+                  key={tweet.id} 
+                  className="text-red-400/80 flex gap-3 hover:bg-red-500/5 transition-all duration-300 py-2 px-3 rounded backdrop-blur-sm border border-transparent hover:border-red-500/10 hover-glow float"
                 >
-                  <div 
-                    className={`max-w-[80%] rounded backdrop-blur-sm border border-red-500/10 shadow-lg hover-glow float
-                      ${msg.isUser 
-                        ? 'bg-red-500/5 text-red-400/90' 
-                        : 'bg-black/40 text-red-300/90'
-                      } px-4 py-2 text-sm`}
-                  >
-                    <p className="text-red-500/90 hover-text-glow">{msg.text}</p>
+                  <div className="text-red-500/50 select-none font-bold glow-text">[{String(index + 1).padStart(4, '0')}]</div>
+                  
+                  <div className="flex-1">
+                    <div className="text-red-300/90 hover-text-glow">{tweet.text}</div>
+                    <div className="text-red-500/40 text-xs flex items-center gap-2 mt-1.5">
+                      <span>{tweet.timestamp && new Date(tweet.timestamp).toLocaleString()}</span>
+                      {tweet.isReply && (
+                        <>
+                          <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box"></div>
+                          <span className="glow-text">REPLY</span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
+              ))}
 
-          {analysis && (
-            <div className="border-t border-red-500/10 p-4 bg-black/40 backdrop-blur-sm glow-border">
-              <form onSubmit={handleSubmit} className="flex gap-2">
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Enter your message..."
-                  disabled={loading}
-                  className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow disabled:opacity-50"
-                />
-                <button
-                  type="submit"
-                  disabled={!input.trim() || loading}
-                  className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow min-w-[80px]"
-                >
-                  {loading ? (
-                    <Spinner size="sm" />
-                  ) : (
-                    'Send'
-                  )}
-                </button>
-              </form>
+              {tweets.length > 0 && (
+                <div className="mt-6 pt-4 border-t border-red-500/10 text-red-500/60 backdrop-blur-sm glow-border">
+                  {'>'} Collection Stats: {tweets.length} posts
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
 
-        {/* Personality Analysis */}
-        <div className="row-span-1 bg-black/40 backdrop-blur-md border-l border-t border-red-500/10 shadow-2xl flex flex-col hover-glow">
+        {/* Personality Analysis - Bottom Half */}
+        <div className="h-1/2 bg-black/40 backdrop-blur-md border-l border-t border-red-500/10 shadow-2xl flex flex-col hover-glow">
           <div className="border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm glow-border">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                <h3 className="text-sm font-bold text-red-500/90 tracking-wider glow-text">PERSONALITY ANALYSIS</h3>
-              </div>
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+              <h3 className="text-sm font-bold text-red-500/90 tracking-wider glow-text">PERSONALITY ANALYSIS</h3>
             </div>
           </div>
 
@@ -670,6 +847,185 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
           </div>
         </div>
       </div>
+
+      {/* Main Chat Interface - Center */}
+      <div className="fixed inset-0 flex items-center justify-center pointer-events-none">
+        <div className="w-full max-w-4xl h-[96vh] backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow pointer-events-auto z-10">
+          <div className="flex flex-col h-full bg-transparent">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 rounded-t-lg glow-border">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+                <h3 className="text-sm font-bold text-red-500/90 tracking-wider glow-text">CHAT INTERFACE</h3>
+              </div>
+              <button
+                onClick={onClose}
+                className="text-red-500/70 hover:text-red-500/90 hover-text-glow"
+              >
+                <span className="sr-only">Close</span>
+                ×
+              </button>
+            </div>
+
+            {/* Chat Messages */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4 backdrop-blur-sm bg-black/20 dynamic-bg">
+              {!analysis ? (
+                <div className="text-red-500/70 italic text-center glow-text">
+                  Start personality analysis to begin chat interaction
+                </div>
+              ) : (
+                messages.map((msg, i) => (
+                  <div 
+                    key={i}
+                    className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div 
+                      className={`max-w-[80%] rounded backdrop-blur-sm border border-red-500/10 shadow-lg hover-glow float
+                        ${msg.isUser 
+                          ? 'bg-red-500/5 text-red-400/90' 
+                          : 'bg-black/40 text-red-300/90'
+                        } px-4 py-2 text-sm`}
+                    >
+                      <p className="text-red-500/90 hover-text-glow">{msg.text}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+              {isTyping && (
+                <div className="flex justify-start">
+                  <div className="max-w-[80%] rounded-lg p-3 bg-red-500/5 text-red-500/80">
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce [animation-delay:-0.3s]" />
+                      <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce [animation-delay:-0.15s]" />
+                      <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce" />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Chat Input */}
+            {analysis && (
+              <div className="border-t border-red-500/10 p-4 bg-black/40 backdrop-blur-sm glow-border">
+                <form onSubmit={handleSubmit} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Enter your message..."
+                    disabled={loading}
+                    className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow disabled:opacity-50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!input.trim() || loading}
+                    className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow min-w-[80px]"
+                  >
+                    {loading ? (
+                      <Spinner size="sm" />
+                    ) : (
+                      'Send'
+                    )}
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Consent Modal */}
+      {showConsent && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+          onClick={() => {
+            setShowConsent(false)
+            if (loading) handleCancelScraping()
+          }}
+        >
+          <div 
+            className="bg-black/40 backdrop-blur-md p-8 rounded-lg shadow-2xl w-[500px] border border-red-500/20 hover-glow float"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 mb-4 border-b border-red-500/20 pb-4 glow-border">
+              <div className="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+              <h3 className="text-lg font-bold text-red-500/90 tracking-wider glow-text">SYSTEM AUTHORIZATION REQUIRED</h3>
+            </div>
+            <div className="space-y-4 text-red-400/90">
+              <p className="uppercase tracking-wider glow-text">
+                This operation will collect the following data:
+              </p>
+              <ul className="list-disc pl-5 space-y-2 text-red-300/80">
+                <li className="hover-text-glow">Profile metrics and identifiers</li>
+                <li className="hover-text-glow">Recent transmission logs</li>
+                <li className="hover-text-glow">Associated media content</li>
+              </ul>
+              <p className="text-red-300/80 hover-text-glow">
+                Estimated operation time: 1-2 minutes. Maintain connection stability during the process.
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setShowConsent(false)}
+                className="px-4 py-2 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs hover-glow"
+              >
+                Abort
+              </button>
+              <button
+                onClick={startScraping}
+                className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow"
+              >
+                Authorize
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Completion Modal */}
+      {showComplete && !loading && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+          onClick={handleCloseModal}
+        >
+          <div 
+            className="bg-black/40 backdrop-blur-md p-8 rounded-lg shadow-2xl w-[500px] border border-red-500/20 hover-glow float"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4 border-b border-red-500/20 pb-4 glow-border">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+                <h3 className="text-lg font-bold tracking-wider text-red-500/90 glow-text">OPERATION COMPLETE</h3>
+              </div>
+              <button
+                onClick={handleCloseModal}
+                className="text-red-500/70 hover:text-red-500/90 transition-colors hover-text-glow"
+              >
+                <span className="sr-only">Close</span>
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="text-red-400/90">
+                <p className="uppercase tracking-wider mb-2 glow-text">Data Collection Summary:</p>
+                <ul className="list-disc pl-5 space-y-1 text-red-300/80">
+                  <li className="hover-text-glow">{tweets.length} posts collected</li>
+                </ul>
+              </div>
+              
+              <div className="flex justify-end">
+                <button
+                  onClick={handleCloseModal}
+                  className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow"
+                >
+                  Close Terminal
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 } 
