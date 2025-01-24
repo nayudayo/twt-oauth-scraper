@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { signIn, useSession } from 'next-auth/react'
 import ChatBox from '@/components/ChatBox'
 import { Tweet } from '@/types/scraper'
@@ -8,6 +8,24 @@ import { Tweet } from '@/types/scraper'
 export default function Home() {
   const { data: session } = useSession()
   const [tweets, setTweets] = useState<Tweet[]>([])
+
+  // Fetch tweets when session is available
+  useEffect(() => {
+    const fetchTweets = async () => {
+      if (session?.username) {
+        try {
+          const response = await fetch(`/api/tweets?username=${session.username}`)
+          if (!response.ok) throw new Error('Failed to fetch tweets')
+          const data = await response.json()
+          setTweets(data.tweets)
+        } catch (error) {
+          console.error('Error fetching tweets:', error)
+        }
+      }
+    }
+
+    fetchTweets()
+  }, [session?.username])
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-black via-red-950/20 to-black text-red-500 font-mono flex">
