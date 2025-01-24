@@ -121,9 +121,7 @@ function convertTweetFormat(tweet: ApifyTweet): Tweet {
             retweets: null,
             views: null
         },
-        images: [],
-        mentions: [],
-        hashtags: []
+        images: []
     };
 }
 
