@@ -7,7 +7,9 @@
     "build": "next build && tsc -p tsconfig.worker.json",
     "start": "next start",
     "lint": "next lint",
-    "test-db": "tsx src/scripts/test-db.ts"
+    "test-db": "tsx src/scripts/test-db.ts",
+    "postinstall": "mkdir -p data && chmod 755 data && touch data/twitter.db && chmod 664 data/twitter.db",
+    "check-db": "bash scripts/check-db-permissions.sh"
   },
   "dependencies": {
     "@auth/core": "^0.37.4",
