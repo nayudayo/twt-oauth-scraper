@@ -30,18 +30,36 @@ export interface TweetMetrics {
 
 export interface Tweet {
   id: string
-  url: string
   text: string
+  url: string
   createdAt: string
-  isReply?: boolean
-  timestamp?: string
-  metrics?: TweetMetrics
-  images?: string[]
-  mentions?: string[]
-  hashtags?: string[]
-  quoted?: boolean
-  retweeted?: boolean
-  [key: string]: string | string[] | boolean | TweetMetrics | null | undefined
+  timestamp: string
+  metrics: {
+    likes: number | null
+    retweets: number | null
+    views: number | null
+  }
+  images: string[]
+  isReply: boolean
+}
+
+export interface PersonalityAnalysis {
+  summary: string
+  traits: Array<{
+    name: string
+    score: number
+    explanation: string
+  }>
+  interests: string[]
+  communicationStyle: {
+    formality: number
+    enthusiasm: number
+    technicalLevel: number
+    emojiUsage: number
+    description: string
+  }
+  topicsAndThemes: string[]
+  emotionalTone: string
 }
 
 export interface ScrapedData {
@@ -50,10 +68,25 @@ export interface ScrapedData {
 }
 
 export interface EventData {
-  error?: string
-  progress?: number
+  progress: number
   status?: string
-  data?: ScrapedData
+  error?: string
+  phase?: string
+  type?: 'complete'
+  tweets?: Tweet[]
+  scanProgress?: {
+    phase: string
+    count: number
+  }
+  data?: {
+    profile: TwitterProfile
+    tweets: Tweet[]
+    analysis: PersonalityAnalysis
+  }
+  // Chunk-related fields
+  isChunk?: boolean
+  chunkIndex?: number
+  totalChunks?: number
 }
 
 export interface WorkerMessage {
