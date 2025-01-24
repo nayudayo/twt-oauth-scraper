@@ -14,6 +14,6 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src/lib/worker.ts", "src/lib/scraper.ts"],
+  "include": ["src/lib/worker.ts", "src/lib/scraper.ts", "src/lib/apify-worker.ts"],
   "exclude": ["node_modules"]
 } 

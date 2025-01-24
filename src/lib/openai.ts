@@ -1,16 +1,9 @@
 import OpenAI from 'openai'
-import { Tweet } from '@/types/scraper'
+import { Tweet, OpenAITwitterProfile } from '@/types/scraper'
 
 function ensureString(value: string | null | undefined, defaultValue: string = 'Not provided'): string {
   if (!value) return defaultValue
   return value
-}
-
-interface TwitterProfile {
-  name: string | null
-  bio: string | null
-  followersCount: string | null
-  followingCount: string | null
 }
 
 export interface AnalysisSettings {
@@ -28,10 +21,15 @@ export interface PersonalityAnalysis {
     explanation: string
   }[]
   interests: string[]
-  communicationStyle: string
-  topicsAndThemes: string[]
-  emotionalTone: string
-  recommendations: string[]
+  communicationStyle: {
+    formality: number
+    enthusiasm: number
+    technicalLevel: number
+    emojiUsage: number
+    description: string  // Overall description of communication style
+  }
+  topicsAndThemes: string[]  // Additional context about recurring themes
+  emotionalTone: string      // Description of emotional expression
 }
 
 const openai = new OpenAI({
@@ -67,7 +65,7 @@ function countWords(text: string | null): number {
 
 export async function analyzePersonality(
   tweets: Tweet[], 
-  profile: TwitterProfile,
+  profile: OpenAITwitterProfile,
   prompt?: string,
   context?: string
 ): Promise<PersonalityAnalysis | { response: string }> {
@@ -84,10 +82,15 @@ export async function analyzePersonality(
     summary: '',
     traits: [],
     interests: [],
-    communicationStyle: '',
+    communicationStyle: {
+      formality: 50,
+      enthusiasm: 50,
+      technicalLevel: 50,
+      emojiUsage: 50,
+      description: ''
+    },
     topicsAndThemes: [],
-    emotionalTone: '',
-    recommendations: []
+    emotionalTone: ''
   }
 
   // Analyze each chunk
@@ -112,7 +115,8 @@ Tweet History:
 ${tweetTexts}
 
 Provide a detailed analysis focusing specifically on this aspect of their personality.` :
-      `Analyze the following Twitter profile and tweets to create a detailed personality analysis. 
+      `Analyze the following Twitter profile and tweets to create a detailed personality profile for AI character creation.
+
 Profile Information:
 ${profileInfo}
 
@@ -121,39 +125,32 @@ ${tweetTexts}
 
 Create a personality analysis in the following format:
 
-1. Summary:
-A brief summary of the person (2-3 sentences)
+1. Summary (2-3 sentences):
+A concise description of their personality, communication style, and main interests.
 
-2. Personality Traits:
-List 4-6 key traits with scores and explanations
-Example format:
+2. Core Personality Traits (4-6 traits):
+List key traits with scores (0-10) and brief explanations
+Format: [Trait] [Score]/10 - [One-sentence explanation]
+Example:
 Openness 8/10 - Shows high curiosity and interest in new ideas
 Enthusiasm 7/10 - Frequently expresses excitement about topics
 
-3. Interests & Topics:
-List 5-8 clear interests/topics they frequently engage with
-Format each interest on a new line with a bullet point
+3. Primary Interests (3-5):
+List their main interests/topics they engage with most
+Format as bullet points
 Example:
-- Cryptocurrency Trading
-- NFT Collections
-- Blockchain Technology
+- Artificial Intelligence
+- Software Development
+- Gaming
 
-4. Communication Style:
-Describe their typical way of expressing themselves (2-3 sentences)
+4. Communication Style Analysis:
+Please rate the following aspects from 0-100:
+- Formality: [0=extremely casual, 100=highly formal]
+- Enthusiasm: [0=very reserved, 100=highly enthusiastic]
+- Technical Level: [0=non-technical, 100=highly technical]
+- Emoji Usage: [0=never uses emojis, 100=frequent emoji use]
 
-5. Topics & Themes:
-List recurring topics/themes in their tweets
-Format as bullet points
-
-6. Emotional Tone:
-Describe their emotional expression style (1-2 sentences)
-
-7. Recommendations:
-List 3-4 specific ways to engage with this person
-Format as bullet points
-
-Focus on being insightful but respectful. Avoid making assumptions about personal details not evident in the data.
-Ensure each section is clearly formatted and separated by newlines.`
+Focus on being accurate and concise. Base all analysis strictly on the provided tweets.`
 
     try {
       const completion = await openai.chat.completions.create({
@@ -161,7 +158,7 @@ Ensure each section is clearly formatted and separated by newlines.`
         messages: [
           {
             role: "system",
-            content: "You are an expert personality analyst specializing in social media behavior analysis. Provide detailed, professional, and respectful insights."
+            content: "You are an expert personality analyst specializing in creating accurate personality profiles for AI character development. Focus on clear, actionable insights that can be used to create a conversational AI character."
           },
           {
             role: "user",
@@ -194,15 +191,118 @@ Ensure each section is clearly formatted and separated by newlines.`
   return combinedAnalysis
 }
 
+function parseAnalysisResponse(response: string): PersonalityAnalysis {
+  const analysis: PersonalityAnalysis = {
+    summary: '',
+    traits: [],
+    interests: [],
+    communicationStyle: {
+      formality: 50,
+      enthusiasm: 50,
+      technicalLevel: 50,
+      emojiUsage: 50,
+      description: ''
+    },
+    topicsAndThemes: [],
+    emotionalTone: ''
+  }
+
+  try {
+    const sections = response.split('\n\n')
+    
+    for (const section of sections) {
+      if (section.includes('Summary')) {
+        analysis.summary = section.split('\n').slice(1).join(' ').trim()
+      }
+      else if (section.includes('Core Personality Traits')) {
+        const traitLines = section.split('\n').slice(1)
+        for (const line of traitLines) {
+          const match = line.match(/(\w+)\s+(\d+)\/10\s*-\s*(.+)/)
+          if (match) {
+            analysis.traits.push({
+              name: match[1],
+              score: parseInt(match[2]),
+              explanation: match[3].trim()
+            })
+          }
+        }
+      }
+      else if (section.includes('Primary Interests')) {
+        const interestLines = section.split('\n').slice(1)
+        analysis.interests = interestLines
+          .filter(line => line.startsWith('-'))
+          .map(line => line.replace('-', '').trim())
+      }
+      else if (section.includes('Communication Style Analysis')) {
+        // First get the numerical scores
+        const styleLines = section.split('\n').slice(1)
+        const descriptionParts = []
+        
+        for (const line of styleLines) {
+          if (line.includes('Formality:')) {
+            const match = line.match(/Formality:\s*(\d+)/)
+            if (match) {
+              analysis.communicationStyle.formality = parseInt(match[1])
+              descriptionParts.push(`Formality level: ${match[1]}/100`)
+            }
+          }
+          else if (line.includes('Enthusiasm:')) {
+            const match = line.match(/Enthusiasm:\s*(\d+)/)
+            if (match) {
+              analysis.communicationStyle.enthusiasm = parseInt(match[1])
+              descriptionParts.push(`Enthusiasm level: ${match[1]}/100`)
+            }
+          }
+          else if (line.includes('Technical Level:')) {
+            const match = line.match(/Technical Level:\s*(\d+)/)
+            if (match) {
+              analysis.communicationStyle.technicalLevel = parseInt(match[1])
+              descriptionParts.push(`Technical level: ${match[1]}/100`)
+            }
+          }
+          else if (line.includes('Emoji Usage:')) {
+            const match = line.match(/Emoji Usage:\s*(\d+)/)
+            if (match) {
+              analysis.communicationStyle.emojiUsage = parseInt(match[1])
+              descriptionParts.push(`Emoji usage: ${match[1]}/100`)
+            }
+          }
+        }
+        
+        // Combine into a descriptive string
+        analysis.communicationStyle.description = descriptionParts.join('. ')
+      }
+      else if (section.toLowerCase().includes('topics and themes')) {
+        analysis.topicsAndThemes = section.split('\n')
+          .slice(1)
+          .filter(line => line.startsWith('-'))
+          .map(line => line.replace('-', '').trim())
+      }
+      else if (section.toLowerCase().includes('emotional tone')) {
+        analysis.emotionalTone = section.split(':')[1]?.trim() || ''
+      }
+    }
+  } catch (error) {
+    console.error('Error parsing analysis response:', error)
+  }
+
+  return analysis
+}
+
 function mergeAnalyses(a: PersonalityAnalysis, b: PersonalityAnalysis): PersonalityAnalysis {
   return {
     summary: a.summary + (a.summary && b.summary ? ' ' : '') + b.summary,
     traits: mergeTraits(a.traits, b.traits),
     interests: [...new Set([...a.interests, ...b.interests])],
-    communicationStyle: a.communicationStyle + (a.communicationStyle && b.communicationStyle ? ' ' : '') + b.communicationStyle,
+    communicationStyle: {
+      formality: Math.round((a.communicationStyle.formality + b.communicationStyle.formality) / 2),
+      enthusiasm: Math.round((a.communicationStyle.enthusiasm + b.communicationStyle.enthusiasm) / 2),
+      technicalLevel: Math.round((a.communicationStyle.technicalLevel + b.communicationStyle.technicalLevel) / 2),
+      emojiUsage: Math.round((a.communicationStyle.emojiUsage + b.communicationStyle.emojiUsage) / 2),
+      description: a.communicationStyle.description + (a.communicationStyle.description && b.communicationStyle.description ? ' ' : '') + b.communicationStyle.description
+    },
     topicsAndThemes: [...new Set([...a.topicsAndThemes, ...b.topicsAndThemes])],
-    emotionalTone: a.emotionalTone + (a.emotionalTone && b.emotionalTone ? ' ' : '') + b.emotionalTone,
-    recommendations: [...new Set([...a.recommendations, ...b.recommendations])]
+    emotionalTone: a.emotionalTone + (a.emotionalTone && b.emotionalTone ? ' ' : '') + b.emotionalTone
   }
 }
 
@@ -231,70 +331,4 @@ function mergeTraits(a: PersonalityAnalysis['traits'], b: PersonalityAnalysis['t
     score: Math.round(data.score / data.count),
     explanation: data.explanations.join(' ')
   }))
-}
-
-function parseAnalysisResponse(response: string): PersonalityAnalysis {
-  // Default structure
-  const analysis: PersonalityAnalysis = {
-    summary: '',
-    traits: [],
-    interests: [],
-    communicationStyle: '',
-    topicsAndThemes: [],
-    emotionalTone: '',
-    recommendations: []
-  }
-
-  try {
-    // Split response into sections
-    const sections = response.split('\n\n')
-    
-    sections.forEach(section => {
-      if (section.includes('summary') || section.includes('Summary')) {
-        analysis.summary = section.split(':')[1]?.trim() || ''
-      }
-      else if (section.toLowerCase().includes('personality traits')) {
-        const traits = section.split('\n').slice(1)
-        traits.forEach(trait => {
-          const match = trait.match(/(\w+).*?(\d+).*?-\s*(.*)/)
-          if (match) {
-            analysis.traits.push({
-              name: match[1],
-              score: parseInt(match[2]),
-              explanation: match[3].trim()
-            })
-          }
-        })
-      }
-      else if (section.toLowerCase().includes('interests')) {
-        analysis.interests = section.split('\n')
-          .slice(1)
-          .map(i => i.replace(/^[•-]\s*/, '').trim())
-          .filter(Boolean)
-      }
-      else if (section.toLowerCase().includes('communication style')) {
-        analysis.communicationStyle = section.split(':')[1]?.trim() || ''
-      }
-      else if (section.toLowerCase().includes('topics and themes')) {
-        analysis.topicsAndThemes = section.split('\n')
-          .slice(1)
-          .map(t => t.replace(/^[•-]\s*/, '').trim())
-          .filter(Boolean)
-      }
-      else if (section.toLowerCase().includes('emotional tone')) {
-        analysis.emotionalTone = section.split(':')[1]?.trim() || ''
-      }
-      else if (section.toLowerCase().includes('recommendations')) {
-        analysis.recommendations = section.split('\n')
-          .slice(1)
-          .map(r => r.replace(/^[•-]\s*/, '').trim())
-          .filter(Boolean)
-      }
-    })
-
-    return analysis
-  } catch (error) {
-    console.error('Error parsing analysis response:', error)
-    return analysis
-  }
 } 

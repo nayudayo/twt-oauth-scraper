@@ -122,10 +122,8 @@ async function runScraper() {
 
       const tweets = await scrapeUserContent(page, targetUsername)
 
-      // Calculate final stats
-      const postsCount = tweets.filter(t => !t.isReply).length
-      const repliesCount = tweets.filter(t => t.isReply).length
-      console.log(`✅ Collected ${tweets.length} items (${postsCount} posts, ${repliesCount} replies)`)
+      // Log collection complete
+      console.log(`✅ Collected ${tweets.length} items`)
 
       parentPort!.postMessage({
         progress: 90,

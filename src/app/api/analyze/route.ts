@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { analyzePersonality } from '@/lib/openai'
-import { Tweet, TwitterProfile } from '@/types/scraper'
+import { Tweet, TwitterProfile, convertProfileForOpenAI } from '@/types/scraper'
 
 export async function POST(req: Request) {
   try {
@@ -15,7 +15,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid tweets data' }, { status: 400 })
     }
 
-    const analysis = await analyzePersonality(tweets, profile, prompt, context)
+    const openAIProfile = convertProfileForOpenAI(profile)
+    const analysis = await analyzePersonality(tweets, openAIProfile, prompt, context)
     return NextResponse.json(analysis)
   } catch (error) {
     console.error('Error in analyze route:', error)

@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Tweet, TwitterProfile } from '@/types/scraper'
 import { PersonalityAnalysis } from '@/lib/openai'
 import ReactMarkdown from 'react-markdown'
+import '@/styles/glow.css'
 
 interface ChatBoxProps {
   tweets: Tweet[]
@@ -45,6 +46,23 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
     }
   })
   const [newInterest, setNewInterest] = useState('')
+
+  // Add mouse tracking for dynamic glow
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const elements = document.getElementsByClassName('dynamic-bg');
+      Array.from(elements).forEach((element) => {
+        const rect = (element as HTMLElement).getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
+        (element as HTMLElement).style.setProperty('--mouse-x', `${x}%`);
+        (element as HTMLElement).style.setProperty('--mouse-y', `${y}%`);
+      });
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    return () => document.removeEventListener('mousemove', handleMouseMove);
+  }, []);
 
   const handleTraitAdjustment = (traitName: string, adjustment: number) => {
     setTuning(prev => ({
@@ -602,7 +620,7 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                     <span className="glow-text">Communication Style</span>
                   </h4>
                   <ReactMarkdown className="prose prose-red prose-invert hover-text-glow">
-                    {analysis.communicationStyle}
+                    {analysis.communicationStyle.description}
                   </ReactMarkdown>
                 </div>
                 
@@ -626,18 +644,6 @@ export default function ChatBox({ tweets, profile, onClose }: ChatBoxProps) {
                   <ReactMarkdown className="prose prose-red prose-invert hover-text-glow">
                     {analysis.emotionalTone}
                   </ReactMarkdown>
-                </div>
-                
-                <div>
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                    <span className="glow-text">Recommendations</span>
-                  </h4>
-                  <ul className="list-disc list-inside space-y-1 text-red-400/70">
-                    {analysis.recommendations.map((rec: string, i: number) => (
-                      <li key={i} className="hover-text-glow">{rec}</li>
-                    ))}
-                  </ul>
                 </div>
               </div>
             )}

@@ -286,6 +286,11 @@ async function scrapeTweets(page, username, isRepliesTab = false) {
                     return parts.join(' ').trim();
                 }).catch(() => null);
                 console.log('Extracted text:', text);
+                // Skip if no text content
+                if (!text) {
+                    console.log('No tweet text found - skipping');
+                    continue;
+                }
                 // Get handle for filtering replies
                 const handle = await tweet.evaluate(el => {
                     const handleSpan = el.querySelector('div.css-175oi2r.r-18u37iz.r-1wbh5a2.r-1ez5h0i > div > div.css-175oi2r.r-1wbh5a2.r-dnmrzs > a > div > span');
@@ -300,9 +305,16 @@ async function scrapeTweets(page, username, isRepliesTab = false) {
                 // Get timestamp
                 const timestamp = await extractTweetTimestamp(tweet);
                 console.log('Tweet timestamp:', timestamp);
+                // Skip if no timestamp
+                if (!timestamp) {
+                    console.log('No timestamp found - skipping');
+                    continue;
+                }
                 tweets.push({
                     id: tweetId,
                     text,
+                    url: `https://twitter.com/${username}/status/${tweetId}`,
+                    createdAt: timestamp,
                     metrics: {
                         likes: null,
                         retweets: null,

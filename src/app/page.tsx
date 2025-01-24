@@ -340,7 +340,7 @@ export default function Home() {
 
                 {tweets.length > 0 && (
                   <div className="mt-6 pt-4 border-t border-red-500/10 text-red-500/60 backdrop-blur-sm glow-border">
-                    {'>'} Collection Stats: {tweets.filter(t => !t.isReply).length} posts, {tweets.filter(t => t.isReply).length} replies
+                    {'>'} Collection Stats: {tweets.length} posts
                   </div>
                 )}
               </div>
@@ -388,9 +388,7 @@ export default function Home() {
                   <div className="text-red-400/90">
                     <p className="uppercase tracking-wider mb-2 glow-text">Data Collection Summary:</p>
                     <ul className="list-disc pl-5 space-y-1 text-red-300/80">
-                      <li className="hover-text-glow">{tweets.filter(t => !t.isReply).length} posts collected</li>
-                      <li className="hover-text-glow">{tweets.filter(t => t.isReply).length} replies collected</li>
-                      <li className="hover-text-glow">Total items: {tweets.length}</li>
+                      <li className="hover-text-glow">{tweets.length} posts collected</li>
                     </ul>
                   </div>
                   

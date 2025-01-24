@@ -17,8 +17,8 @@ export class WorkerPool {
   private events = new EventEmitter()
   
   constructor(
-    private maxWorkers: number = 50,  // Increased from 3 to 50 concurrent workers
-    private maxQueueSize: number = 100 // Increased from 10 to 100 queued jobs
+    private maxWorkers: number = 16,  // Maximum 16 concurrent workers
+    private maxQueueSize: number = 100 // Queue size for additional requests
   ) {}
 
   public async addJob(job: ScrapingJob): Promise<void> {
@@ -38,13 +38,13 @@ export class WorkerPool {
     } else {
       // Queue the job
       this.queue.push(job)
-      console.log(`Job ${job.id} queued. Queue length: ${this.queue.length}`)
+      console.log(`Job ${job.id} queued. Queue length: ${this.queue.length}/${this.maxQueueSize}`)
     }
   }
 
   private async startWorker(job: ScrapingJob): Promise<void> {
     // Use absolute path to worker file
-    const workerPath = path.join(process.cwd(), 'dist', 'lib', 'worker.js')
+    const workerPath = path.join(process.cwd(), 'dist', 'lib', 'apify-worker.js') // Changed to use apify-worker
     console.log('Starting worker with path:', workerPath)
     
     const worker = new Worker(workerPath, {
@@ -104,11 +104,15 @@ export class WorkerPool {
     activeWorkers: number
     queueLength: number
     activeJobs: string[]
+    maxWorkers: number
+    maxQueueSize: number
   } {
     return {
       activeWorkers: this.workers.length,
       queueLength: this.queue.length,
-      activeJobs: Array.from(this.activeJobs.keys())
+      activeJobs: Array.from(this.activeJobs.keys()),
+      maxWorkers: this.maxWorkers,
+      maxQueueSize: this.maxQueueSize
     }
   }
 

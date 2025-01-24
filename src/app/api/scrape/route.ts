@@ -3,8 +3,8 @@ import { NextRequest } from 'next/server'
 import type { EventData } from '@/types/scraper'
 import { WorkerPool } from '@/lib/worker-pool'
 
-// Create a single worker pool instance
-const workerPool = new WorkerPool(3, 10) // 3 concurrent workers, 10 max queued jobs
+// Create a single worker pool instance with 16 concurrent workers
+const workerPool = new WorkerPool(16, 100) // 16 concurrent workers, 100 max queued jobs
 
 export async function POST(req: NextRequest) {
   // Create the stream first
