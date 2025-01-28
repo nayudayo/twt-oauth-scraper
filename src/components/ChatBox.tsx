@@ -39,6 +39,8 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   const [showConsent, setShowConsent] = useState(false)
   const [showComplete, setShowComplete] = useState(false)
   const [abortController, setAbortController] = useState<AbortController | null>(null)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [showAnalysisPrompt, setShowAnalysisPrompt] = useState(false)
   const [tuning, setTuning] = useState<PersonalityTuning>({
     traitModifiers: {},
     interestWeights: {},
@@ -201,7 +203,12 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   }
 
   const handleAnalyze = async () => {
-    setLoading(true)
+    if (!tweets || tweets.length === 0) {
+      setError('No tweets available for analysis')
+      return
+    }
+
+    setIsAnalyzing(true)
     setError(null)
     try {
       const response = await fetch('/api/analyze', {
@@ -220,7 +227,9 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       
       // Initialize tuning with the analysis values
       const initialTuning: PersonalityTuning = {
-        traitModifiers: Object.fromEntries(data.traits.map((trait: { name: string }) => [trait.name, 0])),
+        traitModifiers: Object.fromEntries(data.traits.map((trait: { name: string; score: number }) => 
+          [trait.name, trait.score * 10]  // Convert 0-10 score to 0-100 scale
+        )),
         interestWeights: {},
         customInterests: [],
         communicationStyle: {
@@ -244,7 +253,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
-      setLoading(false)
+      setIsAnalyzing(false)
     }
   }
 
@@ -302,6 +311,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     setLoading(true)
     setError(null)
     setShowComplete(false)
+    setShowAnalysisPrompt(false) // Reset analysis prompt
 
     // Create new AbortController for this scraping session
     const controller = new AbortController()
@@ -358,6 +368,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 setLoading(false)
                 setScanProgress(null)
                 setShowComplete(true)
+                setShowAnalysisPrompt(true) // Show analysis prompt after scraping is complete
               }
             } catch (err) {
               console.error('Failed to parse:', line, err)
@@ -390,7 +401,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
           <div className="flex flex-col gap-2">
             <button
               onClick={loading ? handleCancelScraping : handleScrape}
-              className="w-full px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow"
+              className={`w-full px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow ${!loading && !analysis ? 'pulse-action' : ''}`}
             >
               {loading ? 'ABORT SEQUENCE' : 'EXECUTE DATA EXTRACTION'}
             </button>
@@ -434,7 +445,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                       <div className="flex justify-between text-xs text-red-400/70">
                         <span className="hover-text-glow capitalize">{trait.name}</span>
                         <span className="hover-text-glow">
-                          {getTraitLabel(tuning.traitModifiers[trait.name] || trait.score * 10)}
+                          {getTraitLabel(tuning.traitModifiers[trait.name])}
                         </span>
                       </div>
                       <input
@@ -442,7 +453,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                         min="0"
                         max="100"
                         step="25"
-                        value={tuning.traitModifiers[trait.name] || trait.score * 10}
+                        value={tuning.traitModifiers[trait.name]}
                         onChange={(e) => handleTraitAdjustment(trait.name, parseInt(e.target.value))}
                         className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
                       />
@@ -750,10 +761,10 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 </p>
                 <button
                   onClick={handleAnalyze}
-                  disabled={loading}
-                  className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow"
+                  disabled={isAnalyzing}
+                  className={`px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow ${showAnalysisPrompt && !isAnalyzing ? 'pulse-action' : ''}`}
                 >
-                  {loading ? (
+                  {isAnalyzing ? (
                     <div className="flex items-center gap-2">
                       <Spinner size="sm" />
                       <span>ANALYZING PERSONALITY...</span>

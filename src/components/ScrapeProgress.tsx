@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Tweet } from '@/types/scraper'
 import { Spinner } from '@/components/ui/spinner'
+import { signIn } from 'next-auth/react'
 
 interface ScrapeProgressProps {
   onComplete: (tweets: Tweet[]) => void
@@ -21,6 +22,15 @@ export function ScrapeProgress({ onComplete, onError }: ScrapeProgressProps) {
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
+        
+        // Handle session expiry
+        if (data.error?.toLowerCase().includes('session expired') || 
+            data.error?.toLowerCase().includes('no access token')) {
+          eventSource.close()
+          // Redirect to auth
+          signIn('twitter', { callbackUrl: window.location.href })
+          return
+        }
         
         // Update progress and status
         if (data.progress) setProgress(data.progress)
@@ -90,10 +100,13 @@ export function ScrapeProgress({ onComplete, onError }: ScrapeProgressProps) {
           {phase === 'posts' && tweets.length > 0 && (
             <span>Found {tweets.length} tweets</span>
           )}
+          {phase === 'analysis' && tweets.length > 0 && (
+            <span>Ready to analyze {tweets.length} tweets for personality insights</span>
+          )}
         </div>
       </div>
 
-      {error && (
+      {error && !error.toLowerCase().includes('session expired') && (
         <div className="text-red-500/90 text-sm">
           {error}
         </div>

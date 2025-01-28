@@ -1,0 +1,68 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        - OPENAI_API_KEY=${OPENAI_API_KEY}
+        - TWITTER_CLIENT_ID=${TWITTER_CLIENT_ID}
+        - TWITTER_CLIENT_SECRET=${TWITTER_CLIENT_SECRET}
+        - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+        - NEXTAUTH_URL=${NEXTAUTH_URL}
+        - SCRAPER_USERNAME=${SCRAPER_USERNAME}
+        - SCRAPER_PASSWORD=${SCRAPER_PASSWORD}
+        - APIFY_API_TOKEN=${APIFY_API_TOKEN}
+    ports:
+      - "3000:3000"
+    volumes:
+      - type: bind
+        source: ./data
+        target: /app/data
+        consistency: delegated
+    environment:
+      - NODE_ENV=production
+      - TWITTER_CLIENT_ID=${TWITTER_CLIENT_ID}
+      - TWITTER_CLIENT_SECRET=${TWITTER_CLIENT_SECRET}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - SCRAPER_USERNAME=${SCRAPER_USERNAME}
+      - SCRAPER_PASSWORD=${SCRAPER_PASSWORD}
+      - COOKIES_PATH=/app/data/cookies.json
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - APIFY_API_TOKEN=${APIFY_API_TOKEN}
+    user: "1001:1001"
+    secrets:
+      - source: openai_api_key
+        target: openai_api_key
+      - source: twitter_client_id
+        target: twitter_client_id
+      - source: twitter_client_secret
+        target: twitter_client_secret
+      - source: nextauth_secret
+        target: nextauth_secret
+      - source: nextauth_url
+        target: nextauth_url
+      - source: scraper_username
+        target: scraper_username
+      - source: scraper_password
+        target: scraper_password
+      - source: apify_api_token
+        target: apify_api_token
+    restart: unless-stopped
+
+secrets:
+  openai_api_key:
+    file: ./secrets/openai_api_key.txt
+  twitter_client_id:
+    file: ./secrets/twitter_client_id.txt
+  twitter_client_secret:
+    file: ./secrets/twitter_client_secret.txt
+  nextauth_secret:
+    file: ./secrets/nextauth_secret.txt
+  nextauth_url:
+    file: ./secrets/nextauth_url.txt
+  scraper_username:
+    file: ./secrets/scraper_username.txt
+  scraper_password:
+    file: ./secrets/scraper_password.txt
+  apify_api_token:
+    file: ./secrets/apify_api_token.txt 

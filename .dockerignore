@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.env*
+*.md
+.gitignore
+data/*
+npm-debug.log*
+README.md
+.vscode
+*.sqlite
+*.sqlite-journal 

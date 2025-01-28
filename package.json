@@ -23,7 +23,6 @@
     "next": "15.1.5",
     "next-auth": "^4.24.7",
     "openai": "^4.79.2",
-    "playwright": "^1.49.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^9.0.3",

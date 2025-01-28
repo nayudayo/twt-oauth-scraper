@@ -77,12 +77,29 @@ export async function POST(req: NextRequest) {
   try {
     console.log('🔑 Getting auth token...')
     const token = await getToken({ req })
-    if (!token?.accessToken || !token?.username) {
-      console.error('❌ No access token or username found')
-      await send({ error: 'No access token or username found', progress: 0 })
+    
+    // Check for token expiry
+    if (!token) {
+      console.error('❌ No token found')
+      await send({ error: 'Session expired. Please sign in again.', progress: 0 })
       await writer.close()
       return response
     }
+
+    if (!token.accessToken) {
+      console.error('❌ No access token found')
+      await send({ error: 'Session expired. Please sign in again.', progress: 0 })
+      await writer.close()
+      return response
+    }
+
+    if (!token.username) {
+      console.error('❌ No username found in token')
+      await send({ error: 'Invalid session. Please sign in again.', progress: 0 })
+      await writer.close()
+      return response
+    }
+
     console.log('✅ Token found for user:', token.username)
 
     // Create a unique job ID
@@ -104,6 +121,14 @@ export async function POST(req: NextRequest) {
       username: token.username,
       accessToken: token.accessToken,
       onProgress: async (data: EventData) => {
+        // Check for Apify API errors that might indicate token issues
+        if (data.error?.toLowerCase().includes('unauthorized') || 
+            data.error?.toLowerCase().includes('forbidden')) {
+          await send({ error: 'Session expired. Please sign in again.', progress: 0 })
+          await writer.close()
+          return
+        }
+        
         await send(data)
         if (data.progress === 100 || data.error) {
           await writer.close()
