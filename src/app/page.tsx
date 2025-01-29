@@ -3,11 +3,13 @@
 import { useState, useEffect } from 'react'
 import { signIn, useSession } from 'next-auth/react'
 import ChatBox from '@/components/ChatBox'
+import { TerminalModal } from '@/components/TerminalModal'
 import { Tweet } from '@/types/scraper'
 
 export default function Home() {
   const { data: session } = useSession()
   const [tweets, setTweets] = useState<Tweet[]>([])
+  const [terminalComplete, setTerminalComplete] = useState(false)
 
   // Fetch tweets when session is available
   useEffect(() => {
@@ -26,6 +28,17 @@ export default function Home() {
 
     fetchTweets()
   }, [session?.username])
+
+  // Reset terminal state when session changes
+  useEffect(() => {
+    if (!session) {
+      setTerminalComplete(false)
+    }
+  }, [session])
+
+  if (!terminalComplete) {
+    return <TerminalModal onComplete={() => setTerminalComplete(true)} />
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-black via-red-950/20 to-black text-red-500 font-mono flex">

@@ -391,7 +391,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   return (
     <>
       {/* Fine Tuning Panel - Left Side */}
-      <div className="fixed top-4 left-4 h-[calc(100vh-32px)] w-[470px] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow">
+      <div className="fixed top-16 left-4 h-[calc(100vh-68px)] w-[470px] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow">
         {/* Control Panel */}
         <div className="border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm glow-border">
           <div className="flex items-center gap-2 mb-4">
@@ -667,7 +667,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       </div>
 
       {/* Right Side Panels */}
-      <div className="fixed top-4 right-4 h-[calc(100vh-32px)] w-[480px] flex flex-col gap-4">
+      <div className="fixed top-16 right-4 h-[calc(100vh-68px)] w-[480px] flex flex-col gap-4">
         {/* ARCHIVES - Top Half */}
         <div className="h-[calc(50%-2px)] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow">
           <div className="flex items-center px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 glow-border">
@@ -914,8 +914,8 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       </div>
 
       {/* Main Chat Interface - Center */}
-      <div className="fixed inset-0 flex items-center justify-center pointer-events-none">
-        <div className="w-full max-w-4xl h-[calc(100vh-32px)] mx-4 backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow pointer-events-auto z-10">
+      <div className="fixed inset-0 flex items-center justify-center pointer-events-none pt-16">
+        <div className="w-full max-w-4xl h-[calc(100vh-68px)] mx-4 backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow pointer-events-auto z-10">
           <div className="flex flex-col h-full bg-transparent">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 rounded-t-lg glow-border">
