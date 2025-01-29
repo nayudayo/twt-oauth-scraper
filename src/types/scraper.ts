@@ -3,6 +3,7 @@ export interface TwitterProfile {
   bio: string | null
   followersCount: number | null
   followingCount: number | null
+  imageUrl: string | null
 }
 
 export interface OpenAITwitterProfile {

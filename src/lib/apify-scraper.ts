@@ -141,8 +141,14 @@ export async function scrapeTweetsForUser(username: string) {
             name: username,
             bio: null,
             followersCount: null,
-            followingCount: null
+            followingCount: null,
+            imageUrl: null // Add profile picture URL field
         };
+        
+        // Get profile picture URL from Apify data if available
+        if (apifyTweets.length > 0 && apifyTweets[0].profilePicture) {
+            profile.imageUrl = apifyTweets[0].profilePicture;
+        }
         
         // Save user profile
         await saveUserProfile(db, username, profile);

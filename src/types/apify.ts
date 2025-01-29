@@ -4,6 +4,7 @@ export interface ApifyTweet {
     text: string;
     createdAt: string;
     isReply?: boolean;
+    profilePicture?: string;
     [key: string]: string | number | boolean | null | undefined;
 }
 

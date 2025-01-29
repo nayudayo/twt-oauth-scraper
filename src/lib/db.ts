@@ -54,6 +54,7 @@ export async function initDB() {
         id TEXT PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
         profile_data JSON,
+        profile_picture_url TEXT,
         last_scraped DATETIME,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
@@ -98,9 +99,9 @@ export async function saveUserProfile(db: Database, username: string, profile: T
   try {
     console.log(`Saving profile for user: ${username}`)
     const result = await db.run(`
-      INSERT OR REPLACE INTO users (id, username, profile_data, last_scraped)
-      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-    `, username, username, JSON.stringify(profile))
+      INSERT OR REPLACE INTO users (id, username, profile_data, profile_picture_url, last_scraped)
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `, username, username, JSON.stringify(profile), profile.imageUrl)
     console.log('Profile saved successfully:', result)
     return result
   } catch (error) {

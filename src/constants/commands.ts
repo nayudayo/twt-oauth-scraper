@@ -1,3 +1,5 @@
+import { SYSTEM_MESSAGES } from './messages'
+
 export interface Command {
   command: string
   description: string
@@ -40,9 +42,7 @@ Enter commands in sequence to proceed.
 Type 'help' for command list.
 `
 
-export const HELP_MESSAGE = `
-Available Commands:
-------------------
+export const HELP_MESSAGE = `${SYSTEM_MESSAGES.COMMAND_RESPONSES.HELP_HEADER}
 help            : Display this help message
 clear           : Clear terminal screen
 ${REQUIRED_COMMANDS.map(cmd => `${cmd.command.toLowerCase()}     : ${cmd.description}`).join('\n')}

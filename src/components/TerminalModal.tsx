@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { REQUIRED_COMMANDS, WELCOME_MESSAGE, HELP_MESSAGE } from '@/constants/commands'
+import { REQUIRED_COMMANDS, HELP_MESSAGE } from '@/constants/commands'
+import { SYSTEM_MESSAGES } from '@/constants/messages'
 
 interface TerminalModalProps {
   onComplete: () => void
@@ -11,11 +12,13 @@ interface TerminalLine {
   content: string
   isCommand?: boolean
   isError?: boolean
+  isSuccess?: boolean
+  isSystem?: boolean
 }
 
 export function TerminalModal({ onComplete }: TerminalModalProps) {
   const [input, setInput] = useState('')
-  const [lines, setLines] = useState<TerminalLine[]>([{ content: WELCOME_MESSAGE }])
+  const [lines, setLines] = useState<TerminalLine[]>([{ content: SYSTEM_MESSAGES.BOOT }])
   const [currentCommandIndex, setCurrentCommandIndex] = useState(0)
   const [showCursor, setShowCursor] = useState(true)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -51,35 +54,42 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
     if (normalizedCommand === 'help') {
       newLines.push({ content: HELP_MESSAGE })
     } else if (normalizedCommand === 'clear') {
-      setLines([{ content: WELCOME_MESSAGE }])
+      setLines([{ content: SYSTEM_MESSAGES.BOOT }])
       return
     } else {
       const currentCommand = REQUIRED_COMMANDS[currentCommandIndex]
       
       if (!currentCommand) {
         newLines.push({ 
-          content: 'ERROR: Unknown command sequence', 
+          content: SYSTEM_MESSAGES.ERROR.UNKNOWN_COMMAND, 
           isError: true 
         })
       } else if (currentCommand.validation(command)) {
         newLines.push({ 
-          content: `Command accepted: ${currentCommand.description}` 
+          content: SYSTEM_MESSAGES.COMMAND_RESPONSES.COMMAND_ACCEPTED(currentCommand.description),
+          isSuccess: true
         })
         
         if (currentCommandIndex === REQUIRED_COMMANDS.length - 1) {
           newLines.push({ 
-            content: '\nAll security protocols verified.\nInitializing main interface...' 
+            content: SYSTEM_MESSAGES.COMMAND_RESPONSES.SEQUENCE_COMPLETE,
+            isSystem: true
           })
-          setTimeout(onComplete, 1500)
+          newLines.push({
+            content: SYSTEM_MESSAGES.ACCESS_GRANTED,
+            isSuccess: true
+          })
+          setTimeout(onComplete, 2000)
         } else {
           newLines.push({ 
-            content: `\nNext command required: ${REQUIRED_COMMANDS[currentCommandIndex + 1].command}` 
+            content: SYSTEM_MESSAGES.COMMAND_RESPONSES.NEXT_COMMAND(REQUIRED_COMMANDS[currentCommandIndex + 1].command),
+            isSystem: true
           })
           setCurrentCommandIndex(prev => prev + 1)
         }
       } else {
         newLines.push({ 
-          content: `ERROR: Invalid input for ${currentCommand.command}. Expected: ${currentCommand.expectedInput}`,
+          content: SYSTEM_MESSAGES.ERROR.INVALID_INPUT(currentCommand.command, currentCommand.expectedInput),
           isError: true 
         })
       }
@@ -97,53 +107,69 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black flex items-center justify-center z-50 font-mono">
-      <div className="w-full max-w-3xl h-[80vh] bg-black/40 backdrop-blur-md border border-red-500/20 rounded-lg shadow-2xl p-4 flex flex-col">
-        {/* Terminal Header */}
-        <div className="flex items-center gap-2 pb-4 border-b border-red-500/20">
-          <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20"></div>
-          <span className="text-red-500/70 text-sm tracking-widest uppercase">Terminal Access Required</span>
+    <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
+      <div className="relative w-full max-w-4xl h-[85vh]">
+        {/* CRT screen effect */}
+        <div className="absolute inset-0 pointer-events-none crt">
+          <div className="absolute inset-0 bg-gradient-to-b from-red-500/5 to-transparent opacity-50" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(239,68,68,0.1),transparent_100%)]" />
         </div>
 
-        {/* Terminal Output */}
-        <div 
-          ref={terminalRef}
-          className="flex-1 overflow-y-auto custom-scrollbar py-4 space-y-1"
-        >
-          {lines.map((line, i) => (
-            <pre 
-              key={i}
-              className={`font-mono whitespace-pre-wrap ${
-                line.isError 
-                  ? 'text-red-500/90' 
-                  : line.isCommand 
-                    ? 'text-red-500/70' 
-                    : 'text-red-400/60'
-              }`}
-            >
-              {line.content}
-            </pre>
-          ))}
-        </div>
-
-        {/* Input Form */}
-        <form onSubmit={handleSubmit} className="pt-4 border-t border-red-500/20">
-          <div className="flex items-center gap-2">
-            <span className="text-red-500/70">{'>'}</span>
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              className="flex-1 bg-transparent text-red-400/90 outline-none"
-              autoFocus
-              spellCheck={false}
-            />
-            <span 
-              className={`w-2 h-5 bg-red-500/70 ${showCursor ? 'opacity-100' : 'opacity-0'}`}
-            />
+        {/* Main terminal window */}
+        <div className="relative w-full h-full bg-black/40 backdrop-blur-md border border-red-500/20 rounded-lg shadow-2xl p-4 flex flex-col font-['Share_Tech_Mono']">
+          {/* Terminal Header */}
+          <div className="flex items-center gap-2 pb-4 border-b border-red-500/20">
+            <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20"></div>
+            <span className="text-red-500/70 text-sm tracking-[0.2em] uppercase terminal-text">Neural Terminal v1.0.3</span>
           </div>
-        </form>
+
+          {/* Terminal Output */}
+          <div 
+            ref={terminalRef}
+            className="flex-1 overflow-y-auto custom-scrollbar py-4 space-y-1"
+          >
+            {lines.map((line, i) => (
+              <pre 
+                key={i}
+                className={`font-['Share_Tech_Mono'] whitespace-pre-wrap tracking-wider terminal-text ${
+                  line.isError 
+                    ? 'text-red-500/90 font-bold' 
+                    : line.isSuccess
+                      ? 'text-green-500/70'
+                      : line.isSystem
+                        ? 'text-cyan-500/70'
+                        : line.isCommand 
+                          ? 'text-red-500/70' 
+                          : 'text-red-400/60'
+                }`}
+              >
+                {line.content}
+              </pre>
+            ))}
+          </div>
+
+          {/* Input Form */}
+          <form onSubmit={handleSubmit} className="pt-4 border-t border-red-500/20">
+            <div className="flex items-center gap-2">
+              <span className="text-red-500/70 tracking-wider terminal-text">{'>'}</span>
+              <input
+                ref={inputRef}
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                className="flex-1 bg-transparent text-red-400/90 outline-none font-['Share_Tech_Mono'] tracking-wider terminal-text"
+                autoFocus
+                spellCheck={false}
+              />
+              <span 
+                className={`w-2 h-5 bg-red-500/70 ${showCursor ? 'opacity-100' : 'opacity-0'}`}
+              />
+            </div>
+          </form>
+
+          {/* Scan effect */}
+          <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent via-red-500/5 to-transparent opacity-50 animate-scan" />
+        </div>
       </div>
     </div>
   )

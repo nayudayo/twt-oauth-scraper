@@ -166,7 +166,8 @@ async function runScraper() {
       name: targetUsername,
       bio: null,
       followersCount: null,
-      followingCount: null
+      followingCount: null,
+      imageUrl: null
     }
 
     // Initialize database and save tweets

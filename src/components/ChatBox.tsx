@@ -391,31 +391,31 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   return (
     <>
       {/* Fine Tuning Panel - Left Side */}
-      <div className="fixed top-16 left-4 h-[calc(100vh-68px)] w-[470px] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow">
+      <div className="fixed top-16 left-4 h-[calc(100vh-84px)] w-[470px] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern mb-4">
         {/* Control Panel */}
-        <div className="border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm glow-border">
+        <div className="border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
           <div className="flex items-center gap-2 mb-4">
-            <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-            <h3 className="text-sm font-bold text-red-500/90 tracking-wider glow-text">SYSTEM CONTROLS</h3>
+            <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+            <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">SYSTEM CONTROLS</h3>
           </div>
           <div className="flex flex-col gap-2">
             <button
               onClick={loading ? handleCancelScraping : handleScrape}
-              className={`w-full px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow ${!loading && !analysis ? 'pulse-action' : ''}`}
+              className={`w-full px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text ${!loading && !analysis ? 'pulse-action' : ''}`}
             >
               {loading ? 'ABORT SEQUENCE' : 'EXECUTE DATA EXTRACTION'}
             </button>
             {tweets.length > 0 && (
               <button
                 onClick={handleClearData}
-                className="w-full px-3 py-2 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs hover-glow"
+                className="w-full px-3 py-2 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs ancient-text"
               >
                 CLEAR DATA
               </button>
             )}
             <button
               onClick={onClose}
-              className="w-full px-3 py-2 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs hover-glow"
+              className="w-full px-3 py-2 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs ancient-text"
             >
               TERMINATE SESSION
             </button>
@@ -423,10 +423,10 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
         </div>
 
         {/* Fine Tuning Header */}
-        <div className="border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm glow-border">
+        <div className="border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
           <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-            <h3 className="text-sm font-bold text-red-500/90 tracking-wider glow-text">PERSONALITY FINE-TUNING</h3>
+            <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+            <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">PERSONALITY FINE-TUNING</h3>
           </div>
         </div>
 
@@ -667,15 +667,14 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       </div>
 
       {/* Right Side Panels */}
-      <div className="fixed top-16 right-4 h-[calc(100vh-68px)] w-[480px] flex flex-col gap-4">
+      <div className="fixed top-16 right-4 h-[calc(100vh-84px)] w-[480px] flex flex-col gap-4 mb-4">
         {/* ARCHIVES - Top Half */}
-        <div className="h-[calc(50%-2px)] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow">
-          <div className="flex items-center px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 glow-border">
-            {/* Left side */}
+        <div className="h-[calc(50%-2px)] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
+          <div className="flex items-center px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 cryptic-shadow">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                <h3 className="text-sm font-bold text-red-500/90 tracking-wider glow-text">ARCHIVES </h3>
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">ARCHIVES</h3>
               </div>
 
               {profile.name && (
@@ -745,11 +744,11 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
         </div>
 
         {/* Personality Analysis - Bottom Half */}
-        <div className="h-[calc(50%-2px)] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow">
-          <div className="border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm glow-border">
+        <div className="h-[calc(50%-12px)] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern mb-8">
+          <div className="border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
             <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-              <h3 className="text-sm font-bold text-red-500/90 tracking-wider glow-text">PERSONALITY ANALYSIS</h3>
+              <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+              <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">PERSONALITY ANALYSIS</h3>
             </div>
           </div>
 
@@ -776,20 +775,20 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
               </div>
             ) : (
               <div className="space-y-6 text-red-400/90">
-                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow">
+                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                    <span className="glow-text">Summary</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                    <span className="ancient-text">Summary</span>
                   </h4>
                   <div className="prose prose-red prose-invert max-w-none hover-text-glow">
                     <ReactMarkdown>{analysis.summary}</ReactMarkdown>
                   </div>
                 </div>
 
-                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow">
+                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                    <span className="glow-text">Key Traits</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                    <span className="ancient-text">Key Traits</span>
                   </h4>
                   <div className="space-y-2">
                     {analysis.traits.map((trait: { name: string; score: number; explanation: string }, i: number) => (
@@ -812,10 +811,10 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   </div>
                 </div>
                 
-                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow">
+                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                    <span className="glow-text">Communication Style</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                    <span className="ancient-text">Communication Style</span>
                   </h4>
                   <div className="prose prose-red prose-invert max-w-none hover-text-glow mb-4">
                     <ReactMarkdown>{analysis.communicationStyle.description}</ReactMarkdown>
@@ -860,10 +859,10 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   </div>
                 </div>
                 
-                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow">
+                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                    <span className="glow-text">Interests</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                    <span className="ancient-text">Interests</span>
                   </h4>
                   <div className="flex flex-wrap gap-2">
                     {analysis.interests.map((interest: string) => (
@@ -877,10 +876,10 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   </div>
                 </div>
                 
-                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow">
+                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                    <span className="glow-text">Topics & Themes</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                    <span className="ancient-text">Topics & Themes</span>
                   </h4>
                   <ul className="list-none space-y-2">
                     {analysis.topicsAndThemes.map((topic: string, i: number) => (
@@ -892,10 +891,10 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   </ul>
                 </div>
                 
-                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow">
+                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                    <span className="glow-text">Emotional Tone</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                    <span className="ancient-text">Emotional Tone</span>
                   </h4>
                   <div className="prose prose-red prose-invert max-w-none hover-text-glow">
                     <ReactMarkdown>{analysis.emotionalTone}</ReactMarkdown>
@@ -915,17 +914,17 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
 
       {/* Main Chat Interface - Center */}
       <div className="fixed inset-0 flex items-center justify-center pointer-events-none pt-16">
-        <div className="w-full max-w-4xl h-[calc(100vh-68px)] mx-4 backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow pointer-events-auto z-10">
+        <div className="w-full max-w-4xl h-[calc(100vh-84px)] mx-4 mb-4 backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow pointer-events-auto z-10 ancient-border rune-pattern">
           <div className="flex flex-col h-full bg-transparent">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 rounded-t-lg glow-border">
+            {/* Chat Header */}
+            <div className="flex items-center justify-between px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 rounded-t-lg cryptic-shadow">
               <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                <h3 className="text-sm font-bold text-red-500/90 tracking-wider glow-text">CHAT INTERFACE</h3>
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">NEURAL INTERFACE</h3>
               </div>
               <button
                 onClick={onClose}
-                className="text-red-500/70 hover:text-red-500/90 hover-text-glow"
+                className="text-red-500/70 hover:text-red-500/90 ancient-text"
               >
                 <span className="sr-only">Close</span>
                 ×
@@ -933,28 +932,58 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
             </div>
 
             {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4 backdrop-blur-sm bg-black/20 dynamic-bg">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4 backdrop-blur-sm bg-black/20 ancient-scroll">
               {!analysis ? (
                 <div className="text-red-500/70 italic text-center glow-text">
                   Start personality analysis to begin chat interaction
                 </div>
               ) : (
-                messages.map((msg, i) => (
-                  <div 
-                    key={i}
-                    className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div 
-                      className={`max-w-[80%] rounded backdrop-blur-sm border border-red-500/10 shadow-lg hover-glow float
-                        ${msg.isUser 
-                          ? 'bg-red-500/5 text-red-400/90' 
-                          : 'bg-black/40 text-red-300/90'
-                        } px-4 py-2 text-sm`}
-                    >
-                      <p className="text-red-500/90 hover-text-glow">{msg.text}</p>
+                <>
+                  {/* Profile Picture Section */}
+                  <div className="flex flex-col items-center gap-4 mb-8 p-4 bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg hover-glow ancient-border">
+                    <div className="w-20 h-20 rounded-full border-2 border-red-500/20 overflow-hidden hover-glow">
+                      {profile.imageUrl ? (
+                        <img 
+                          src={profile.imageUrl} 
+                          alt={profile.name || 'Profile'} 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-red-500/5 flex items-center justify-center">
+                          <span className="text-red-500/50 text-2xl">?</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-center">
+                      <h4 className="text-red-500/90 font-bold tracking-wider ancient-text">
+                        {profile.name ? `@${profile.name}` : 'Anonymous User'}
+                      </h4>
+                      {profile.bio && (
+                        <p className="text-red-400/70 text-sm mt-1 hover-text-glow max-w-md">
+                          {profile.bio}
+                        </p>
+                      )}
                     </div>
                   </div>
-                ))
+
+                  {/* Messages */}
+                  {messages.map((msg, i) => (
+                    <div 
+                      key={i}
+                      className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div 
+                        className={`max-w-[80%] rounded backdrop-blur-sm border border-red-500/10 shadow-lg hover-glow float
+                          ${msg.isUser 
+                            ? 'bg-red-500/5 text-red-400/90' 
+                            : 'bg-black/40 text-red-300/90'
+                          } px-4 py-2 text-sm`}
+                      >
+                        <p className="text-red-500/90 hover-text-glow">{msg.text}</p>
+                      </div>
+                    </div>
+                  ))}
+                </>
               )}
               {isTyping && (
                 <div className="flex justify-start">
@@ -971,7 +1000,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
 
             {/* Chat Input */}
             {analysis && (
-              <div className="border-t border-red-500/10 p-4 bg-black/40 backdrop-blur-sm glow-border">
+              <div className="p-4 border-t border-red-500/10 bg-black/40 backdrop-blur-sm cryptic-shadow">
                 <form onSubmit={handleSubmit} className="flex gap-2">
                   <input
                     type="text"
