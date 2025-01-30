@@ -1,7 +1,0 @@
----
-description: ui component handling
-globs: 
----
-# do not alter the ui components anymore
-- should be in [page.tsx](mdc:src/app/page.tsx) and [layout.tsx](mdc:src/app/layout.tsx)
-

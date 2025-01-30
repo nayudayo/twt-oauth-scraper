@@ -1,8 +1,0 @@
----
-description: 
-globs: 
----
-# do not remove too much of the code unless it is necessary. and if it is necessary, ask for permission first
-- you are notorious in removing 90% of the code and replacing it without checking the context
-
-# show me the code changes first before implementing them

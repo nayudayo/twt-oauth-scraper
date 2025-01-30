@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { REQUIRED_COMMANDS, HELP_MESSAGE } from '@/constants/commands'
 import { SYSTEM_MESSAGES } from '@/constants/messages'
+import { useSession } from 'next-auth/react'
 
 interface TerminalModalProps {
   onComplete: () => void
@@ -17,14 +18,89 @@ interface TerminalLine {
 }
 
 export function TerminalModal({ onComplete }: TerminalModalProps) {
+  const { data: session } = useSession()
   const [input, setInput] = useState('')
   const [lines, setLines] = useState<TerminalLine[]>([{ content: SYSTEM_MESSAGES.BOOT }])
   const [currentCommandIndex, setCurrentCommandIndex] = useState(0)
   const [showCursor, setShowCursor] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
   const [showMainContent, setShowMainContent] = useState(false)
+  const [completedCommands, setCompletedCommands] = useState<string[]>([])
+  const [commandResponses, setCommandResponses] = useState<{ [key: string]: string }>({})
   const inputRef = useRef<HTMLInputElement>(null)
   const terminalRef = useRef<HTMLDivElement>(null)
+
+  // Load saved progress and check completion when component mounts
+  useEffect(() => {
+    const loadProgress = async () => {
+      if (session?.user?.name) {
+        try {
+          const response = await fetch(`/api/command-progress?userId=${session.user.name}`)
+          if (response.ok) {
+            const data = await response.json()
+            
+            // If user has already completed the funnel, skip to main content
+            if (data.completion) {
+              setShowMainContent(true)
+              setTimeout(onComplete, 500)
+              return
+            }
+            
+            // Otherwise load their progress
+            if (data.progress) {
+              setCurrentCommandIndex(data.progress.current_command_index)
+              setCompletedCommands(data.progress.completed_commands)
+              setCommandResponses(data.progress.command_responses)
+              
+              // Reconstruct terminal lines based on progress
+              const reconstructedLines: TerminalLine[] = [{ content: SYSTEM_MESSAGES.BOOT }]
+              data.progress.completed_commands.forEach((cmd: string, index: number) => {
+                const command = REQUIRED_COMMANDS[index]
+                reconstructedLines.push(
+                  { content: `> ${data.progress.command_responses[cmd] || cmd}`, isCommand: true },
+                  { content: "It works!", isSuccess: true },
+                  { content: SYSTEM_MESSAGES.COMMAND_RESPONSES.COMMAND_ACCEPTED(command.description), isSuccess: true }
+                )
+                
+                if (index < data.progress.completed_commands.length - 1) {
+                  reconstructedLines.push({
+                    content: SYSTEM_MESSAGES.COMMAND_RESPONSES.NEXT_COMMAND(REQUIRED_COMMANDS[index + 1].command),
+                    isSystem: true
+                  })
+                }
+              })
+              setLines(reconstructedLines)
+            }
+          }
+        } catch (error) {
+          console.error('Failed to load funnel progress:', error)
+        }
+      }
+    }
+    loadProgress()
+  }, [session?.user?.name, onComplete])
+
+  // Save progress when commands are completed
+  const saveProgress = async (commandIndex: number, commands: string[], responses: { [key: string]: string }) => {
+    if (session?.user?.name) {
+      try {
+        await fetch('/api/command-progress', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: session.user.name,
+            currentIndex: commandIndex,
+            completedCommands: commands,
+            commandResponses: responses
+          }),
+        })
+      } catch (error) {
+        console.error('Failed to save funnel progress:', error)
+      }
+    }
+  }
 
   // Blinking cursor effect
   useEffect(() => {
@@ -67,6 +143,13 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
           isError: true 
         })
       } else if (currentCommand.validation(command)) {
+        // Store the user's response
+        const updatedResponses = {
+          ...commandResponses,
+          [currentCommand.command]: command
+        }
+        setCommandResponses(updatedResponses)
+
         // Add placeholder response for each command
         newLines.push({ 
           content: "It works!",
@@ -77,6 +160,9 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
           content: SYSTEM_MESSAGES.COMMAND_RESPONSES.COMMAND_ACCEPTED(currentCommand.description),
           isSuccess: true
         })
+
+        const updatedCompletedCommands = [...completedCommands, currentCommand.command]
+        setCompletedCommands(updatedCompletedCommands)
         
         if (currentCommandIndex === REQUIRED_COMMANDS.length - 1) {
           newLines.push({ 
@@ -91,6 +177,29 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
           setLines(newLines)
           setIsLoading(true)
           
+          // Save final progress
+          await saveProgress(currentCommandIndex + 1, updatedCompletedCommands, updatedResponses)
+          
+          // Mark funnel as completed
+          try {
+            await fetch('/api/funnel-completion', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                userId: session?.user?.name,
+                completionData: {
+                  telegram_username: updatedResponses['JOIN_TELEGRAM'] || null,
+                  wallet_address: updatedResponses['SOL_WALLET'] || null,
+                  referral_code: updatedResponses['SUBMIT_REFERRAL'] || null
+                }
+              })
+            })
+          } catch (error) {
+            console.error('Failed to mark funnel as completed:', error)
+          }
+          
           // Simulate loading and transition
           setTimeout(() => {
             setIsLoading(false)
@@ -104,7 +213,10 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
             content: SYSTEM_MESSAGES.COMMAND_RESPONSES.NEXT_COMMAND(REQUIRED_COMMANDS[currentCommandIndex + 1].command),
             isSystem: true
           })
-          setCurrentCommandIndex(prev => prev + 1)
+          const nextIndex = currentCommandIndex + 1
+          setCurrentCommandIndex(nextIndex)
+          // Save progress after each successful command
+          await saveProgress(nextIndex, updatedCompletedCommands, updatedResponses)
         }
       } else {
         newLines.push({ 

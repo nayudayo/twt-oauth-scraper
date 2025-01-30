@@ -6,8 +6,8 @@ import { Header } from '@/components/Header'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
-  title: 'NEXUS-7 Terminal | Personality Analysis System',
-  description: 'Advanced personality analysis and simulation system',
+  title: 'PTB Terminal | Askance',
+  description: 'what are we?',
 }
 
 export default function RootLayout({

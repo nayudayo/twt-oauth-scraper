@@ -32,6 +32,31 @@ interface DBAnalysis {
   analyzed_at: string
 }
 
+interface CommandProgress {
+  user_id: string
+  current_command_index: number
+  completed_commands: string[] // Array of completed command names
+  last_updated: string
+}
+
+interface FunnelProgress {
+  user_id: string
+  current_command_index: number
+  completed_commands: string[]
+  command_responses: { [key: string]: string } // Store user responses for each command
+  last_updated: string
+}
+
+interface FunnelCompletion {
+  user_id: string
+  completed_at: string
+  completion_data: {
+    telegram_username?: string
+    wallet_address?: string
+    referral_code?: string
+  }
+}
+
 export async function initDB() {
   try {
     console.log('Initializing database at:', DB_PATH)
@@ -78,6 +103,22 @@ export async function initDB() {
         interests JSON NOT NULL,
         communication_style JSON NOT NULL,
         analyzed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS funnel_progress (
+        user_id TEXT PRIMARY KEY,
+        current_command_index INTEGER DEFAULT 0,
+        completed_commands JSON DEFAULT '[]',
+        command_responses JSON DEFAULT '{}',
+        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS funnel_completion (
+        user_id TEXT PRIMARY KEY,
+        completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        completion_data JSON DEFAULT '{}',
         FOREIGN KEY (user_id) REFERENCES users(id)
       );
     
@@ -217,5 +258,153 @@ export async function getLatestAnalysis(db: Database, userId: string) {
     interests: JSON.parse(analysis.interests),
     communicationStyle: JSON.parse(analysis.communication_style),
     analyzedAt: analysis.analyzed_at
+  }
+}
+
+// Helper function to get user's command progress
+export async function getCommandProgress(db: Database, userId: string): Promise<CommandProgress | null> {
+  try {
+    const progress = await db.get(`
+      SELECT * FROM command_progress
+      WHERE user_id = ?
+    `, userId)
+
+    if (!progress) return null
+
+    return {
+      user_id: progress.user_id,
+      current_command_index: progress.current_command_index,
+      completed_commands: JSON.parse(progress.completed_commands),
+      last_updated: progress.last_updated
+    }
+  } catch (error) {
+    console.error('Failed to get command progress:', error)
+    throw error
+  }
+}
+
+// Helper function to update user's command progress
+export async function updateCommandProgress(
+  db: Database, 
+  userId: string, 
+  currentIndex: number,
+  completedCommands: string[]
+): Promise<void> {
+  try {
+    await db.run(`
+      INSERT OR REPLACE INTO command_progress (
+        user_id,
+        current_command_index,
+        completed_commands,
+        last_updated
+      )
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    `, userId, currentIndex, JSON.stringify(completedCommands))
+  } catch (error) {
+    console.error('Failed to update command progress:', error)
+    throw error
+  }
+}
+
+// Helper function to reset user's command progress
+export async function resetCommandProgress(db: Database, userId: string): Promise<void> {
+  try {
+    await db.run(`
+      DELETE FROM command_progress
+      WHERE user_id = ?
+    `, userId)
+  } catch (error) {
+    console.error('Failed to reset command progress:', error)
+    throw error
+  }
+}
+
+// Helper function to get user's funnel progress
+export async function getFunnelProgress(db: Database, userId: string): Promise<FunnelProgress | null> {
+  try {
+    const progress = await db.get(`
+      SELECT * FROM funnel_progress
+      WHERE user_id = ?
+    `, userId)
+
+    if (!progress) return null
+
+    return {
+      user_id: progress.user_id,
+      current_command_index: progress.current_command_index,
+      completed_commands: JSON.parse(progress.completed_commands),
+      command_responses: JSON.parse(progress.command_responses),
+      last_updated: progress.last_updated
+    }
+  } catch (error) {
+    console.error('Failed to get funnel progress:', error)
+    throw error
+  }
+}
+
+// Helper function to update user's funnel progress
+export async function updateFunnelProgress(
+  db: Database, 
+  userId: string, 
+  currentIndex: number,
+  completedCommands: string[],
+  commandResponses: { [key: string]: string }
+): Promise<void> {
+  try {
+    await db.run(`
+      INSERT OR REPLACE INTO funnel_progress (
+        user_id,
+        current_command_index,
+        completed_commands,
+        command_responses,
+        last_updated
+      )
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `, userId, currentIndex, JSON.stringify(completedCommands), JSON.stringify(commandResponses))
+  } catch (error) {
+    console.error('Failed to update funnel progress:', error)
+    throw error
+  }
+}
+
+// Helper function to check if user has completed the funnel
+export async function checkFunnelCompletion(db: Database, userId: string): Promise<FunnelCompletion | null> {
+  try {
+    const completion = await db.get(`
+      SELECT * FROM funnel_completion
+      WHERE user_id = ?
+    `, userId)
+
+    if (!completion) return null
+
+    return {
+      user_id: completion.user_id,
+      completed_at: completion.completed_at,
+      completion_data: JSON.parse(completion.completion_data)
+    }
+  } catch (error) {
+    console.error('Failed to check funnel completion:', error)
+    throw error
+  }
+}
+
+// Helper function to mark funnel as completed
+export async function markFunnelCompleted(
+  db: Database, 
+  userId: string,
+  completionData: FunnelCompletion['completion_data']
+): Promise<void> {
+  try {
+    await db.run(`
+      INSERT OR REPLACE INTO funnel_completion (
+        user_id,
+        completed_at,
+        completion_data
+      )
+      VALUES (?, CURRENT_TIMESTAMP, ?)
+    `, userId, JSON.stringify(completionData))
+  } catch (error) {
+    console.error('Failed to mark funnel as completed:', error)
+    throw error
   }
 } 
