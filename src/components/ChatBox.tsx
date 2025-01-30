@@ -744,7 +744,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
         </div>
 
         {/* Personality Analysis - Bottom Half */}
-        <div className="h-[calc(50%-12px)] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern mb-8">
+        <div className="h-[500px] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern mb-8">
           <div className="border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>

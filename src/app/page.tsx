@@ -10,6 +10,7 @@ export default function Home() {
   const { data: session } = useSession()
   const [tweets, setTweets] = useState<Tweet[]>([])
   const [terminalComplete, setTerminalComplete] = useState(false)
+  const [showContent, setShowContent] = useState(false)
 
   // Fetch tweets when session is available
   useEffect(() => {
@@ -33,15 +34,23 @@ export default function Home() {
   useEffect(() => {
     if (!session) {
       setTerminalComplete(false)
+      setShowContent(false)
     }
   }, [session])
 
+  // Handle terminal completion
+  const handleTerminalComplete = () => {
+    setTerminalComplete(true)
+    // Small delay to ensure terminal fade out starts first
+    setTimeout(() => setShowContent(true), 100)
+  }
+
   if (!terminalComplete) {
-    return <TerminalModal onComplete={() => setTerminalComplete(true)} />
+    return <TerminalModal onComplete={handleTerminalComplete} />
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-black via-red-950/20 to-black text-red-500 font-mono flex">
+    <main className={`min-h-screen bg-gradient-to-br from-black via-red-950/20 to-black text-red-500 font-mono flex ${showContent ? 'animate-fadeIn' : 'opacity-0'}`}>
       <div className="flex-1 flex items-center justify-center p-3">
         {session ? (
           <ChatBox
@@ -50,7 +59,8 @@ export default function Home() {
               name: session.username || null,
               bio: null,
               followersCount: null,
-              followingCount: null
+              followingCount: null,
+              imageUrl: session.user?.image || null // Fixed the linter error by adding imageUrl
             }}
             onClose={() => signIn('twitter')}
             onTweetsUpdate={setTweets}

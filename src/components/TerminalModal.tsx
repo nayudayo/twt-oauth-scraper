@@ -21,6 +21,8 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
   const [lines, setLines] = useState<TerminalLine[]>([{ content: SYSTEM_MESSAGES.BOOT }])
   const [currentCommandIndex, setCurrentCommandIndex] = useState(0)
   const [showCursor, setShowCursor] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
+  const [showMainContent, setShowMainContent] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const terminalRef = useRef<HTMLDivElement>(null)
 
@@ -44,7 +46,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
     inputRef.current?.focus()
   }, [])
 
-  const handleCommand = (command: string) => {
+  const handleCommand = async (command: string) => {
     const normalizedCommand = command.trim().toLowerCase()
     const newLines: TerminalLine[] = [
       ...lines,
@@ -65,6 +67,12 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
           isError: true 
         })
       } else if (currentCommand.validation(command)) {
+        // Add placeholder response for each command
+        newLines.push({ 
+          content: "It works!",
+          isSuccess: true 
+        })
+        
         newLines.push({ 
           content: SYSTEM_MESSAGES.COMMAND_RESPONSES.COMMAND_ACCEPTED(currentCommand.description),
           isSuccess: true
@@ -79,7 +87,18 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
             content: SYSTEM_MESSAGES.ACCESS_GRANTED,
             isSuccess: true
           })
-          setTimeout(onComplete, 2000)
+          
+          setLines(newLines)
+          setIsLoading(true)
+          
+          // Simulate loading and transition
+          setTimeout(() => {
+            setIsLoading(false)
+            setShowMainContent(true)
+            setTimeout(onComplete, 500) // Give time for fade-in animation
+          }, 2000)
+          
+          return
         } else {
           newLines.push({ 
             content: SYSTEM_MESSAGES.COMMAND_RESPONSES.NEXT_COMMAND(REQUIRED_COMMANDS[currentCommandIndex + 1].command),
@@ -107,8 +126,13 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
-      <div className="relative w-full max-w-4xl h-[85vh]">
+    <div className={`fixed inset-0 bg-black flex items-center justify-center z-50 ${showMainContent ? 'animate-fadeOut' : ''}`}>
+      {isLoading && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60]">
+          <div className="w-32 h-32 border-4 border-red-500/20 border-t-red-500 rounded-full animate-spin" />
+        </div>
+      )}
+      <div className={`relative w-full max-w-4xl h-[85vh] transition-opacity duration-500 ${isLoading ? 'opacity-30' : 'opacity-100'}`}>
         {/* CRT screen effect */}
         <div className="absolute inset-0 pointer-events-none crt">
           <div className="absolute inset-0 bg-gradient-to-b from-red-500/5 to-transparent opacity-50" />
