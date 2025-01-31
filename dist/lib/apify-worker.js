@@ -163,7 +163,8 @@ async function runScraper() {
             name: targetUsername,
             bio: null,
             followersCount: null,
-            followingCount: null
+            followingCount: null,
+            imageUrl: null
         };
         // Initialize database and save tweets
         const db = await (0, db_1.initDB)();

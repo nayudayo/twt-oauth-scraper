@@ -4,6 +4,7 @@ import { PersonalityAnalysis } from '@/lib/openai'
 import ReactMarkdown from 'react-markdown'
 import { Spinner } from '@/components/ui/spinner'
 import '@/styles/glow.css'
+import Image from 'next/image'
 
 interface ChatBoxProps {
   tweets: Tweet[]
@@ -387,6 +388,12 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       setAbortController(null)
     }
   }
+
+  useEffect(() => {
+    return () => {
+      handleCancelScraping()
+    }
+  }, [handleCancelScraping])
 
   return (
     <>
@@ -943,10 +950,12 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   <div className="flex flex-col items-center gap-4 mb-8 p-4 bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg hover-glow ancient-border">
                     <div className="w-20 h-20 rounded-full border-2 border-red-500/20 overflow-hidden hover-glow">
                       {profile.imageUrl ? (
-                        <img 
-                          src={profile.imageUrl} 
-                          alt={profile.name || 'Profile'} 
+                        <Image
+                          src={profile.imageUrl}
+                          alt={profile.name || 'Profile'}
                           className="w-full h-full object-cover"
+                          width={80}
+                          height={80}
                         />
                       ) : (
                         <div className="w-full h-full bg-red-500/5 flex items-center justify-center">

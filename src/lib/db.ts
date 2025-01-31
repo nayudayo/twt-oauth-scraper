@@ -57,6 +57,13 @@ interface FunnelCompletion {
   }
 }
 
+interface ReferralCodeStats {
+  code: string
+  owner_user_id: string
+  usage_count: number
+  created_at: string
+}
+
 export async function initDB() {
   try {
     console.log('Initializing database at:', DB_PATH)
@@ -121,11 +128,43 @@ export async function initDB() {
         completion_data JSON DEFAULT '{}',
         FOREIGN KEY (user_id) REFERENCES users(id)
       );
+
+      CREATE TABLE IF NOT EXISTS referral_tracking (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        referral_code TEXT NOT NULL,
+        referrer_user_id TEXT NOT NULL,
+        referred_user_id TEXT NOT NULL,
+        used_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (referrer_user_id) REFERENCES users(id),
+        FOREIGN KEY (referred_user_id) REFERENCES users(id),
+        UNIQUE(referred_user_id)  -- Each user can only use one referral code
+      );
+
+      CREATE TABLE IF NOT EXISTS referral_codes (
+        code TEXT PRIMARY KEY,
+        owner_user_id TEXT NOT NULL,
+        usage_count INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (owner_user_id) REFERENCES users(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS referral_usage_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        referral_code TEXT NOT NULL,
+        used_by_user_id TEXT NOT NULL,
+        used_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (referral_code) REFERENCES referral_codes(code),
+        FOREIGN KEY (used_by_user_id) REFERENCES users(id)
+      );
     
       -- Indexes for better query performance
       CREATE INDEX IF NOT EXISTS idx_tweets_user ON tweets(user_id, created_at);
       CREATE INDEX IF NOT EXISTS idx_tweets_created ON tweets(created_at);
       CREATE INDEX IF NOT EXISTS idx_tweets_text ON tweets(text);
+      CREATE INDEX IF NOT EXISTS idx_referral_code ON referral_tracking(referral_code);
+      CREATE INDEX IF NOT EXISTS idx_referrer ON referral_tracking(referrer_user_id);
+      CREATE INDEX IF NOT EXISTS idx_referral_code_owner ON referral_codes(owner_user_id);
+      CREATE INDEX IF NOT EXISTS idx_referral_usage ON referral_usage_log(referral_code);
     `)
     
     return db
@@ -406,5 +445,118 @@ export async function markFunnelCompleted(
   } catch (error) {
     console.error('Failed to mark funnel as completed:', error)
     throw error
+  }
+}
+
+// Helper function to track referral usage
+export async function trackReferralUse(
+  db: Database,
+  referralCode: string,
+  usedByUserId: string
+) {
+  try {
+    // Start a transaction to ensure both operations complete
+    await db.run('BEGIN TRANSACTION')
+
+    // Increment the usage count
+    await db.run(`
+      UPDATE referral_codes 
+      SET usage_count = usage_count + 1 
+      WHERE code = ?
+    `, referralCode)
+
+    // Log the usage
+    await db.run(`
+      INSERT INTO referral_usage_log (referral_code, used_by_user_id)
+      VALUES (?, ?)
+    `, referralCode, usedByUserId)
+
+    await db.run('COMMIT')
+    return true
+  } catch (error) {
+    await db.run('ROLLBACK')
+    console.error('Failed to track referral usage:', error)
+    return false
+  }
+}
+
+// Helper function to get referral statistics for a user
+export async function getReferralStats(db: Database, userId: string) {
+  try {
+    // Get all referral codes owned by the user with their usage counts
+    const codes = await db.all<ReferralCodeStats[]>(`
+      SELECT code, owner_user_id, usage_count, created_at
+      FROM referral_codes 
+      WHERE owner_user_id = ?
+    `, userId)
+    
+    // Get recent usage logs
+    const recentUsage = await db.all(`
+      SELECT rl.referral_code, rl.used_by_user_id, rl.used_at
+      FROM referral_usage_log rl
+      JOIN referral_codes rc ON rl.referral_code = rc.code
+      WHERE rc.owner_user_id = ?
+      ORDER BY rl.used_at DESC
+      LIMIT 10
+    `, userId)
+    
+    return {
+      codes,
+      recentUsage,
+      totalUses: codes.reduce((sum, code) => sum + code.usage_count, 0)
+    }
+  } catch (error) {
+    console.error('Failed to get referral stats:', error)
+    return { codes: [], recentUsage: [], totalUses: 0 }
+  }
+}
+
+// Helper function to check if a referral code exists and is valid
+export async function validateReferralCode(db: Database, referralCode: string) {
+  try {
+    const result = await db.get(`
+      SELECT code, owner_user_id, usage_count
+      FROM referral_codes
+      WHERE code = ?
+    `, referralCode)
+    
+    return result !== undefined
+  } catch (error) {
+    console.error('Failed to validate referral code:', error)
+    return false
+  }
+}
+
+// Helper function to get a specific referral code's usage count
+export async function getReferralCodeUsage(db: Database, referralCode: string) {
+  try {
+    const result = await db.get<{ usage_count: number }>(`
+      SELECT usage_count
+      FROM referral_codes
+      WHERE code = ?
+    `, referralCode)
+    
+    return result?.usage_count || 0
+  } catch (error) {
+    console.error('Failed to get referral code usage:', error)
+    return 0
+  }
+}
+
+// Helper function to create a new referral code
+export async function createReferralCode(
+  db: Database,
+  code: string,
+  ownerUserId: string
+) {
+  try {
+    await db.run(`
+      INSERT INTO referral_codes (code, owner_user_id)
+      VALUES (?, ?)
+    `, code, ownerUserId)
+    return true
+  } catch (error) {
+    console.error('Failed to create referral code:', error)
+    return false
   }
 } 

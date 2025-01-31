@@ -9,6 +9,18 @@ exports.saveTweets = saveTweets;
 exports.getUserTweets = getUserTweets;
 exports.savePersonalityAnalysis = savePersonalityAnalysis;
 exports.getLatestAnalysis = getLatestAnalysis;
+exports.getCommandProgress = getCommandProgress;
+exports.updateCommandProgress = updateCommandProgress;
+exports.resetCommandProgress = resetCommandProgress;
+exports.getFunnelProgress = getFunnelProgress;
+exports.updateFunnelProgress = updateFunnelProgress;
+exports.checkFunnelCompletion = checkFunnelCompletion;
+exports.markFunnelCompleted = markFunnelCompleted;
+exports.trackReferralUse = trackReferralUse;
+exports.getReferralStats = getReferralStats;
+exports.validateReferralCode = validateReferralCode;
+exports.getReferralCodeUsage = getReferralCodeUsage;
+exports.createReferralCode = createReferralCode;
 const sqlite3_1 = __importDefault(require("sqlite3"));
 const sqlite_1 = require("sqlite");
 const path_1 = __importDefault(require("path"));
@@ -36,6 +48,7 @@ async function initDB() {
         id TEXT PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
         profile_data JSON,
+        profile_picture_url TEXT,
         last_scraped DATETIME,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
@@ -61,11 +74,59 @@ async function initDB() {
         analyzed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id)
       );
+
+      CREATE TABLE IF NOT EXISTS funnel_progress (
+        user_id TEXT PRIMARY KEY,
+        current_command_index INTEGER DEFAULT 0,
+        completed_commands JSON DEFAULT '[]',
+        command_responses JSON DEFAULT '{}',
+        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS funnel_completion (
+        user_id TEXT PRIMARY KEY,
+        completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        completion_data JSON DEFAULT '{}',
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS referral_tracking (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        referral_code TEXT NOT NULL,
+        referrer_user_id TEXT NOT NULL,
+        referred_user_id TEXT NOT NULL,
+        used_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (referrer_user_id) REFERENCES users(id),
+        FOREIGN KEY (referred_user_id) REFERENCES users(id),
+        UNIQUE(referred_user_id)  -- Each user can only use one referral code
+      );
+
+      CREATE TABLE IF NOT EXISTS referral_codes (
+        code TEXT PRIMARY KEY,
+        owner_user_id TEXT NOT NULL,
+        usage_count INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (owner_user_id) REFERENCES users(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS referral_usage_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        referral_code TEXT NOT NULL,
+        used_by_user_id TEXT NOT NULL,
+        used_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (referral_code) REFERENCES referral_codes(code),
+        FOREIGN KEY (used_by_user_id) REFERENCES users(id)
+      );
     
       -- Indexes for better query performance
       CREATE INDEX IF NOT EXISTS idx_tweets_user ON tweets(user_id, created_at);
       CREATE INDEX IF NOT EXISTS idx_tweets_created ON tweets(created_at);
       CREATE INDEX IF NOT EXISTS idx_tweets_text ON tweets(text);
+      CREATE INDEX IF NOT EXISTS idx_referral_code ON referral_tracking(referral_code);
+      CREATE INDEX IF NOT EXISTS idx_referrer ON referral_tracking(referrer_user_id);
+      CREATE INDEX IF NOT EXISTS idx_referral_code_owner ON referral_codes(owner_user_id);
+      CREATE INDEX IF NOT EXISTS idx_referral_usage ON referral_usage_log(referral_code);
     `);
         return db;
     }
@@ -79,9 +140,9 @@ async function saveUserProfile(db, username, profile) {
     try {
         console.log(`Saving profile for user: ${username}`);
         const result = await db.run(`
-      INSERT OR REPLACE INTO users (id, username, profile_data, last_scraped)
-      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-    `, username, username, JSON.stringify(profile));
+      INSERT OR REPLACE INTO users (id, username, profile_data, profile_picture_url, last_scraped)
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `, username, username, JSON.stringify(profile), profile.imageUrl);
         console.log('Profile saved successfully:', result);
         return result;
     }
@@ -155,4 +216,232 @@ async function getLatestAnalysis(db, userId) {
         communicationStyle: JSON.parse(analysis.communication_style),
         analyzedAt: analysis.analyzed_at
     };
+}
+// Helper function to get user's command progress
+async function getCommandProgress(db, userId) {
+    try {
+        const progress = await db.get(`
+      SELECT * FROM command_progress
+      WHERE user_id = ?
+    `, userId);
+        if (!progress)
+            return null;
+        return {
+            user_id: progress.user_id,
+            current_command_index: progress.current_command_index,
+            completed_commands: JSON.parse(progress.completed_commands),
+            last_updated: progress.last_updated
+        };
+    }
+    catch (error) {
+        console.error('Failed to get command progress:', error);
+        throw error;
+    }
+}
+// Helper function to update user's command progress
+async function updateCommandProgress(db, userId, currentIndex, completedCommands) {
+    try {
+        await db.run(`
+      INSERT OR REPLACE INTO command_progress (
+        user_id,
+        current_command_index,
+        completed_commands,
+        last_updated
+      )
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    `, userId, currentIndex, JSON.stringify(completedCommands));
+    }
+    catch (error) {
+        console.error('Failed to update command progress:', error);
+        throw error;
+    }
+}
+// Helper function to reset user's command progress
+async function resetCommandProgress(db, userId) {
+    try {
+        await db.run(`
+      DELETE FROM command_progress
+      WHERE user_id = ?
+    `, userId);
+    }
+    catch (error) {
+        console.error('Failed to reset command progress:', error);
+        throw error;
+    }
+}
+// Helper function to get user's funnel progress
+async function getFunnelProgress(db, userId) {
+    try {
+        const progress = await db.get(`
+      SELECT * FROM funnel_progress
+      WHERE user_id = ?
+    `, userId);
+        if (!progress)
+            return null;
+        return {
+            user_id: progress.user_id,
+            current_command_index: progress.current_command_index,
+            completed_commands: JSON.parse(progress.completed_commands),
+            command_responses: JSON.parse(progress.command_responses),
+            last_updated: progress.last_updated
+        };
+    }
+    catch (error) {
+        console.error('Failed to get funnel progress:', error);
+        throw error;
+    }
+}
+// Helper function to update user's funnel progress
+async function updateFunnelProgress(db, userId, currentIndex, completedCommands, commandResponses) {
+    try {
+        await db.run(`
+      INSERT OR REPLACE INTO funnel_progress (
+        user_id,
+        current_command_index,
+        completed_commands,
+        command_responses,
+        last_updated
+      )
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `, userId, currentIndex, JSON.stringify(completedCommands), JSON.stringify(commandResponses));
+    }
+    catch (error) {
+        console.error('Failed to update funnel progress:', error);
+        throw error;
+    }
+}
+// Helper function to check if user has completed the funnel
+async function checkFunnelCompletion(db, userId) {
+    try {
+        const completion = await db.get(`
+      SELECT * FROM funnel_completion
+      WHERE user_id = ?
+    `, userId);
+        if (!completion)
+            return null;
+        return {
+            user_id: completion.user_id,
+            completed_at: completion.completed_at,
+            completion_data: JSON.parse(completion.completion_data)
+        };
+    }
+    catch (error) {
+        console.error('Failed to check funnel completion:', error);
+        throw error;
+    }
+}
+// Helper function to mark funnel as completed
+async function markFunnelCompleted(db, userId, completionData) {
+    try {
+        await db.run(`
+      INSERT OR REPLACE INTO funnel_completion (
+        user_id,
+        completed_at,
+        completion_data
+      )
+      VALUES (?, CURRENT_TIMESTAMP, ?)
+    `, userId, JSON.stringify(completionData));
+    }
+    catch (error) {
+        console.error('Failed to mark funnel as completed:', error);
+        throw error;
+    }
+}
+// Helper function to track referral usage
+async function trackReferralUse(db, referralCode, usedByUserId) {
+    try {
+        // Start a transaction to ensure both operations complete
+        await db.run('BEGIN TRANSACTION');
+        // Increment the usage count
+        await db.run(`
+      UPDATE referral_codes 
+      SET usage_count = usage_count + 1 
+      WHERE code = ?
+    `, referralCode);
+        // Log the usage
+        await db.run(`
+      INSERT INTO referral_usage_log (referral_code, used_by_user_id)
+      VALUES (?, ?)
+    `, referralCode, usedByUserId);
+        await db.run('COMMIT');
+        return true;
+    }
+    catch (error) {
+        await db.run('ROLLBACK');
+        console.error('Failed to track referral usage:', error);
+        return false;
+    }
+}
+// Helper function to get referral statistics for a user
+async function getReferralStats(db, userId) {
+    try {
+        // Get all referral codes owned by the user with their usage counts
+        const codes = await db.all(`
+      SELECT code, owner_user_id, usage_count, created_at
+      FROM referral_codes 
+      WHERE owner_user_id = ?
+    `, userId);
+        // Get recent usage logs
+        const recentUsage = await db.all(`
+      SELECT rl.referral_code, rl.used_by_user_id, rl.used_at
+      FROM referral_usage_log rl
+      JOIN referral_codes rc ON rl.referral_code = rc.code
+      WHERE rc.owner_user_id = ?
+      ORDER BY rl.used_at DESC
+      LIMIT 10
+    `, userId);
+        return {
+            codes,
+            recentUsage,
+            totalUses: codes.reduce((sum, code) => sum + code.usage_count, 0)
+        };
+    }
+    catch (error) {
+        console.error('Failed to get referral stats:', error);
+        return { codes: [], recentUsage: [], totalUses: 0 };
+    }
+}
+// Helper function to check if a referral code exists and is valid
+async function validateReferralCode(db, referralCode) {
+    try {
+        const result = await db.get(`
+      SELECT code, owner_user_id, usage_count
+      FROM referral_codes
+      WHERE code = ?
+    `, referralCode);
+        return result !== undefined;
+    }
+    catch (error) {
+        console.error('Failed to validate referral code:', error);
+        return false;
+    }
+}
+// Helper function to get a specific referral code's usage count
+async function getReferralCodeUsage(db, referralCode) {
+    try {
+        const result = await db.get(`
+      SELECT usage_count
+      FROM referral_codes
+      WHERE code = ?
+    `, referralCode);
+        return (result === null || result === void 0 ? void 0 : result.usage_count) || 0;
+    }
+    catch (error) {
+        console.error('Failed to get referral code usage:', error);
+        return 0;
+    }
+}
+// Helper function to create a new referral code
+async function createReferralCode(db, code, ownerUserId) {
+    try {
+        await db.run(`
+      INSERT INTO referral_codes (code, owner_user_id)
+      VALUES (?, ?)
+    `, code, ownerUserId);
+        return true;
+    }
+    catch (error) {
+        console.error('Failed to create referral code:', error);
+        return false;
+    }
 }

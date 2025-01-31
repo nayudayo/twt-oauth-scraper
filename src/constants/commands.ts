@@ -1,4 +1,6 @@
 import { SYSTEM_MESSAGES } from './messages'
+import { isValidSolanaAddress, generateExampleSolanaAddress, extractSolanaAddress } from '@/utils/solana'
+import { isValidReferralCode, generateExampleReferralCode, extractReferralResponse } from '@/utils/referral'
 
 export interface Command {
   command: string
@@ -23,8 +25,11 @@ export const REQUIRED_COMMANDS: Command[] = [
   {
     command: 'SOL_WALLET',
     description: 'Connect or update your Solana wallet',
-    expectedInput: 'sol_wallet',
-    validation: (input: string) => input.trim().toLowerCase().startsWith('sol_wallet')
+    expectedInput: `sol_wallet ${generateExampleSolanaAddress()}`,
+    validation: (input: string) => {
+      const address = extractSolanaAddress(input)
+      return address !== null && isValidSolanaAddress(address)
+    }
   },
   {
     command: 'REFER',
@@ -34,9 +39,12 @@ export const REQUIRED_COMMANDS: Command[] = [
   },
   {
     command: 'SUBMIT_REFERRAL',
-    description: 'Submit a referral code',
-    expectedInput: 'submit_referral',
-    validation: (input: string) => input.trim().toLowerCase().startsWith('submit_referral')
+    description: 'Submit a referral code or type "submit_referral no" if you don\'t have one',
+    expectedInput: `submit_referral ${generateExampleReferralCode()}`,
+    validation: (input: string) => {
+      const response = extractReferralResponse(input)
+      return response !== null && isValidReferralCode(response)
+    }
   },
   {
     command: 'GENERATE_REFERRAL',

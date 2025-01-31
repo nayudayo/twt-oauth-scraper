@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { REQUIRED_COMMANDS, HELP_MESSAGE } from '@/constants/commands'
 import { SYSTEM_MESSAGES } from '@/constants/messages'
 import { useSession } from 'next-auth/react'
+import { extractReferralResponse, generateReferralCode } from '@/utils/referral'
 
 interface TerminalModalProps {
   onComplete: () => void
@@ -61,14 +62,16 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
                   { content: "It works!", isSuccess: true },
                   { content: SYSTEM_MESSAGES.COMMAND_RESPONSES.COMMAND_ACCEPTED(command.description), isSuccess: true }
                 )
-                
-                if (index < data.progress.completed_commands.length - 1) {
-                  reconstructedLines.push({
-                    content: SYSTEM_MESSAGES.COMMAND_RESPONSES.NEXT_COMMAND(REQUIRED_COMMANDS[index + 1].command),
-                    isSystem: true
-                  })
-                }
               })
+
+              // Add next command message if there are more commands to complete
+              if (data.progress.current_command_index < REQUIRED_COMMANDS.length) {
+                reconstructedLines.push({
+                  content: SYSTEM_MESSAGES.COMMAND_RESPONSES.NEXT_COMMAND(REQUIRED_COMMANDS[data.progress.current_command_index].command),
+                  isSystem: true
+                })
+              }
+              
               setLines(reconstructedLines)
             }
           }
@@ -146,21 +149,40 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
         // Store the user's response
         const updatedResponses = {
           ...commandResponses,
-          [currentCommand.command]: command
+          [currentCommand.command]: currentCommand.command === 'SUBMIT_REFERRAL' ? 
+            extractReferralResponse(command) || command : // Fallback to full command if extraction fails
+            command
         }
         setCommandResponses(updatedResponses)
 
-        // Add placeholder response for each command
-        newLines.push({ 
-          content: "It works!",
-          isSuccess: true 
-        })
+        // Add command-specific responses
+        if (currentCommand.command === 'REFER') {
+          newLines.push({ 
+            content: SYSTEM_MESSAGES.COMMAND_RESPONSES.REFERRAL_INFO,
+            isSystem: true 
+          })
+        } else if (currentCommand.command === 'SOL_WALLET') {
+          newLines.push({
+            content: "[SUCCESS] Wallet address verified and stored successfully",
+            isSuccess: true
+          })
+        } else if (currentCommand.command === 'GENERATE_REFERRAL') {
+          // Generate referral code based on username and wallet address
+          const username = session?.user?.name || ''
+          const walletAddress = commandResponses['SOL_WALLET']?.split(' ')[1] || ''
+          const referralCode = generateReferralCode(username, walletAddress)
+          
+          newLines.push({
+            content: `[SUCCESS] Your unique referral code has been generated:\n\n${referralCode}\n\nShare this code with others to earn rewards!`,
+            isSuccess: true
+          })
+        } else {
+          newLines.push({ 
+            content: "[SUCCESS] Command accepted: " + currentCommand.description,
+            isSuccess: true 
+          })
+        }
         
-        newLines.push({ 
-          content: SYSTEM_MESSAGES.COMMAND_RESPONSES.COMMAND_ACCEPTED(currentCommand.description),
-          isSuccess: true
-        })
-
         const updatedCompletedCommands = [...completedCommands, currentCommand.command]
         setCompletedCommands(updatedCompletedCommands)
         
@@ -233,6 +255,20 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
     e.preventDefault()
     if (input.trim()) {
       handleCommand(input)
+      setInput('')
+    } else {
+      // Handle empty command
+      setLines(prev => [
+        ...prev,
+        { 
+          content: `> ${input}`,
+          isCommand: true
+        },
+        {
+          content: SYSTEM_MESSAGES.ERROR.UNKNOWN_COMMAND,
+          isError: true
+        }
+      ])
       setInput('')
     }
   }
