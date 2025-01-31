@@ -166,16 +166,78 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
             content: "[SUCCESS] Wallet address verified and stored successfully",
             isSuccess: true
           })
+        } else if (currentCommand.command === 'SUBMIT_REFERRAL') {
+          // Validate the referral code with the API
+          try {
+            const referralCode = extractReferralResponse(command)
+            if (!referralCode) {
+              throw new Error('Invalid referral code format')
+            }
+
+            const response = await fetch('/api/validate-referral', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                userId: session?.user?.name,
+                referralCode: referralCode
+              })
+            })
+
+            if (!response.ok) {
+              throw new Error('Invalid referral code')
+            }
+
+            newLines.push({
+              content: "[SUCCESS] Command accepted: " + currentCommand.description,
+              isSuccess: true
+            })
+          } catch (error) {
+            console.error('Failed to validate referral code:', error)
+            newLines.push({
+              content: '[ERROR] Invalid referral code. Please try again.',
+              isError: true
+            })
+            setLines(newLines)
+            return
+          }
         } else if (currentCommand.command === 'GENERATE_REFERRAL') {
           // Generate referral code based on username and wallet address
           const username = session?.user?.name || ''
           const walletAddress = commandResponses['SOL_WALLET']?.split(' ')[1] || ''
           const referralCode = generateReferralCode(username, walletAddress)
           
-          newLines.push({
-            content: `[SUCCESS] Your unique referral code has been generated:\n\n${referralCode}\n\nShare this code with others to earn rewards!`,
-            isSuccess: true
-          })
+          // Store the referral code in the database
+          try {
+            const response = await fetch('/api/referral-code', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                userId: username,
+                referralCode: referralCode
+              })
+            })
+
+            if (!response.ok) {
+              throw new Error('Failed to store referral code')
+            }
+
+            newLines.push({
+              content: `[SUCCESS] Your unique referral code has been generated:\n\n${referralCode}\n\nShare this code with others to earn rewards!`,
+              isSuccess: true
+            })
+          } catch (error) {
+            console.error('Failed to store referral code:', error)
+            newLines.push({
+              content: '[ERROR] Failed to generate referral code. Please try again.',
+              isError: true
+            })
+            setLines(newLines)
+            return
+          }
         } else {
           newLines.push({ 
             content: "[SUCCESS] Command accepted: " + currentCommand.description,

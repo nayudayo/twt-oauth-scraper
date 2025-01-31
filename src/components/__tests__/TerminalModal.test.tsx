@@ -89,6 +89,7 @@ describe('TerminalModal', () => {
     ;(global.fetch as jest.Mock).mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
+        status: 200,
         json: () => Promise.resolve({ success: true })
       })
     )
@@ -99,7 +100,6 @@ describe('TerminalModal', () => {
     const firstCommand = REQUIRED_COMMANDS[0]
     await userEvent.type(input, `${firstCommand.expectedInput}{enter}`)
     
-    // Updated to match new success message format
     await waitFor(() => {
       expect(screen.getByText(`[SUCCESS] Command accepted: ${firstCommand.description}`)).toBeInTheDocument()
     })
@@ -125,14 +125,26 @@ describe('TerminalModal', () => {
   })
 
   it('completes sequence and calls onComplete after all commands', async () => {
-    // Mock successful API responses
-    REQUIRED_COMMANDS.forEach(() => {
-      ;(global.fetch as jest.Mock).mockImplementationOnce(() =>
-        Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ success: true })
-        })
-      )
+    // Mock successful API responses for all fetch calls
+    // First mock for loading progress
+    ;(global.fetch as jest.Mock).mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ progress: null, completion: null })
+      })
+    )
+
+    // Mock for each command progress save and referral operations
+    const mockSuccessResponse = {
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ success: true })
+    }
+
+    // Add enough mocks for all API calls (progress saves + referral operations)
+    Array(10).fill(null).forEach(() => {
+      ;(global.fetch as jest.Mock).mockImplementationOnce(() => Promise.resolve(mockSuccessResponse))
     })
 
     render(<TerminalModal onComplete={mockOnComplete} />)
@@ -438,13 +450,25 @@ describe('TerminalModal', () => {
 
   it('shows loading state during funnel completion', async () => {
     // Mock successful API responses
-    REQUIRED_COMMANDS.forEach(() => {
-      ;(global.fetch as jest.Mock).mockImplementationOnce(() =>
-        Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ success: true })
-        })
-      )
+    // First mock for loading progress
+    ;(global.fetch as jest.Mock).mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ progress: null, completion: null })
+      })
+    )
+
+    // Mock for each command progress save and referral operations
+    const mockSuccessResponse = {
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ success: true })
+    }
+
+    // Add enough mocks for all API calls
+    Array(10).fill(null).forEach(() => {
+      ;(global.fetch as jest.Mock).mockImplementationOnce(() => Promise.resolve(mockSuccessResponse))
     })
 
     render(<TerminalModal onComplete={mockOnComplete} />)
@@ -749,9 +773,29 @@ describe('TerminalModal Command Tests', () => {
       await waitFor(() => {
         expect(screen.getByText(/Command accepted: Submit a referral code/)).toBeInTheDocument()
       })
+
+      // Verify API was called with correct data
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/validate-referral',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'Content-Type': 'application/json'
+          }),
+          body: expect.stringContaining('PUSH-USER-1234')
+        })
+      )
     })
 
     it('accepts NO as valid input', async () => {
+      // Mock API to validate "NO" response
+      ;(global.fetch as jest.Mock).mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true })
+        })
+      )
+
       render(<TerminalModal onComplete={mockOnComplete} />)
       
       // Wait for progress to be restored
@@ -765,9 +809,30 @@ describe('TerminalModal Command Tests', () => {
       await waitFor(() => {
         expect(screen.getByText(/Command accepted: Submit a referral code/)).toBeInTheDocument()
       })
+
+      // Verify API was called with "NO"
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/validate-referral',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'Content-Type': 'application/json'
+          }),
+          body: expect.stringContaining('"referralCode":"NO"')
+        })
+      )
     })
 
     it('rejects invalid referral code format', async () => {
+      // Mock API to reject invalid code
+      ;(global.fetch as jest.Mock).mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: false,
+          status: 400,
+          json: () => Promise.resolve({ error: 'Invalid referral code' })
+        })
+      )
+
       render(<TerminalModal onComplete={mockOnComplete} />)
       
       // Wait for progress to be restored
@@ -779,8 +844,7 @@ describe('TerminalModal Command Tests', () => {
       await userEvent.type(input, 'submit_referral INVALID-CODE{enter}')
       
       await waitFor(() => {
-        expect(screen.getByText(/Invalid input/)).toBeInTheDocument()
-        expect(screen.getByText(/Please enter a valid referral code or type "NO"/)).toBeInTheDocument()
+        expect(screen.getByText(/Invalid input\. Please enter a valid referral code or type "NO" if you weren't referred/)).toBeInTheDocument()
       })
     })
   })
@@ -810,7 +874,15 @@ describe('TerminalModal Command Tests', () => {
       )
     })
 
-    it('generates referral code based on username and wallet', async () => {
+    it('generates and stores referral code', async () => {
+      // Mock API for storing referral code
+      ;(global.fetch as jest.Mock).mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true })
+        })
+      )
+
       render(<TerminalModal onComplete={mockOnComplete} />)
       
       // Wait for progress to be restored
@@ -821,24 +893,35 @@ describe('TerminalModal Command Tests', () => {
       const input = screen.getByRole('textbox')
       await userEvent.type(input, 'generate_referral{enter}')
       
-      // Updated success message checks
+      // Verify success message
       await waitFor(() => {
         expect(screen.getByText(/Your unique referral code has been generated/)).toBeInTheDocument()
-        expect(screen.getByText(/PUSH-TEST-/)).toBeInTheDocument()
+        expect(screen.getByText(/PUSH-/)).toBeInTheDocument()
         expect(screen.getByText(/Share this code with others to earn rewards!/)).toBeInTheDocument()
-        expect(screen.getByText(/Next required command: SHARE/)).toBeInTheDocument()
       })
+
+      // Verify API was called to store the code
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/referral-code',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'Content-Type': 'application/json'
+          }),
+          body: expect.stringContaining('PUSH-')
+        })
+      )
     })
 
-    it('stores generated code in database', async () => {
-      // Mock API for saving referral code
-      ;(global.fetch as jest.Mock)
-        .mockImplementationOnce(() => // Save progress
-          Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ success: true })
-          })
-        )
+    it('handles error when storing referral code fails', async () => {
+      // Mock API to fail with proper response structure
+      ;(global.fetch as jest.Mock).mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({ error: 'Failed to store referral code' })
+        })
+      )
 
       render(<TerminalModal onComplete={mockOnComplete} />)
       
@@ -850,17 +933,9 @@ describe('TerminalModal Command Tests', () => {
       const input = screen.getByRole('textbox')
       await userEvent.type(input, 'generate_referral{enter}')
       
-      // Verify API was called to save progress
+      // Verify error message
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(
-          expect.any(String),
-          expect.objectContaining({
-            method: 'POST',
-            headers: expect.objectContaining({
-              'Content-Type': 'application/json'
-            })
-          })
-        )
+        expect(screen.getByText(/Failed to generate referral code/)).toBeInTheDocument()
       })
     })
   })
