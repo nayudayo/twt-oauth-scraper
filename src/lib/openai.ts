@@ -6,6 +6,13 @@ function ensureString(value: string | null | undefined, defaultValue: string = '
   return value
 }
 
+export interface AnalysisSettings {
+  temperature: number
+  maxTokens: number
+  model: 'gpt-3.5-turbo' | 'gpt-4'
+  focus: 'general' | 'professional' | 'social' | 'academic'
+}
+
 export interface PersonalityAnalysis {
   summary: string
   traits: {
