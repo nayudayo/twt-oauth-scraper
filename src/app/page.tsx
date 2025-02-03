@@ -7,7 +7,7 @@ import { TerminalModal } from '@/components/TerminalModal'
 import { Tweet } from '@/types/scraper'
 
 export default function Home() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const [tweets, setTweets] = useState<Tweet[]>([])
   const [terminalComplete, setTerminalComplete] = useState(false)
   const [showContent, setShowContent] = useState(false)
@@ -45,34 +45,54 @@ export default function Home() {
     setTimeout(() => setShowContent(true), 100)
   }
 
-  if (!terminalComplete) {
-    return <TerminalModal onComplete={handleTerminalComplete} />
+  // Show loading state while checking session
+  if (status === 'loading') {
+    return (
+      <main className="min-h-screen bg-gradient-to-br from-black via-red-950/20 to-black text-red-500 font-mono flex">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-32 h-32 border-4 border-red-500/20 border-t-red-500 rounded-full animate-spin" />
+        </div>
+      </main>
+    )
   }
 
-  return (
-    <main className={`min-h-screen bg-gradient-to-br from-black via-red-950/20 to-black text-red-500 font-mono flex ${showContent ? 'animate-fadeIn' : 'opacity-0'}`}>
-      <div className="flex-1 flex items-center justify-center p-3">
-        {session ? (
-          <ChatBox
-            tweets={tweets}
-            profile={{
-              name: session.username || null,
-              bio: null,
-              followersCount: null,
-              followingCount: null,
-              imageUrl: session.user?.image || null // Fixed the linter error by adding imageUrl
-            }}
-            onClose={() => signIn('twitter')}
-            onTweetsUpdate={setTweets}
-          />
-        ) : (
+  // Show sign in button if not authenticated
+  if (!session) {
+    return (
+      <main className="min-h-screen bg-gradient-to-br from-black via-red-950/20 to-black text-red-500 font-mono flex">
+        <div className="flex-1 flex items-center justify-center">
           <button
             onClick={() => signIn('twitter')}
             className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow"
           >
             ESTABLISH CONNECTION
           </button>
-        )}
+        </div>
+      </main>
+    )
+  }
+
+  // Show terminal if authenticated but not completed
+  if (!terminalComplete) {
+    return <TerminalModal onComplete={handleTerminalComplete} />
+  }
+
+  // Show main content after terminal completion
+  return (
+    <main className={`min-h-screen bg-gradient-to-br from-black via-red-950/20 to-black text-red-500 font-mono flex ${showContent ? 'animate-fadeIn' : 'opacity-0'}`}>
+      <div className="flex-1 flex items-center justify-center p-3">
+        <ChatBox
+          tweets={tweets}
+          profile={{
+            name: session.username || null,
+            bio: null,
+            followersCount: null,
+            followingCount: null,
+            imageUrl: session.user?.image || null
+          }}
+          onClose={() => signIn('twitter')}
+          onTweetsUpdate={setTweets}
+        />
       </div>
     </main>
   )
