@@ -64,6 +64,12 @@ interface ReferralCodeStats {
   created_at: string
 }
 
+// Progress type for UI
+export type Progress = {
+  current_command_index: number
+  completed_commands: string[]
+}
+
 export async function initDB() {
   try {
     console.log('Initializing database at:', DB_PATH)
@@ -557,6 +563,37 @@ export async function createReferralCode(
     return true
   } catch (error) {
     console.error('Failed to create referral code:', error)
+    return false
+  }
+}
+
+// Helper function to save progress
+export async function saveProgress(
+  userId: string, 
+  currentIndex: number,
+  completedCommands: string[]
+): Promise<boolean> {
+  try {
+    const db = await open({
+      filename: DB_PATH,
+      driver: sqlite3.Database
+    })
+    
+    await db.run(
+      `INSERT OR REPLACE INTO funnel_progress (
+        user_id, 
+        current_command_index, 
+        completed_commands,
+        command_responses,
+        last_updated
+      ) VALUES (?, ?, ?, '{}', CURRENT_TIMESTAMP)`,
+      [userId, currentIndex, JSON.stringify(completedCommands)]
+    )
+    
+    await db.close()
+    return true
+  } catch (error) {
+    console.error('Error saving progress:', error)
     return false
   }
 } 

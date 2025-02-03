@@ -4,7 +4,6 @@ interface CommandProgressBody {
   userId: string
   currentIndex: number
   completedCommands: string[]
-  commandResponses: Record<string, string>
 }
 
 interface FunnelCompletionBody {
@@ -27,11 +26,8 @@ export const handlers = [
 
     return HttpResponse.json({
       progress: {
-        user_id: userId,
         current_command_index: 0,
-        completed_commands: [],
-        command_responses: {},
-        last_updated: new Date().toISOString()
+        completed_commands: []
       },
       completion: null
     })

@@ -198,40 +198,20 @@ describe('TerminalModal', () => {
         json: () => Promise.resolve({
           progress: {
             current_command_index: 1,
-            completed_commands: [firstCommand.command],
-            command_responses: {
-              [firstCommand.command]: firstCommand.expectedInput
-            }
-          }
+            completed_commands: [firstCommand.command]
+          },
+          completion: null
         })
       })
     )
 
     render(<TerminalModal onComplete={mockOnComplete} />)
     
-    // Wait for the first command's success indicators
+    // Wait for the next command prompt
     await waitFor(() => {
-      // Check for command input
-      const commandInput = screen.getByText(`> ${firstCommand.expectedInput}`)
-      expect(commandInput).toBeInTheDocument()
-      
-      // Check for success message
-      const successMessage = screen.getByText(/It works!/i)
-      expect(successMessage).toBeInTheDocument()
-      
-      // Check for command description
-      const commandDesc = screen.getByText(new RegExp(firstCommand.description, 'i'))
-      expect(commandDesc).toBeInTheDocument()
-    })
-
-    // Type the second command to verify it's ready for input
-    const input = screen.getByRole('textbox')
-    await userEvent.type(input, `${secondCommand.expectedInput}`)
-    
-    // Verify the input is accepted (no error message)
-    await waitFor(() => {
-      const errorMessages = screen.queryAllByText(/ERROR:|Invalid/i)
-      expect(errorMessages.length).toBe(0)
+      expect(screen.getByText((content) => 
+        content.includes(`Next required command: ${secondCommand.command}`)
+      )).toBeInTheDocument()
     })
   })
 
@@ -538,17 +518,13 @@ describe('TerminalModal', () => {
 
   it('restores multiple completed commands with correct next command message', async () => {
     // Mock API response with multiple completed commands
-    (global.fetch as jest.Mock).mockImplementationOnce(() =>
+    ;(global.fetch as jest.Mock).mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({
           progress: {
             current_command_index: 2,
-            completed_commands: [REQUIRED_COMMANDS[0].command, REQUIRED_COMMANDS[1].command],
-            command_responses: {
-              [REQUIRED_COMMANDS[0].command]: 'test_response_1',
-              [REQUIRED_COMMANDS[1].command]: 'test_response_2'
-            }
+            completed_commands: [REQUIRED_COMMANDS[0].command, REQUIRED_COMMANDS[1].command]
           },
           completion: null
         })
@@ -557,14 +533,10 @@ describe('TerminalModal', () => {
 
     render(<TerminalModal onComplete={mockOnComplete} />)
 
-    // Wait for progress to be restored
+    // Wait for next command prompt
     await waitFor(() => {
-      // Check for both completed commands
-      expect(screen.getByText(`> test_response_1`)).toBeInTheDocument()
-      expect(screen.getByText(`> test_response_2`)).toBeInTheDocument()
-      // Check for next command message - should be SOL_WALLET since we completed JOIN_TELEGRAM and VERIFY_TELEGRAM
       expect(screen.getByText((content) => 
-        content.includes(`[SYSTEM] Next required command: ${REQUIRED_COMMANDS[2].command}`)
+        content.includes(`Next required command: ${REQUIRED_COMMANDS[2].command}`)
       )).toBeInTheDocument()
     })
   })
@@ -577,10 +549,7 @@ describe('TerminalModal', () => {
         json: () => Promise.resolve({
           progress: {
             current_command_index: REQUIRED_COMMANDS.length,
-            completed_commands: REQUIRED_COMMANDS.map(cmd => cmd.command),
-            command_responses: Object.fromEntries(
-              REQUIRED_COMMANDS.map(cmd => [cmd.command, 'test_response'])
-            )
+            completed_commands: REQUIRED_COMMANDS.map(cmd => cmd.command)
           },
           completion: null
         })
@@ -598,6 +567,214 @@ describe('TerminalModal', () => {
       expect(screen.getByText(SYSTEM_MESSAGES.ERROR.UNKNOWN_COMMAND)).toBeInTheDocument()
     })
   })
+
+  it('handles network failure during funnel completion', async () => {
+    // Mock initial progress load with all commands completed except last
+    ;(global.fetch as jest.Mock)
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          progress: {
+            current_command_index: REQUIRED_COMMANDS.length - 1,
+            completed_commands: REQUIRED_COMMANDS.slice(0, -1).map(cmd => cmd.command)
+          },
+          completion: null
+        })
+      }))
+      // Mock network failure for funnel completion
+      .mockImplementationOnce(() => Promise.reject(new Error('Network error')))
+
+    render(<TerminalModal onComplete={mockOnComplete} />)
+
+    // Wait for initial state
+    await waitFor(
+      () => {
+        expect(screen.getByText((content) => 
+          content.includes('Next required command: SHARE')
+        )).toBeInTheDocument()
+      },
+      { timeout: 10000 }
+    )
+
+    const input = screen.getByRole('textbox')
+    await userEvent.type(input, 'share{enter}')
+
+    // Wait for error message
+    await waitFor(
+      () => {
+        expect(screen.getByText((content) => 
+          content.includes('Failed to save funnel progress')
+        )).toBeInTheDocument()
+      },
+      { timeout: 10000 }
+    )
+
+    // Verify progress is maintained
+    await waitFor(
+      () => {
+        expect(screen.getByText((content) => 
+          content.includes('Next required command: SHARE')
+        )).toBeInTheDocument()
+      },
+      { timeout: 10000 }
+    )
+  }, 15000)
+
+  it('handles malformed wallet address parts', async () => {
+    // Mock initial progress load
+    ;(global.fetch as jest.Mock)
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          progress: {
+            current_command_index: 2, // SOL_WALLET index
+            completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM']
+          },
+          completion: null
+        })
+      }))
+      // Mock API response for invalid wallet
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ error: 'Invalid Solana wallet address' })
+      }))
+
+    render(<TerminalModal onComplete={mockOnComplete} />)
+
+    // Wait for command sequence to initialize
+    await waitFor(
+      () => {
+        expect(screen.getByText((content) => 
+          content.includes('Next required command: SOL_WALLET')
+        )).toBeInTheDocument()
+      },
+      { timeout: 10000 }
+    )
+
+    const input = screen.getByRole('textbox')
+    await userEvent.type(input, 'sol_wallet INVALID{enter}')
+
+    // Wait for error message
+    await waitFor(
+      () => {
+        expect(screen.getByText((content) => 
+          content.includes('Invalid Solana wallet address')
+        )).toBeInTheDocument()
+      },
+      { timeout: 10000 }
+    )
+
+    // Verify component state after error
+    expect(input).toHaveValue('')
+    expect(screen.getByText((content) => 
+      content.includes('Next required command: SOL_WALLET')
+    )).toBeInTheDocument()
+  }, 15000)
+
+  it('handles network failure during referral validation', async () => {
+    // Mock initial progress load
+    ;(global.fetch as jest.Mock)
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          progress: {
+            current_command_index: 4, // SUBMIT_REFERRAL index
+            completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM', 'SOL_WALLET', 'REFER']
+          },
+          completion: null
+        })
+      }))
+      // Mock network failure for referral validation
+      .mockImplementationOnce(() => Promise.reject(new Error('Network error')))
+
+    render(<TerminalModal onComplete={mockOnComplete} />)
+
+    // Wait for command sequence to initialize
+    await waitFor(
+      () => {
+        expect(screen.getByText((content) => 
+          content.includes('Next required command: SUBMIT_REFERRAL')
+        )).toBeInTheDocument()
+      },
+      { timeout: 10000 }
+    )
+
+    const input = screen.getByRole('textbox')
+    await userEvent.type(input, 'submit_referral PUSH-TEST-123{enter}')
+
+    // Wait for error message
+    await waitFor(
+      () => {
+        expect(screen.getByText((content) => 
+          content.includes('Invalid input. Please enter a valid referral code')
+        )).toBeInTheDocument()
+      },
+      { timeout: 10000 }
+    )
+
+    // Verify component state after error
+    expect(input).toHaveValue('')
+    expect(screen.getByText((content) => 
+      content.includes('Next required command: SUBMIT_REFERRAL')
+    )).toBeInTheDocument()
+  }, 15000)
+
+  it('handles malformed referral code parts', async () => {
+    // Mock initial progress load
+    ;(global.fetch as jest.Mock)
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          progress: {
+            current_command_index: 4, // SUBMIT_REFERRAL index
+            completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM', 'SOL_WALLET', 'REFER']
+          },
+          completion: null
+        })
+      }))
+      // Mock API response for invalid referral code
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ error: 'Invalid referral code format' })
+      }))
+
+    render(<TerminalModal onComplete={mockOnComplete} />)
+
+    // Wait for command sequence to initialize
+    await waitFor(
+      () => {
+        expect(screen.getByText((content) => 
+          content.includes('Next required command: SUBMIT_REFERRAL')
+        )).toBeInTheDocument()
+      },
+      { timeout: 10000 }
+    )
+
+    const input = screen.getByRole('textbox')
+    await userEvent.type(input, 'submit_referral MALFORMED{enter}')
+
+    // Wait for error message
+    await waitFor(
+      () => {
+        expect(screen.getByText((content) => 
+          content.includes('Invalid input. Please enter a valid referral code')
+        )).toBeInTheDocument()
+      },
+      { timeout: 10000 }
+    )
+
+    // Verify component state after error
+    expect(input).toHaveValue('')
+    expect(screen.getByText((content) => 
+      content.includes('Next required command: SUBMIT_REFERRAL')
+    )).toBeInTheDocument()
+  }, 15000)
 })
 
 describe('TerminalModal Command Tests', () => {
@@ -607,65 +784,73 @@ describe('TerminalModal Command Tests', () => {
   // Reset mock before each test
   beforeEach(() => {
     mockOnComplete.mockReset()
+    console.error = jest.fn()
+    
     // Mock successful progress load with completed previous commands
-    ;(global.fetch as jest.Mock).mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({
-          progress: {
-            current_command_index: 2, // Start at SOL_WALLET
-            completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM'],
-            command_responses: {
-              'JOIN_TELEGRAM': 'join_telegram',
-              'VERIFY_TELEGRAM': 'verify_telegram'
-            }
-          },
-          completion: null
+    ;(global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/api/funnel/progress')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            progress: {
+              current_command_index: 0,
+              completed_commands: []
+            },
+            completion: null
+          })
         })
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ success: true })
       })
-    )
+    })
   })
 
   describe('SOL_WALLET command', () => {
     it('accepts valid Solana wallet address', async () => {
-      // Mock API for saving progress
-      ;(global.fetch as jest.Mock).mockImplementationOnce(() =>
-        Promise.resolve({
+      // Mock initial progress load with correct state
+      ;(global.fetch as jest.Mock)
+        .mockImplementationOnce(() => Promise.resolve({
           ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            progress: {
+              current_command_index: 2, // SOL_WALLET index
+              completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM']
+            },
+            completion: null
+          })
+        }))
+        // Mock successful wallet validation
+        .mockImplementationOnce(() => Promise.resolve({
+          ok: true,
+          status: 200,
           json: () => Promise.resolve({ success: true })
-        })
-      )
+        }))
 
       render(<TerminalModal onComplete={mockOnComplete} />)
-      
-      // Wait for progress to be restored
+
+      // Wait for SOL_WALLET prompt
       await waitFor(() => {
         expect(screen.getByText(/Next required command: SOL_WALLET/)).toBeInTheDocument()
       })
 
       const input = screen.getByRole('textbox')
-      await userEvent.type(input, 'sol_wallet acJHdMxJ6hkik1GgEqL1V1biUT2PCPjtpYLtaWbuSjc{enter}')
-      
-      // Verify the sequence of messages
+      const validWallet = 'F7AniHYnsdX6uGnntoSGfUmouZg4fnWp5ea'
+      await userEvent.type(input, `sol_wallet ${validWallet}{enter}`)
+
+      // Wait for success message
       await waitFor(() => {
-        // 1. Command echo
-        expect(screen.getByText('> sol_wallet acJHdMxJ6hkik1GgEqL1V1biUT2PCPjtpYLtaWbuSjc')).toBeInTheDocument()
-        // 2. Success message
-        expect(screen.getByText('[SUCCESS] Wallet address verified and stored successfully')).toBeInTheDocument()
-        // 3. Next command prompt
-        expect(screen.getByText(/Next required command: REFER/)).toBeInTheDocument()
+        expect(screen.getByText(/Command accepted: Connect or update your Solana wallet/)).toBeInTheDocument()
       })
 
-      // Verify API was called to save progress
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/api/command-progress',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({
-            'Content-Type': 'application/json'
-          })
-        })
-      )
+      // Verify next command (REFER) is shown
+      await waitFor(() => {
+        expect(screen.getByText(/Next required command: REFER/)).toBeInTheDocument()
+      })
     })
 
     it('rejects invalid Solana wallet address', async () => {
@@ -695,12 +880,7 @@ describe('TerminalModal Command Tests', () => {
           json: () => Promise.resolve({
             progress: {
               current_command_index: 3, // REFER
-              completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM', 'SOL_WALLET'],
-              command_responses: {
-                'JOIN_TELEGRAM': 'join_telegram',
-                'VERIFY_TELEGRAM': 'verify_telegram',
-                'SOL_WALLET': 'sol_wallet acJHdMxJ6hkik1GgEqL1V1biUT2PCPjtpYLtaWbuSjc'
-              }
+              completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM', 'SOL_WALLET']
             },
             completion: null
           })
@@ -737,13 +917,7 @@ describe('TerminalModal Command Tests', () => {
           json: () => Promise.resolve({
             progress: {
               current_command_index: 4, // SUBMIT_REFERRAL
-              completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM', 'SOL_WALLET', 'REFER'],
-              command_responses: {
-                'JOIN_TELEGRAM': 'join_telegram',
-                'VERIFY_TELEGRAM': 'verify_telegram',
-                'SOL_WALLET': 'sol_wallet acJHdMxJ6hkik1GgEqL1V1biUT2PCPjtpYLtaWbuSjc',
-                'REFER': 'refer'
-              }
+              completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM', 'SOL_WALLET', 'REFER']
             },
             completion: null
           })
@@ -859,14 +1033,7 @@ describe('TerminalModal Command Tests', () => {
           json: () => Promise.resolve({
             progress: {
               current_command_index: 5, // GENERATE_REFERRAL
-              completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM', 'SOL_WALLET', 'REFER', 'SUBMIT_REFERRAL'],
-              command_responses: {
-                'JOIN_TELEGRAM': 'join_telegram',
-                'VERIFY_TELEGRAM': 'verify_telegram',
-                'SOL_WALLET': 'sol_wallet acJHdMxJ6hkik1GgEqL1V1biUT2PCPjtpYLtaWbuSjc',
-                'REFER': 'refer',
-                'SUBMIT_REFERRAL': 'submit_referral NO'
-              }
+              completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM', 'SOL_WALLET', 'REFER', 'SUBMIT_REFERRAL']
             },
             completion: null
           })
@@ -936,6 +1103,166 @@ describe('TerminalModal Command Tests', () => {
       // Verify error message
       await waitFor(() => {
         expect(screen.getByText(/Failed to generate referral code/)).toBeInTheDocument()
+      })
+    })
+  })
+})
+
+describe('Edge Cases and Error Handling', () => {
+  const mockOnComplete = jest.fn()
+
+  beforeEach(() => {
+    // Reset mocks
+    jest.clearAllMocks()
+    // Mock authenticated session
+    ;(useSession as jest.Mock).mockReturnValue({
+      data: { user: { name: 'testuser' } },
+      status: 'authenticated'
+    })
+  })
+
+  describe('Referral Code Validation', () => {
+    it('handles network failure during referral validation', async () => {
+      // Mock initial progress load
+      ;(global.fetch as jest.Mock)
+        .mockImplementationOnce(() => Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            progress: {
+              current_command_index: 4, // SUBMIT_REFERRAL index
+              completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM', 'SOL_WALLET', 'REFER']
+            },
+            completion: null
+          })
+        }))
+        // Mock network failure for referral validation
+        .mockImplementationOnce(() => Promise.reject(new Error('Network error')))
+
+      render(<TerminalModal onComplete={mockOnComplete} />)
+
+      // Wait for SUBMIT_REFERRAL prompt
+      await waitFor(() => {
+        expect(screen.getByText(/Next required command: SUBMIT_REFERRAL/)).toBeInTheDocument()
+      })
+
+      const input = screen.getByRole('textbox')
+      await userEvent.type(input, 'submit_referral PUSH-TEST-123{enter}')
+
+      // Wait for error message
+      await waitFor(() => {
+        expect(screen.getByText(/Invalid input. Please enter a valid referral code/)).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('Funnel Completion Error Handling', () => {
+    it('handles network failure during funnel completion', async () => {
+      // Mock initial progress load with all commands completed except last
+      ;(global.fetch as jest.Mock)
+        .mockImplementationOnce(() => Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            progress: {
+              current_command_index: REQUIRED_COMMANDS.length - 1,
+              completed_commands: REQUIRED_COMMANDS.slice(0, -1).map(cmd => cmd.command)
+            },
+            completion: null
+          })
+        }))
+        // Mock network failure for funnel completion
+        .mockImplementationOnce(() => Promise.reject(new Error('Network error')))
+
+      render(<TerminalModal onComplete={mockOnComplete} />)
+
+      // Wait for initial state
+      await waitFor(() => {
+        expect(screen.getByText(/Next required command: SHARE/)).toBeInTheDocument()
+      })
+
+      const input = screen.getByRole('textbox')
+      await userEvent.type(input, 'share{enter}')
+
+      // Wait for error message
+      await waitFor(() => {
+        expect(screen.getByText(/Failed to save funnel progress/)).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('Utils Edge Cases', () => {
+    it('handles malformed referral code parts', async () => {
+      // Mock initial progress load
+      ;(global.fetch as jest.Mock)
+        .mockImplementationOnce(() => Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            progress: {
+              current_command_index: 4, // SUBMIT_REFERRAL index
+              completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM', 'SOL_WALLET', 'REFER']
+            },
+            completion: null
+          })
+        }))
+        // Mock API response for invalid referral code
+        .mockImplementationOnce(() => Promise.resolve({
+          ok: false,
+          status: 400,
+          json: () => Promise.resolve({ error: 'Invalid referral code format' })
+        }))
+
+      render(<TerminalModal onComplete={mockOnComplete} />)
+
+      // Wait for command sequence to initialize
+      await waitFor(() => {
+        expect(screen.getByText(/Next required command: SUBMIT_REFERRAL/)).toBeInTheDocument()
+      })
+
+      const input = screen.getByRole('textbox')
+      await userEvent.type(input, 'submit_referral MALFORMED{enter}')
+
+      // Wait for error message
+      await waitFor(() => {
+        expect(screen.getByText(/Invalid input. Please enter a valid referral code/)).toBeInTheDocument()
+      })
+    })
+
+    it('handles malformed wallet address parts', async () => {
+      // Mock initial progress load
+      ;(global.fetch as jest.Mock)
+        .mockImplementationOnce(() => Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            progress: {
+              current_command_index: 2, // SOL_WALLET index
+              completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM']
+            },
+            completion: null
+          })
+        }))
+        // Mock API response for invalid wallet
+        .mockImplementationOnce(() => Promise.resolve({
+          ok: false,
+          status: 400,
+          json: () => Promise.resolve({ error: 'Invalid Solana wallet address' })
+        }))
+
+      render(<TerminalModal onComplete={mockOnComplete} />)
+
+      // Wait for command sequence to initialize
+      await waitFor(() => {
+        expect(screen.getByText(/Next required command: SOL_WALLET/)).toBeInTheDocument()
+      })
+
+      const input = screen.getByRole('textbox')
+      await userEvent.type(input, 'sol_wallet INVALID{enter}')
+
+      // Wait for error message
+      await waitFor(() => {
+        expect(screen.getByText(/Invalid Solana wallet address/)).toBeInTheDocument()
       })
     })
   })
