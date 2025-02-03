@@ -1,0 +1,42 @@
+---
+description: 
+globs: 
+---
+ # Coding Standards and Conventions
+
+## Language & Tooling
+- Use TypeScript/JavaScript consistently across the project.
+- Enforce coding standards with ESLint and code formatting with Prettier.
+
+## Code Structure & Organization
+- Maintain a clear separation of concerns by modularizing code into distinct components (API, Scraper, OAuth, OpenAI Integration).
+- Organize files and directories logically (e.g., src/app/api, src/types, src/lib).
+
+## Naming Conventions
+- Use camelCase for variables and functions.
+- Use PascalCase for classes and components.
+- File names should be descriptive and follow kebab-case or lower-case naming.
+
+## Documentation
+- Each module must have its own documentation file (.mdc) outlining its rules and guidelines.
+- Comment code judiciously to clarify intent and logic.
+
+## Error Handling & Logging
+- Handle errors gracefully using try/catch blocks.
+- Log errors without revealing sensitive information.
+- Return standardized error responses in API endpoints.
+
+## Testing & Quality Assurance
+- Write unit and integration tests for all critical functionality.
+- Validate inputs rigorously to prevent unexpected behavior.
+- Use automated testing frameworks (e.g., Jest) to maintain code quality.
+
+## Version Control & Collaboration
+- Commit changes with concise, descriptive messages.
+- Review changes thoroughly before merging to maintain code integrity.
+- Document any significant changes in the appropriate module .mdc files.
+
+## Security & Best Practices
+- Use environment variables to manage sensitive data (e.g., API keys, OAuth secrets).
+- Follow legal and ethical guidelines when scraping and interacting with external APIs.
+- Regularly update dependencies and audit the code for vulnerabilities.

@@ -1,0 +1,30 @@
+---
+description: 
+globs: 
+---
+ # OpenAI Integration Rules
+
+## Overview
+- This module integrates with the OpenAI API for generating chat responses.
+- It should be configured with a secure API key from environment variables.
+
+## Configuration
+- Use the environment variable OPENAI_API_KEY for authentication.
+- Employ secure practices to prevent accidental key exposure.
+
+## Request Construction
+- Construct prompts with clear system and user messages.
+- Ensure that the system prompt incorporates all tuning parameters (formality, enthusiasm, etc.).
+- Use appropriate model selection (e.g., "gpt-4o-mini") based on endpoint requirements.
+
+## Parameter Guidelines
+- Adjust temperature based on the strictness of tuning parameters. Use lower temperature (e.g., 0.3) when high precision is needed and higher (e.g., 0.9) when flexibility is acceptable.
+- Limit the max_tokens parameter to prevent overly long responses, as needed (e.g., max_tokens: 150).
+
+## Error Handling
+- Catch and log errors without exposing sensitive details.
+- Return a standardized error response in case of failure.
+
+## Testing & Maintenance
+- Regularly test prompt construction to ensure that adjustments (e.g., personality traits, interests) are accurately reflected.
+- Keep track of any changes in the OpenAI API and update integration strategies accordingly.

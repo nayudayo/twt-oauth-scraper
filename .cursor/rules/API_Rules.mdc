@@ -1,0 +1,26 @@
+---
+description: 
+globs: 
+---
+ # Chat API Rules
+
+## Overview
+- The chat API endpoint must accept only HTTP POST requests.
+- All interactions should be conducted through JSON payloads.
+
+## Request Structure
+- Required fields: `message` and `analysis`.
+- Optional fields: `profile` and `tuning`.
+- Ensure incoming data adheres to the defined types.
+
+## Processing Guidelines
+- Adjust personality traits based on provided `traitModifiers`.
+- Combine personality interests from analysis and custom inputs, then filter and sort based on weight.
+
+## Response Handling
+- Return HTTP 400 for missing required fields.
+- Return HTTP 500 for internal errors.
+- All responses must be in JSON format.
+
+## Logging & Error Handling
+- Log errors using `console.error` without exposing sensitive data.

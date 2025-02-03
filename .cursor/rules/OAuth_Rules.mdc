@@ -1,0 +1,30 @@
+---
+description: 
+globs: 
+---
+ # OAuth Integration Rules
+
+## Overview
+- This module handles secure Twitter OAuth authentication for the application.
+- It ensures that only authenticated users can access protected endpoints.
+
+## Configuration
+- Store client ID, client secret, and callback URLs securely using environment variables.
+- Use HTTPS for all OAuth-related endpoints to maintain a secure connection.
+
+## Authentication Flow
+- Validate OAuth callbacks and tokens thoroughly.
+- Implement secure cookie/session management to persist user sessions.
+- Support token rotation and expiration as per OAuth best practices.
+
+## Error Handling
+- Log errors without exposing sensitive details.
+- Return clear and secure error messages during authentication failures.
+
+## Security Guidelines
+- Follow Twitter's OAuth policies rigorously.
+- Periodically review and update the OAuth integration to align with the latest security standards.
+
+## Testing & Maintenance
+- Write unit and integration tests specifically for the OAuth flow.
+- Regularly audit the OAuth implementation for potential vulnerabilities.

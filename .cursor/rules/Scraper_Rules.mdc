@@ -1,0 +1,25 @@
+---
+description: 
+globs: 
+---
+ # Twitter Scraper Rules
+
+## Overview
+- This component is responsible for scraping Twitter profiles and related data.
+- It must adhere to Twitter's terms of service and respect rate limits.
+
+## Data Extraction
+- Extract user information (e.g., username, bio, tweet metadata) according to the TwitterProfile structure.
+- Ensure data is cleaned and formatted consistently.
+
+## Error Handling
+- Log errors with sufficient detail using appropriate logging mechanisms.
+- Implement retry logic where needed to handle transient failures.
+
+## Performance & Reliability
+- Enforce rate limiting to avoid overwhelming Twitter's servers.
+- Validate and sanitize scraped data for consistency and completeness.
+
+## Legal & Ethical Guidelines
+- Do not violate Twitter's terms of service during scraping.
+- Respect user privacy by only accessing publicly available data.

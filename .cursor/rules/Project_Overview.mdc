@@ -1,0 +1,47 @@
+---
+description: 
+globs: 
+---
+ # Project Overview: twt-oauth-scraper
+
+## Description
+- This project integrates Twitter OAuth authentication with Twitter scraping capabilities, personality analysis using OpenAI, and a chat API to generate responses mimicking a Twitter user's personality.
+
+## Core Components
+1. Chat API
+   - Handles user messages and interacts with the OpenAI API to generate chat responses.
+   - Uses tuning parameters to adjust personality traits, interests, and communication style.
+
+2. Twitter Scraper
+   - Responsible for scraping user data from Twitter profiles according to Twitter's terms of service.
+   - Extracts data such as username, bio, tweet metadata, and more.
+
+3. OAuth Integration
+   - Securely manages Twitter OAuth authentication to ensure that only authorized users access protected endpoints.
+   - Implements secure token handling, session management, and callback validation.
+
+4. OpenAI Integration
+   - Interacts with the OpenAI API to generate chat responses based on personality analysis and tuning inputs.
+   - Constructs dynamic system prompts to reflect the user’s personality and communication style.
+
+## Technology Stack
+- Next.js for server-side API routes
+- TypeScript/JavaScript for application logic
+- OpenAI API for AI-driven responses
+- Twitter API for data scraping and OAuth authentication
+
+## General Guidelines
+- Maintain clear separation of concerns between modules.
+- Follow strict error handling and logging practices without exposing sensitive data.
+- Adhere to legal and ethical guidelines, particularly when scraping Twitter data and using OAuth.
+- Use environment variables for sensitive configurations (e.g., API keys, OAuth secrets).
+- Write unit and integration tests for critical modules to ensure robustness.
+
+## File Structure Overview
+- src/app/api/chat/route.ts: Chat API endpoint implementation
+- Modular documentation files (.mdc): Contain rules and guidelines for each aspect (API, Scraper, OAuth, OpenAI).
+
+## Development Best Practices
+- Keep code changes minimal and well-documented.
+- Validate inputs and ensure proper error handling.
+- Modularize documentation to align with respective components for easier maintenance.
