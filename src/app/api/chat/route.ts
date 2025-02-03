@@ -22,15 +22,11 @@ interface RequestBody {
       emojiUsage: number
     }
   }
-  conversationHistory?: Array<{
-    role: 'user' | 'assistant'
-    content: string
-  }>
 }
 
 export async function POST(req: Request) {
   try {
-    const { message, profile, analysis, tuning, conversationHistory = [] } = await req.json() as RequestBody
+    const { message, profile, analysis, tuning } = await req.json() as RequestBody
 
     if (!message || !analysis) {
       return NextResponse.json(
@@ -56,10 +52,11 @@ export async function POST(req: Request) {
         weight: tuning.interestWeights[interest] || 50
       }))
     ]
+    // Filter out interests with 0 weight and sort remaining by weight
     .filter(interest => interest.weight > 0)
     .sort((a, b) => b.weight - a.weight)
 
-    // Create a system prompt that incorporates the tuning and conversation history
+    // Create a system prompt that incorporates the tuning
     const systemPrompt = `You are roleplaying as the Twitter user @${profile.name}. Based on their personality analysis and current tuning parameters:
 
 Summary: ${analysis.summary}
@@ -70,7 +67,7 @@ ${adjustedTraits.map(t => `- ${t.name} (${t.score}/10): ${t.explanation}`).join(
 Weighted Interests (sorted by importance):
 ${allInterests.map(i => `- ${i.name} (${i.weight}% focus)`).join('\n')}
 
-Base Communication Style: ${analysis.communicationStyle.description}
+Base Communication Style: ${analysis.communicationStyle}
 Emotional Tone: ${analysis.emotionalTone}
 
 Topics & Themes:
@@ -99,7 +96,7 @@ You MUST strictly match this enthusiasm level:
 - 1-40%: Show minimal enthusiasm, be very reserved
 - 41-60%: Show moderate enthusiasm
 - 61-80%: Show high energy and excitement
-- 81-100%: Show extreme enthusiasm and use exclamation marks frequently
+- 81-100%: Show extreme enthusiasm
 Current setting: ${tuning.communicationStyle.enthusiasm}% = ${
   tuning.communicationStyle.enthusiasm === 0 ? 'No enthusiasm' :
   tuning.communicationStyle.enthusiasm < 41 ? 'Minimal enthusiasm' :
@@ -113,8 +110,8 @@ You MUST strictly follow this technical language level:
 - 0%: Use no technical terms whatsoever
 - 1-40%: Use only basic terminology
 - 41-60%: Mix technical and non-technical terms
-- 61-80%: Use detailed technical language based on the analyzed personality or tweets
-- 81-100%: Use expert-level technical discourse based on the analyzed personality or tweets
+- 61-80%: Use detailed technical language
+- 81-100%: Use expert-level technical discourse
 Current setting: ${tuning.communicationStyle.technicalLevel}% = ${
   tuning.communicationStyle.technicalLevel === 0 ? 'No technical terms' :
   tuning.communicationStyle.technicalLevel < 41 ? 'Basic terms only' :
@@ -128,8 +125,8 @@ You MUST strictly follow this emoji usage level:
 - 0%: Use NO emojis or emoticons whatsoever
 - 1-40%: Use exactly 1 emoji per message
 - 41-60%: Use exactly 1-2 emojis per message
-- 61-80%: Use exactly 2-3 emojis per message, especially crypto-related ones (💎, 🚀, 📈, etc.)
-- 81-100%: Use 3+ emojis per message, heavily using crypto and tech emojis
+- 61-80%: Use exactly 2-3 emojis per message
+- 81-100%: Use 3+ emojis per message
 Current setting: ${tuning.communicationStyle.emojiUsage}% = ${
   tuning.communicationStyle.emojiUsage === 0 ? 'No emojis' :
   tuning.communicationStyle.emojiUsage < 41 ? '1 emoji' :
@@ -138,53 +135,30 @@ Current setting: ${tuning.communicationStyle.emojiUsage}% = ${
   '3+ emojis'
 }
 
-CONVERSATION HISTORY ANALYSIS:
-${conversationHistory.length > 0 ? `
-Previous interactions show:
-- Topics discussed: ${Array.from(new Set(conversationHistory.map(msg => msg.content.toLowerCase().match(/\b\w+\b/g) || []))).join(', ')}
-- User's tone: ${conversationHistory.filter(msg => msg.role === 'user').map(msg => msg.content).join(' ')}
-- Your previous responses: ${conversationHistory.filter(msg => msg.role === 'assistant').map(msg => msg.content).join(' ')}
-
-Maintain consistency with previous responses while adapting to the user's current tone and topics.` : 'No previous conversation history.'}
-
 CRITICAL RULES:
 1. You MUST strictly follow ALL of the above style requirements simultaneously
 2. When any parameter is 0%, you MUST completely avoid that aspect
 3. Focus ONLY on interests with weight > 0%
 4. Maintain personality traits according to their adjusted scores
 5. Keep responses concise and natural, as if in a real Twitter conversation
-6. Maintain consistency with previous conversation history
-7. Adapt your tone to match the user's emotional state while staying within your style parameters
-8. Show strong enthusiasm for topics that match the analyzed interests and themes
-9. Use terminology and emojis that match the analyzed personality and topics
-10. Be engaging and show genuine interest in topics that align with the analyzed interests
 
-Remember: You are this person, not just describing them. Respond authentically as them based on their analyzed personality, interests, and communication style.`
-
-    // Create messages array with conversation history
-    const messages = [
-      { role: "system" as const, content: systemPrompt },
-      ...conversationHistory.map(msg => ({ 
-        role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
-        content: msg.content 
-      })),
-      { role: "user" as const, content: message }
-    ]
+Remember: You are this person, not just describing them. Respond authentically as them.`
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",  // Using GPT-4 for better personality matching
-      messages,
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: message }
+      ],
       temperature: Math.min(
         ...[ 
           tuning.communicationStyle.emojiUsage,
           tuning.communicationStyle.formality,
           tuning.communicationStyle.enthusiasm,
           tuning.communicationStyle.technicalLevel
-        ].map(value => value < 20 ? 0.3 : value > 80 ? 0.9 : 0.7)  // Adjusted temperature for more natural responses
-      ),
-      max_tokens: 150,
-      presence_penalty: 0.6,  // Added to encourage more varied responses
-      frequency_penalty: 0.3  // Added to reduce repetition
+        ].map(value => value < 20 || value > 80 ? 0.3 : 0.9)
+      ), // Lower temperature when any style needs strict adherence
+      max_tokens: 150
     })
 
     return NextResponse.json({ response: response.choices[0].message.content })

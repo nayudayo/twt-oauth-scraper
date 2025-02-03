@@ -155,13 +155,6 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     setError(null)
     try {
       setIsTyping(true)
-
-      // Convert messages to the format expected by the API
-      const conversationHistory = messages.map(msg => ({
-        role: msg.isUser ? 'user' as const : 'assistant' as const,
-        content: msg.text
-      }))
-
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -172,7 +165,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
           profile,
           analysis,
           tuning,
-          conversationHistory
+          tweets,
         }),
       })
       
@@ -404,304 +397,296 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
 
   return (
     <>
-      {/* Left Side Panels Container */}
-      <div className="fixed top-16 left-4 flex flex-col gap-4 h-[calc(100vh-84px)]">
-        {/* System Controls Panel */}
-        <div className="w-[470px] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
-          <div className="border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
-              <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">SYSTEM CONTROLS</h3>
-            </div>
-            <div className="flex flex-col gap-2">
+      {/* Fine Tuning Panel - Left Side */}
+      <div className="fixed top-16 left-4 h-[calc(100vh-84px)] w-[470px] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern mb-4">
+        {/* Control Panel */}
+        <div className="border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+            <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">SYSTEM CONTROLS</h3>
+          </div>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={loading ? handleCancelScraping : handleScrape}
+              className={`w-full px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text ${!loading && !analysis ? 'pulse-action' : ''}`}
+            >
+              {loading ? 'ABORT SEQUENCE' : 'EXECUTE DATA EXTRACTION'}
+            </button>
+            {tweets.length > 0 && (
               <button
-                onClick={loading ? handleCancelScraping : handleScrape}
-                className={`w-full px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text ${!loading && !analysis ? 'pulse-action' : ''}`}
-              >
-                {loading ? 'ABORT SEQUENCE' : 'EXECUTE DATA EXTRACTION'}
-              </button>
-              {tweets.length > 0 && (
-                <button
-                  onClick={handleClearData}
-                  className="w-full px-3 py-2 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs ancient-text"
-                >
-                  CLEAR DATA
-                </button>
-              )}
-              <button
-                onClick={onClose}
+                onClick={handleClearData}
                 className="w-full px-3 py-2 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs ancient-text"
               >
-                TERMINATE SESSION
+                CLEAR DATA
               </button>
-            </div>
+            )}
+            <button
+              onClick={onClose}
+              className="w-full px-3 py-2 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs ancient-text"
+            >
+              TERMINATE SESSION
+            </button>
           </div>
         </div>
 
-        {/* Personality Fine-Tuning Panel */}
-        <div className="w-[470px] flex-1 bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern overflow-hidden">
-          <div className="border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
-              <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">PERSONALITY FINE-TUNING</h3>
+        {/* Fine Tuning Header */}
+        <div className="border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+            <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">PERSONALITY FINE-TUNING</h3>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6 backdrop-blur-sm bg-black/20 dynamic-bg">
+          {analysis ? (
+            <>
+              {/* Personality Traits */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+                  <span className="glow-text">Key Traits</span>
+                </h4>
+                <div className="space-y-4">
+                  {analysis.traits.map((trait: { name: string; score: number; explanation: string }) => (
+                    <div key={trait.name} className="space-y-2 hover-glow">
+                      <div className="flex justify-between text-xs text-red-400/70">
+                        <span className="hover-text-glow capitalize">{trait.name}</span>
+                        <span className="hover-text-glow">
+                          {getTraitLabel(tuning.traitModifiers[trait.name])}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="25"
+                        value={tuning.traitModifiers[trait.name]}
+                        onChange={(e) => handleTraitAdjustment(trait.name, parseInt(e.target.value))}
+                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
+                      />
+                      <p className="text-xs text-red-400/50 mt-1 hover-text-glow">
+                        {trait.explanation}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Interest Weights */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+                  <span className="glow-text">Interests & Topics</span>
+                </h4>
+                <div className="space-y-3">
+                  {analysis.interests.map((interest: string) => (
+                    <div key={interest} className="space-y-1">
+                      <div className="flex justify-between items-center text-xs text-red-400/70">
+                        <div className="flex-1">
+                          <span className={tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}>
+                            {interest}
+                            <button
+                              onClick={() => handleInterestWeight(interest, 0)}
+                              className="ml-2 text-red-500/50 hover:text-red-500/70"
+                              title="Disable interest"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        </div>
+                        <div className="w-20 text-right">
+                          {getWeightLabel(tuning.interestWeights[interest] || 0)}
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="25"
+                        value={Math.round((tuning.interestWeights[interest] || 0) / 25) * 25}
+                        onChange={(e) => handleInterestWeight(interest, parseInt(e.target.value))}
+                        className={`w-full accent-red-500/50 bg-red-500/10 rounded h-1 ${
+                          tuning.interestWeights[interest] === 0 ? 'opacity-50' : ''
+                        }`}
+                      />
+                    </div>
+                  ))}
+
+                  {/* Custom Interests */}
+                  {tuning.customInterests.map((interest) => (
+                    <div key={interest} className="space-y-1">
+                      <div className="flex justify-between items-center text-xs text-red-400/70">
+                        <div className="flex-1">
+                          <span className={tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}>
+                            {interest}
+                            <button
+                              onClick={() => handleRemoveCustomInterest(interest)}
+                              className="ml-2 text-red-500/50 hover:text-red-500/70"
+                              title="Remove custom interest"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        </div>
+                        <div className="w-20 text-right">
+                          {getWeightLabel(tuning.interestWeights[interest] || 0)}
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="25"
+                        value={Math.round((tuning.interestWeights[interest] || 0) / 25) * 25}
+                        onChange={(e) => handleInterestWeight(interest, parseInt(e.target.value))}
+                        className={`w-full accent-red-500/50 bg-red-500/10 rounded h-1 ${
+                          tuning.interestWeights[interest] === 0 ? 'opacity-50' : ''
+                        }`}
+                      />
+                    </div>
+                  ))}
+
+                  {/* Custom Interests Form */}
+                  <div className="space-y-2">
+                    <form onSubmit={handleAddCustomInterest} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newInterest}
+                        onChange={(e) => setNewInterest(e.target.value)}
+                        placeholder="Add custom interest..."
+                        className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!newInterest.trim()}
+                        className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow"
+                      >
+                        Add
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+
+              {/* Communication Style */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+                  <span className="glow-text">Communication Style</span>
+                </h4>
+                <div className="space-y-3">
+                  <div className="space-y-1 hover-glow">
+                    <div className="flex justify-between text-xs text-red-400/70">
+                      <span className="hover-text-glow">Formality</span>
+                      <span className="hover-text-glow">
+                        {tuning.communicationStyle.formality === 0 ? 'None' :
+                         tuning.communicationStyle.formality < 41 ? 'Very Casual' :
+                         tuning.communicationStyle.formality < 61 ? 'Casual' :
+                         tuning.communicationStyle.formality < 81 ? 'Professional' :
+                         'Highly Formal'}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="25"
+                      value={tuning.communicationStyle.formality}
+                      onChange={(e) => handleStyleAdjustment('formality', parseInt(e.target.value))}
+                      className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
+                    />
+                  </div>
+
+                  <div className="space-y-1 hover-glow">
+                    <div className="flex justify-between text-xs text-red-400/70">
+                      <span className="hover-text-glow">Technical Level</span>
+                      <span className="hover-text-glow">
+                        {tuning.communicationStyle.technicalLevel === 0 ? 'None' :
+                         tuning.communicationStyle.technicalLevel <= 25 ? 'Basic' :
+                         tuning.communicationStyle.technicalLevel <= 50 ? 'Mixed' :
+                         tuning.communicationStyle.technicalLevel <= 75 ? 'Detailed' :
+                         'Expert'}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="25"
+                      value={tuning.communicationStyle.technicalLevel}
+                      onChange={(e) => handleStyleAdjustment('technicalLevel', parseInt(e.target.value))}
+                      className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
+                    />
+                  </div>
+
+                  <div className="space-y-1 hover-glow">
+                    <div className="flex justify-between text-xs text-red-400/70">
+                      <span className="hover-text-glow">Enthusiasm</span>
+                      <span className="hover-text-glow">
+                        {tuning.communicationStyle.enthusiasm === 0 ? 'None' :
+                         tuning.communicationStyle.enthusiasm <= 25 ? 'Reserved' :
+                         tuning.communicationStyle.enthusiasm <= 50 ? 'Moderate' :
+                         tuning.communicationStyle.enthusiasm <= 75 ? 'High' :
+                         'Very High'}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="25"
+                      value={tuning.communicationStyle.enthusiasm}
+                      onChange={(e) => handleStyleAdjustment('enthusiasm', parseInt(e.target.value))}
+                      className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
+                    />
+                  </div>
+
+                  <div className="space-y-1 hover-glow">
+                    <div className="flex justify-between text-xs text-red-400/70">
+                      <span className="hover-text-glow">Emoji Usage</span>
+                      <span className="hover-text-glow">
+                        {tuning.communicationStyle.emojiUsage === 0 ? 'None' :
+                         tuning.communicationStyle.emojiUsage <= 25 ? 'Minimal' :
+                         tuning.communicationStyle.emojiUsage <= 50 ? 'Moderate' :
+                         tuning.communicationStyle.emojiUsage <= 75 ? 'Frequent' :
+                         'Very Frequent'}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="25"
+                      value={tuning.communicationStyle.emojiUsage}
+                      onChange={(e) => handleStyleAdjustment('emojiUsage', parseInt(e.target.value))}
+                      className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
+                    />
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="text-red-500/70 italic text-center glow-text">
+              Run personality analysis to enable fine-tuning
             </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6 backdrop-blur-sm bg-black/20 dynamic-bg">
-            {analysis ? (
-              <div className="space-y-6">
-                {/* Personality Traits */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box" />
-                    <span className="glow-text">Key Traits</span>
-                  </h4>
-                  <div className="space-y-4">
-                    {analysis.traits.map((trait: { name: string; score: number; explanation: string }, index: number) => {
-                      return (
-                        <div key={`trait-${index}-${trait.name}`} className="space-y-2 hover-glow">
-                          <div className="flex justify-between text-xs text-red-400/70">
-                            <span className="hover-text-glow capitalize">{trait.name}</span>
-                            <span className="hover-text-glow">
-                              {getTraitLabel(tuning.traitModifiers[trait.name])}
-                            </span>
-                          </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="25"
-                            value={tuning.traitModifiers[trait.name]}
-                            onChange={(e) => handleTraitAdjustment(trait.name, parseInt(e.target.value))}
-                            className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
-                          />
-                          <p className="text-xs text-red-400/50 mt-1 hover-text-glow">
-                            {trait.explanation}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Interest Weights */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box" />
-                    <span className="glow-text">Interests & Topics</span>
-                  </h4>
-                  <div className="space-y-3">
-                    {analysis.interests.map((interest: string, index: number) => {
-                      return (
-                        <div key={`interest-${index}-${interest}`} className="space-y-1">
-                          <div className="flex justify-between items-center text-xs text-red-400/70">
-                            <div className="flex-1">
-                              <span className={tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}>
-                                {interest}
-                                <button
-                                  onClick={() => handleInterestWeight(interest, 0)}
-                                  className="ml-2 text-red-500/50 hover:text-red-500/70"
-                                  title="Disable interest"
-                                >
-                                  ×
-                                </button>
-                              </span>
-                            </div>
-                            <div className="w-20 text-right">
-                              {getWeightLabel(tuning.interestWeights[interest] || 0)}
-                            </div>
-                          </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="25"
-                            value={Math.round((tuning.interestWeights[interest] || 0) / 25) * 25}
-                            onChange={(e) => handleInterestWeight(interest, parseInt(e.target.value))}
-                            className={`w-full accent-red-500/50 bg-red-500/10 rounded h-1 ${
-                              tuning.interestWeights[interest] === 0 ? 'opacity-50' : ''
-                            }`}
-                          />
-                        </div>
-                      );
-                    })}
-
-                    {/* Custom Interests */}
-                    {tuning.customInterests.map((interest: string, index: number) => (
-                      <div key={`custom-interest-${index}-${interest}`} className="space-y-1">
-                        <div className="flex justify-between items-center text-xs text-red-400/70">
-                          <div className="flex-1">
-                            <span className={tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}>
-                              {interest}
-                              <button
-                                onClick={() => handleRemoveCustomInterest(interest)}
-                                className="ml-2 text-red-500/50 hover:text-red-500/70"
-                                title="Remove custom interest"
-                              >
-                                ×
-                              </button>
-                            </span>
-                          </div>
-                          <div className="w-20 text-right">
-                            {getWeightLabel(tuning.interestWeights[interest] || 0)}
-                          </div>
-                        </div>
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          step="25"
-                          value={Math.round((tuning.interestWeights[interest] || 0) / 25) * 25}
-                          onChange={(e) => handleInterestWeight(interest, parseInt(e.target.value))}
-                          className={`w-full accent-red-500/50 bg-red-500/10 rounded h-1 ${
-                            tuning.interestWeights[interest] === 0 ? 'opacity-50' : ''
-                          }`}
-                        />
-                      </div>
-                    ))}
-
-                    {/* Custom Interests Form */}
-                    <div className="space-y-2">
-                      <form onSubmit={handleAddCustomInterest} className="flex gap-2">
-                        <input
-                          type="text"
-                          value={newInterest}
-                          onChange={(e) => setNewInterest(e.target.value)}
-                          placeholder="Add custom interest..."
-                          className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow"
-                        />
-                        <button
-                          type="submit"
-                          disabled={!newInterest.trim()}
-                          className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow"
-                        >
-                          Add
-                        </button>
-                      </form>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Communication Style */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                    <span className="glow-text">Communication Style</span>
-                  </h4>
-                  <div className="space-y-3">
-                    <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/70">
-                        <span className="hover-text-glow">Formality</span>
-                        <span className="hover-text-glow">
-                          {tuning.communicationStyle.formality === 0 ? 'None' :
-                           tuning.communicationStyle.formality < 41 ? 'Very Casual' :
-                           tuning.communicationStyle.formality < 61 ? 'Casual' :
-                           tuning.communicationStyle.formality < 81 ? 'Professional' :
-                           'Highly Formal'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
-                        value={tuning.communicationStyle.formality}
-                        onChange={(e) => handleStyleAdjustment('formality', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
-                      />
-                    </div>
-
-                    <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/70">
-                        <span className="hover-text-glow">Technical Level</span>
-                        <span className="hover-text-glow">
-                          {tuning.communicationStyle.technicalLevel === 0 ? 'None' :
-                           tuning.communicationStyle.technicalLevel <= 25 ? 'Basic' :
-                           tuning.communicationStyle.technicalLevel <= 50 ? 'Mixed' :
-                           tuning.communicationStyle.technicalLevel <= 75 ? 'Detailed' :
-                           'Expert'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
-                        value={tuning.communicationStyle.technicalLevel}
-                        onChange={(e) => handleStyleAdjustment('technicalLevel', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
-                      />
-                    </div>
-
-                    <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/70">
-                        <span className="hover-text-glow">Enthusiasm</span>
-                        <span className="hover-text-glow">
-                          {tuning.communicationStyle.enthusiasm === 0 ? 'None' :
-                           tuning.communicationStyle.enthusiasm <= 25 ? 'Reserved' :
-                           tuning.communicationStyle.enthusiasm <= 50 ? 'Moderate' :
-                           tuning.communicationStyle.enthusiasm <= 75 ? 'High' :
-                           'Very High'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
-                        value={tuning.communicationStyle.enthusiasm}
-                        onChange={(e) => handleStyleAdjustment('enthusiasm', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
-                      />
-                    </div>
-
-                    <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/70">
-                        <span className="hover-text-glow">Emoji Usage</span>
-                        <span className="hover-text-glow">
-                          {tuning.communicationStyle.emojiUsage === 0 ? 'None' :
-                           tuning.communicationStyle.emojiUsage <= 25 ? 'Minimal' :
-                           tuning.communicationStyle.emojiUsage <= 50 ? 'Moderate' :
-                           tuning.communicationStyle.emojiUsage <= 75 ? 'Frequent' :
-                           'Very Frequent'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
-                        value={tuning.communicationStyle.emojiUsage}
-                        onChange={(e) => handleStyleAdjustment('emojiUsage', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-red-500/70 italic text-center glow-text">
-                Run personality analysis to enable fine-tuning
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </div>
 
       {/* Right Side Panels */}
-      <div className="fixed top-16 right-4 h-[calc(100vh-84px)] w-[480px] flex flex-col gap-4">
+      <div className="fixed top-16 right-4 h-[calc(100vh-84px)] w-[480px] flex flex-col gap-4 mb-4">
         {/* ARCHIVES - Top Half */}
         <div className="h-[calc(50%-2px)] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
           <div className="flex items-center px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 cryptic-shadow">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
                 <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">ARCHIVES</h3>
               </div>
 
               {profile.name && (
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
                   <span className="text-xs text-red-500/80 hover-text-glow">@{profile.name}</span>
                 </div>
               )}
@@ -711,9 +696,9 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 {loading && (
                   <>
                     <div className="flex items-center gap-1">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20 glow-box" />
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-100 shadow-lg shadow-red-500/20 glow-box" />
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-200 shadow-lg shadow-red-500/20 glow-box" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20 glow-box"></div>
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-100 shadow-lg shadow-red-500/20 glow-box"></div>
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-200 shadow-lg shadow-red-500/20 glow-box"></div>
                     </div>
                     {scanProgress && (
                       <span className="uppercase tracking-wider text-xs glow-text">
@@ -747,7 +732,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                       <span>{tweet.timestamp && new Date(tweet.timestamp).toLocaleString()}</span>
                       {tweet.isReply && (
                         <>
-                          <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box" />
+                          <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box"></div>
                           <span className="glow-text">REPLY</span>
                         </>
                       )}
@@ -766,10 +751,10 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
         </div>
 
         {/* Personality Analysis - Bottom Half */}
-        <div className="h-[calc(50%-2px)] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
+        <div className="h-[500px] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern mb-8">
           <div className="border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
             <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
+              <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
               <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">PERSONALITY ANALYSIS</h3>
             </div>
           </div>
@@ -813,8 +798,8 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     <span className="ancient-text">Key Traits</span>
                   </h4>
                   <div className="space-y-2">
-                    {analysis.traits.map((trait: { name: string; score: number; explanation: string }, index: number) => (
-                      <div key={`trait-${index}-${trait.name}`} className="hover-glow">
+                    {analysis.traits.map((trait: { name: string; score: number; explanation: string }, i: number) => (
+                      <div key={i} className="hover-glow">
                         <div className="flex justify-between mb-1 text-xs text-red-400/70">
                           <span className="hover-text-glow font-medium">{trait.name}</span>
                           <span className="hover-text-glow">{trait.score}/10</span>

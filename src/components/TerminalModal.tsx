@@ -37,56 +37,46 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
       if (session?.user?.name) {
         try {
           const response = await fetch(`/api/command-progress?userId=${session.user.name}`)
-          
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}))
-            throw new Error(errorData.error || 'Failed to load progress')
-          }
-
-          const data = await response.json().catch(() => ({}))
-          
-          // If user has already completed the funnel, skip to main content
-          if (data.completion) {
-            setShowMainContent(true)
-            setTimeout(onComplete, 500)
-            return
-          }
+          if (response.ok) {
+            const data = await response.json()
             
-          // Otherwise just set up for the next required command
-          if (data.progress) {
-            const { current_command_index, completed_commands } = data.progress
+            // If user has already completed the funnel, skip to main content
+            if (data.completion) {
+              setShowMainContent(true)
+              setTimeout(onComplete, 500)
+              return
+            }
             
-            setCurrentCommandIndex(current_command_index)
-            setCompletedCommands(completed_commands || [])
+            // Otherwise load their progress
+            if (data.progress) {
+              setCurrentCommandIndex(data.progress.current_command_index)
+              setCompletedCommands(data.progress.completed_commands)
+              setCommandResponses(data.progress.command_responses)
               
-            // Only show boot message and next command prompt
-            setLines([
-              { content: SYSTEM_MESSAGES.BOOT },
-              { 
-                content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[current_command_index].command}`,
-                isSystem: true 
+              // Reconstruct terminal lines based on progress
+              const reconstructedLines: TerminalLine[] = [{ content: SYSTEM_MESSAGES.BOOT }]
+              data.progress.completed_commands.forEach((cmd: string, index: number) => {
+                const command = REQUIRED_COMMANDS[index]
+                reconstructedLines.push(
+                  { content: `> ${data.progress.command_responses[cmd] || cmd}`, isCommand: true },
+                  { content: "It works!", isSuccess: true },
+                  { content: SYSTEM_MESSAGES.COMMAND_RESPONSES.COMMAND_ACCEPTED(command.description), isSuccess: true }
+                )
+              })
+
+              // Add next command message if there are more commands to complete
+              if (data.progress.current_command_index < REQUIRED_COMMANDS.length) {
+                reconstructedLines.push({
+                  content: SYSTEM_MESSAGES.COMMAND_RESPONSES.NEXT_COMMAND(REQUIRED_COMMANDS[data.progress.current_command_index].command),
+                  isSystem: true
+                })
               }
-            ])
-          } else {
-            // No progress yet, start from beginning
-            setLines([
-              { content: SYSTEM_MESSAGES.BOOT },
-              { 
-                content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[0].command}`,
-                isSystem: true 
-              }
-            ])
+              
+              setLines(reconstructedLines)
+            }
           }
         } catch (error) {
           console.error('Failed to load funnel progress:', error)
-          // On error, start from beginning but maintain any existing progress
-          setLines([
-            { content: SYSTEM_MESSAGES.BOOT },
-            { 
-              content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[currentCommandIndex].command}`,
-              isSystem: true 
-            }
-          ])
         }
       }
     }
@@ -94,10 +84,10 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
   }, [session?.user?.name, onComplete])
 
   // Save progress when commands are completed
-  const saveProgress = async (commandIndex: number, commands: string[]) => {
+  const saveProgress = async (commandIndex: number, commands: string[], responses: { [key: string]: string }) => {
     if (session?.user?.name) {
       try {
-        const response = await fetch('/api/command-progress', {
+        await fetch('/api/command-progress', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -105,28 +95,14 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
           body: JSON.stringify({
             userId: session.user.name,
             currentIndex: commandIndex,
-            completedCommands: commands
+            completedCommands: commands,
+            commandResponses: responses
           }),
         })
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error(errorData.error || 'Failed to save progress')
-        }
-
-        // Just check if we can parse the response, but don't store it
-        await response.json().catch(() => ({}))
-        return true
       } catch (error) {
         console.error('Failed to save funnel progress:', error)
-        setLines(prev => [
-          ...prev,
-          { content: '[ERROR] Failed to save funnel progress. Please try again.', isError: true }
-        ])
-        return false
       }
     }
-    return false
   }
 
   // Blinking cursor effect
@@ -198,25 +174,19 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
               throw new Error('Invalid referral code format')
             }
 
-            if (!session?.user?.name) {
-              throw new Error('Not authenticated')
-            }
-
             const response = await fetch('/api/validate-referral', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                userId: session.user.name,
+                userId: session?.user?.name,
                 referralCode: referralCode
-              }),
-              credentials: 'include' // Include cookies for authentication
+              })
             })
 
             if (!response.ok) {
-              const errorData = await response.json().catch(() => ({}))
-              throw new Error(errorData.error || 'Invalid referral code')
+              throw new Error('Invalid referral code')
             }
 
             newLines.push({
@@ -226,7 +196,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
           } catch (error) {
             console.error('Failed to validate referral code:', error)
             newLines.push({
-              content: `[ERROR] Invalid input. Please enter a valid referral code or type "NO" if you weren't referred.\nExample: submit_referral PUSH-USER-CODE1\nOr: submit_referral NO`,
+              content: '[ERROR] Invalid referral code. Please try again.',
               isError: true
             })
             setLines(newLines)
@@ -234,16 +204,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
           }
         } else if (currentCommand.command === 'GENERATE_REFERRAL') {
           // Generate referral code based on username and wallet address
-          const username = session?.user?.name
-          if (!username) {
-            newLines.push({
-              content: '[ERROR] Not authenticated. Please sign in again.',
-              isError: true
-            })
-            setLines(newLines)
-            return
-          }
-
+          const username = session?.user?.name || ''
           const walletAddress = commandResponses['SOL_WALLET']?.split(' ')[1] || ''
           const referralCode = generateReferralCode(username, walletAddress)
           
@@ -257,13 +218,11 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
               body: JSON.stringify({
                 userId: username,
                 referralCode: referralCode
-              }),
-              credentials: 'include' // Include cookies for authentication
+              })
             })
 
             if (!response.ok) {
-              const errorData = await response.json().catch(() => ({}))
-              throw new Error(errorData.error || 'Failed to store referral code')
+              throw new Error('Failed to store referral code')
             }
 
             newLines.push({
@@ -303,7 +262,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
           setIsLoading(true)
           
           // Save final progress
-          await saveProgress(currentCommandIndex + 1, updatedCompletedCommands)
+          await saveProgress(currentCommandIndex + 1, updatedCompletedCommands, updatedResponses)
           
           // Mark funnel as completed
           try {
@@ -341,7 +300,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
           const nextIndex = currentCommandIndex + 1
           setCurrentCommandIndex(nextIndex)
           // Save progress after each successful command
-          await saveProgress(nextIndex, updatedCompletedCommands)
+          await saveProgress(nextIndex, updatedCompletedCommands, updatedResponses)
         }
       } else {
         newLines.push({ 
