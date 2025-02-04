@@ -179,21 +179,84 @@ class MemoryRecovery {
   - [x] Create `src/lib/memory/types` directory
   - [x] Create `src/lib/memory/utils` directory
 
+- [✓] Type Definitions (Redis)
+  - [✓] Create `types/redis.ts`
+    ```typescript
+    // Activity level type
+    type ActivityLevel = 'active' | 'inactive'
+
+    // Redis configuration
+    interface RedisConfig {
+      host: string
+      port: number
+      password?: string
+      keyPrefix: string
+      ttl: {
+        active: number    // 24 hours
+        inactive: number  // 1 hour
+      }
+      rateLimit: {
+        perUser: number   // requests per minute
+        global: number    // total requests per minute
+        window: number    // time window in seconds
+      }
+    }
+
+    // Redis message structure
+    interface RedisMessage {
+      content: string
+      userId: string
+      timestamp: number
+      type: 'user' | 'assistant'
+      conversationId: string
+      metadata?: {
+        activityLevel: ActivityLevel
+        lastActive: number
+      }
+    }
+
+    // Additional implemented types:
+    // - RedisOptions (connection pool, retry strategy)
+    // - RateLimitInfo
+    // - RedisOperationResult
+    // - REDIS_KEYS constants
+    // - Default configurations
+    ```
+
+- [✓] Type Definitions (Next)
+  - [✓] Create `types/chroma.ts`
+    ```typescript
+    // ChromaDB client interfaces
+    interface IChromaClient {
+      createCollection(name: string, metadata?: Record<string, unknown>): Promise<IChromaCollection>;
+      getCollection(name: string): Promise<IChromaCollection>;
+      deleteCollection(name: string): Promise<void>;
+      listCollections(): Promise<string[]>;
+    }
+
+    interface IChromaCollection {
+      name: string;
+      metadata: Record<string, unknown>;
+      add(documents: string[], metadatas?: Record<string, unknown>[], ids?: string[]): Promise<void>;
+      query(queryTexts: string[], nResults?: number, where?: Record<string, unknown>): Promise<{
+        ids: string[][];
+        distances: number[][];
+        metadatas: Record<string, unknown>[][];
+        documents: string[][];
+      }>;
+    }
+
+    // Additional implemented types:
+    // - ChromaConfig (connection, collection settings, embedding settings)
+    // - ChromaMessage (message structure with metadata)
+    // - ChromaCollectionOptions (collection creation options)
+    // - ChromaQueryOptions (query parameters)
+    // - ChromaOperationResult (operation results with error handling)
+    // - ChromaCollectionManager (collection management interface)
+    // - Default configurations and key patterns
+    ```
+
 - [ ] Type Definitions (Next)
-  - [ ] Create `types/redis.ts`
-    ```typescript
-    // Redis interfaces
-    interface RedisConfig
-    interface RedisMessage
-    interface RedisOptions
-    ```
-  - [ ] Create `types/chroma.ts`
-    ```typescript
-    // Chroma interfaces
-    interface ChromaConfig
-    interface ChromaMessage
-    interface ChromaOptions
-    ```
   - [ ] Create `types/index.ts`
     ```typescript
     // Common types
@@ -251,9 +314,11 @@ class MemoryRecovery {
 ### Phase 3: Testing & Monitoring (Day 3)
 - [ ] Unit Tests
   - [ ] Test Redis operations
-  - [ ] Test Chroma operations
-  - [ ] Test error recovery
-  - [ ] Test rate limiting
+  - [ ] Test ChromaDB Integration (Next)
+    - [ ] Test collection creation and management
+    - [ ] Test document storage and retrieval
+    - [ ] Test query operations
+    - [ ] Test error handling
 
 - [ ] Integration Tests
   - [ ] Test dual memory system
