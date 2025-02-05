@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Tweet, TwitterProfile } from '@/types/scraper'
 import { PersonalityAnalysis } from '@/lib/openai'
 import ReactMarkdown from 'react-markdown'
@@ -60,6 +60,8 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   const [analysisElapsedTime, setAnalysisElapsedTime] = useState<string | null>(null)
   const [scrapingStartTime, setScrapingStartTime] = useState<number | null>(null)
   const [scrapingElapsedTime, setScrapingElapsedTime] = useState<string | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Add escape key handler for modals
   useEffect(() => {
@@ -466,6 +468,35 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     }
   }, []) // Empty dependency array since we want this only on unmount
 
+  // Add auto-scroll effect
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages, isTyping])
+
+  // Handle text input with Shift+Enter
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSubmit(e)
+    }
+  }
+
+  // Auto-resize textarea
+  const adjustTextareaHeight = () => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`
+    }
+  }
+
+  useEffect(() => {
+    adjustTextareaHeight()
+  }, [input])
+
   return (
     <>
       {/* Main Container - Mobile First Layout */}
@@ -538,41 +569,46 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                             : 'bg-black/40 text-red-300/90'
                           } px-4 py-2 text-sm`}
                       >
-                        <p className="text-red-500/90 hover-text-glow">{msg.text}</p>
+                        <div className="prose prose-red prose-invert max-w-none hover-text-glow whitespace-pre-wrap">
+                          <ReactMarkdown>{msg.text}</ReactMarkdown>
+                        </div>
                       </div>
                     </div>
                   ))}
-                </>
-              )}
-              {isTyping && (
-                <div className="flex justify-start">
-                  <div className="max-w-[80%] rounded-lg p-3 bg-red-500/5 text-red-500/80">
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce [animation-delay:-0.3s]" />
-                      <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce [animation-delay:-0.15s]" />
-                      <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce" />
+                  {isTyping && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[80%] rounded-lg p-3 bg-red-500/5 text-red-500/80">
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce [animation-delay:-0.3s]" />
+                          <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce [animation-delay:-0.15s]" />
+                          <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce" />
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </>
               )}
             </div>
 
             {/* Chat Input */}
             {analysis && (
-              <div className="flex-none p-3 border-t border-red-500/10 bg-black/40 backdrop-blur-sm cryptic-shadow">
+              <div className="flex-none p-3 md:p-4 border-t border-red-500/10 bg-black/40 backdrop-blur-sm cryptic-shadow">
                 <form onSubmit={handleSubmit} className="flex gap-2">
-                  <input
-                    type="text"
+                  <textarea
+                    ref={textareaRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="Enter your message..."
+                    onKeyDown={handleKeyDown}
+                    placeholder="Enter your message... (Shift+Enter for new line)"
                     disabled={loading}
-                    className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-2 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow disabled:opacity-50"
+                    rows={1}
+                    className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-2 md:px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow disabled:opacity-50 resize-none min-h-[38px] max-h-[200px] overflow-y-auto custom-scrollbar"
                   />
                   <button
                     type="submit"
                     disabled={!input.trim() || loading}
-                    className="px-2 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow min-w-[60px]"
+                    className="px-2 md:px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow min-w-[60px] md:min-w-[80px] h-[38px]"
                   >
                     {loading ? (
                       <Spinner size="sm" />
@@ -581,6 +617,9 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     )}
                   </button>
                 </form>
+                <div className="mt-1 text-xs text-red-500/40">
+                  Supports Markdown: **bold**, *italic*, - bullets, etc.
+                </div>
               </div>
             )}
           </div>
@@ -1709,71 +1748,78 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
               </div>
 
               {/* Chat Messages Container */}
-              <div className="flex-1 overflow-y-auto custom-scrollbar p-3 md:p-4 space-y-4 backdrop-blur-sm bg-black/20 ancient-scroll min-h-0">
+              <div className="flex-1 overflow-y-auto custom-scrollbar backdrop-blur-sm bg-black/20 ancient-scroll min-h-0">
                 {!analysis ? (
-                  <div className="text-red-500/70 italic text-center glow-text">
+                  <div className="text-red-500/70 italic text-center glow-text p-4">
                     Start personality analysis to begin chat interaction
                   </div>
                 ) : (
                   <>
-                    {/* Profile Picture Section */}
-                    <div className="flex flex-col items-center gap-4 mb-8 p-4 bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg hover-glow ancient-border">
-                      <div className="w-20 h-20 rounded-full border-2 border-red-500/20 overflow-hidden hover-glow">
-                        {profile.imageUrl ? (
-                          <Image
-                            src={profile.imageUrl}
-                            alt={profile.name || 'Profile'}
-                            className="w-full h-full object-cover"
-                            width={80}
-                            height={80}
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-red-500/5 flex items-center justify-center">
-                            <span className="text-red-500/50 text-2xl">?</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-center">
-                        <h4 className="text-red-500/90 font-bold tracking-wider ancient-text">
-                          {profile.name ? `@${profile.name}` : 'Anonymous User'}
-                        </h4>
-                        {profile.bio && (
-                          <p className="text-red-400/70 text-sm mt-1 hover-text-glow max-w-md">
-                            {profile.bio}
-                          </p>
-                        )}
+                    {/* Sticky Profile Section */}
+                    <div className="sticky top-0 z-10 p-4 bg-black/40 backdrop-blur-md">
+                      <div className="flex flex-col items-center gap-4 border border-red-500/10 rounded-lg hover-glow ancient-border p-4">
+                        <div className="w-20 h-20 rounded-full border-2 border-red-500/20 overflow-hidden hover-glow">
+                          {profile.imageUrl ? (
+                            <Image
+                              src={profile.imageUrl}
+                              alt={profile.name || 'Profile'}
+                              className="w-full h-full object-cover"
+                              width={80}
+                              height={80}
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-red-500/5 flex items-center justify-center">
+                              <span className="text-red-500/50 text-2xl">?</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-center">
+                          <h4 className="text-red-500/90 font-bold tracking-wider ancient-text">
+                            {profile.name ? `@${profile.name}` : 'Anonymous User'}
+                          </h4>
+                          {profile.bio && (
+                            <p className="text-red-400/70 text-sm mt-1 hover-text-glow max-w-md">
+                              {profile.bio}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
 
-                    {/* Messages */}
-                    {messages.map((msg, i) => (
-                      <div 
-                        key={i}
-                        className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}
-                      >
+                    {/* Messages Section with padding to account for sticky header */}
+                    <div className="p-4 space-y-4">
+                      {messages.map((msg, i) => (
                         <div 
-                          className={`max-w-[80%] rounded backdrop-blur-sm border border-red-500/10 shadow-lg hover-glow float
-                            ${msg.isUser 
-                              ? 'bg-red-500/5 text-red-400/90' 
-                              : 'bg-black/40 text-red-300/90'
-                            } px-4 py-2 text-sm`}
+                          key={i}
+                          className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}
                         >
-                          <p className="text-red-500/90 hover-text-glow">{msg.text}</p>
+                          <div 
+                            className={`max-w-[80%] rounded backdrop-blur-sm border border-red-500/10 shadow-lg hover-glow float
+                              ${msg.isUser 
+                                ? 'bg-red-500/5 text-red-400/90' 
+                                : 'bg-black/40 text-red-300/90'
+                              } px-4 py-2 text-sm`}
+                          >
+                            <div className="prose prose-red prose-invert max-w-none hover-text-glow whitespace-pre-wrap">
+                              <ReactMarkdown>{msg.text}</ReactMarkdown>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </>
-                )}
-                {isTyping && (
-                  <div className="flex justify-start">
-                    <div className="max-w-[80%] rounded-lg p-3 bg-red-500/5 text-red-500/80">
-                      <div className="flex items-center gap-1">
-                        <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce [animation-delay:-0.3s]" />
-                        <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce [animation-delay:-0.15s]" />
-                        <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce" />
-                      </div>
+                      ))}
+                      {isTyping && (
+                        <div className="flex justify-start">
+                          <div className="max-w-[80%] rounded-lg p-3 bg-red-500/5 text-red-500/80">
+                            <div className="flex items-center gap-1">
+                              <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce [animation-delay:-0.3s]" />
+                              <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce [animation-delay:-0.15s]" />
+                              <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce" />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      <div ref={messagesEndRef} />
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
 
@@ -1781,18 +1827,20 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
               {analysis && (
                 <div className="flex-none p-3 md:p-4 border-t border-red-500/10 bg-black/40 backdrop-blur-sm cryptic-shadow">
                   <form onSubmit={handleSubmit} className="flex gap-2">
-                    <input
-                      type="text"
+                    <textarea
+                      ref={textareaRef}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      placeholder="Enter your message..."
+                      onKeyDown={handleKeyDown}
+                      placeholder="Enter your message... (Shift+Enter for new line)"
                       disabled={loading}
-                      className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-2 md:px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow disabled:opacity-50"
+                      rows={1}
+                      className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-2 md:px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow disabled:opacity-50 resize-none min-h-[38px] max-h-[200px] overflow-y-auto custom-scrollbar"
                     />
                     <button
                       type="submit"
                       disabled={!input.trim() || loading}
-                      className="px-2 md:px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow min-w-[60px] md:min-w-[80px]"
+                      className="px-2 md:px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow min-w-[60px] md:min-w-[80px] h-[38px]"
                     >
                       {loading ? (
                         <Spinner size="sm" />
@@ -1801,6 +1849,9 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                       )}
                     </button>
                   </form>
+                  <div className="mt-1 text-xs text-red-500/40">
+                    Supports Markdown: **bold**, *italic*, - bullets, etc.
+                  </div>
                 </div>
               )}
             </div>
