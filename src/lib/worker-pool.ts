@@ -121,19 +121,38 @@ export class WorkerPool {
     const activeJob = this.activeJobs.get(jobId)
     if (activeJob) {
       console.log(`Terminating job ${jobId}`)
-      const { worker } = activeJob
+      const { worker, job } = activeJob
       
-      // Terminate the worker
-      await worker.terminate()
-      
-      // Clean up
-      this.workers = this.workers.filter(w => w !== worker)
-      this.activeJobs.delete(jobId)
-      
-      // Remove from queue if present
-      this.queue = this.queue.filter(job => job.id !== jobId)
-      
-      console.log(`Job ${jobId} terminated`)
+      try {
+        // Send termination signal to worker
+        worker.postMessage({ type: 'terminate' })
+        
+        // Wait for worker to cleanup and terminate
+        await Promise.race([
+          worker.terminate(),
+          new Promise(resolve => setTimeout(resolve, 5000)) // 5s timeout
+        ])
+        
+        // Clean up
+        this.workers = this.workers.filter(w => w !== worker)
+        this.activeJobs.delete(jobId)
+        
+        // Remove from queue if present
+        this.queue = this.queue.filter(j => j.id !== jobId)
+        
+        // Notify progress handler of termination
+        if (job.onProgress) {
+          job.onProgress({
+            error: 'Operation cancelled by user',
+            progress: 0
+          })
+        }
+        
+        console.log(`Job ${jobId} terminated`)
+      } catch (error) {
+        console.error(`Error terminating job ${jobId}:`, error)
+        throw error
+      }
     } else {
       // If job is in queue, remove it
       this.queue = this.queue.filter(job => job.id !== jobId)

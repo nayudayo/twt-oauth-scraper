@@ -39,7 +39,20 @@ const client = new ApifyClient({
   token: process.env.APIFY_API_TOKEN,
 })
 
+// Add termination signal handling
+let isTerminating = false
+
+if (parentPort) {
+  parentPort.on('message', (message) => {
+    if (message.type === 'terminate') {
+      console.log('Received termination signal')
+      isTerminating = true
+    }
+  })
+}
+
 async function runScraper() {
+  let db = null
   try {
     const { username: targetUsername } = workerData // This is the profile we want to scrape
 
@@ -85,6 +98,12 @@ async function runScraper() {
     let totalAttempts = 0
 
     while (true) {
+      // Check for termination signal
+      if (isTerminating) {
+        console.log('Terminating scraping process...')
+        throw new Error('Operation cancelled by user')
+      }
+
       totalAttempts++
       console.log(`\nAttempt ${totalAttempts}: Fetching batch starting at offset ${offset}...`)
       
@@ -170,8 +189,14 @@ async function runScraper() {
       imageUrl: null
     }
 
+    // Check for termination before saving
+    if (isTerminating) {
+      console.log('Terminating before database operations...')
+      throw new Error('Operation cancelled by user')
+    }
+
     // Initialize database and save tweets
-    const db = await initDB()
+    db = await initDB()
     await saveUserProfile(db, targetUsername, profile)
     await saveTweets(db, targetUsername, allTweets)
     console.log('Tweets saved to database')
@@ -205,6 +230,16 @@ async function runScraper() {
 
   } catch (error) {
     console.error('❌ Scrape error:', error)
+    // Clean up database if needed
+    if (db) {
+      try {
+        // Roll back any incomplete operations
+        await db.exec('ROLLBACK')
+        await db.close()
+      } catch (dbError) {
+        console.error('Failed to cleanup database:', dbError)
+      }
+    }
     parentPort!.postMessage({ 
       error: error instanceof Error ? error.message : 'Scrape failed',
       progress: 0

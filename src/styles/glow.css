@@ -53,4 +53,14 @@
 .pulse-action {
   animation: pulse-border 2s infinite;
   border-width: 2px !important;
+}
+
+/* Hide scrollbar but maintain scroll functionality */
+.custom-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;  /* Internet Explorer 10+ */
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  display: none; /* WebKit */
 } 
