@@ -395,7 +395,16 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
           break
         }
         
-        if (done) break
+        if (done) {
+          console.log('Stream complete')
+          setLoading(false)
+          setScanProgress(null)
+          setShowComplete(true)
+          setShowAnalysisPrompt(true)
+          setScrapingStartTime(null)
+          setAbortController(null)
+          break
+        }
 
         // Parse the SSE data
         const text = new TextDecoder().decode(value)
@@ -412,6 +421,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 setLoading(false)
                 setAbortController(null)
                 setScrapingStartTime(null)
+                setScanProgress(null)
                 reader.cancel()
                 return
               }
@@ -429,7 +439,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
               }
 
               // Handle completion
-              if (data.type === 'complete' || (data.progress === 100 && data.status === 'Complete')) {
+              if (data.type === 'complete' || data.type === 'done' || (data.progress === 100 && data.status === 'Complete')) {
                 console.log('Scraping complete, showing completion modal')
                 if (data.data?.tweets) {
                   onTweetsUpdate(data.data.tweets)
@@ -439,6 +449,9 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 setShowComplete(true)
                 setShowAnalysisPrompt(true)
                 setScrapingStartTime(null)
+                setAbortController(null)
+                reader.cancel()
+                break
               }
             } catch (err) {
               console.error('Failed to parse:', line, err)
@@ -456,6 +469,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       setLoading(false)
       setAbortController(null)
       setScrapingStartTime(null)
+      setScanProgress(null)
     }
   }
 

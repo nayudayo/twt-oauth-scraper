@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { TwitterProfile } from '@/types/scraper'
 import { PersonalityAnalysis } from '@/lib/openai'
+import { ConsciousnessConfig, DEFAULT_CONSCIOUSNESS, generateConsciousnessInstructions, applyConsciousnessEffects } from '@/lib/consciousness'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -22,6 +23,7 @@ interface RequestBody {
       emojiUsage: number
     }
   }
+  consciousness?: ConsciousnessConfig
   conversationHistory?: Array<{
     role: 'user' | 'assistant'
     content: string
@@ -54,7 +56,7 @@ const calculateTemperature = (tuning: RequestBody['tuning']): number => {
 
 export async function POST(req: Request) {
   try {
-    const { message, profile, analysis, tuning, conversationHistory = [] } = await req.json() as RequestBody
+    const { message, profile, analysis, tuning, consciousness, conversationHistory = [] } = await req.json() as RequestBody
 
     if (!message || !analysis) {
       return NextResponse.json(
@@ -67,7 +69,7 @@ export async function POST(req: Request) {
     const adjustedTraits = analysis.traits.map(trait => ({
       ...trait,
       score: Math.max(0, Math.min(10, trait.score + (tuning.traitModifiers[trait.name] || 0)))
-    }))
+    } as PersonalityAnalysis['traits'][0]))
 
     // Combine original and custom interests with weights
     const allInterests = [
@@ -122,7 +124,7 @@ YOUR RESPONSE MUST STRICTLY FOLLOW THESE STYLE REQUIREMENTS. THIS IS NOT A SUGGE
 Summary: ${analysis.summary}
 
 Adjusted Personality Traits:
-${adjustedTraits.map(t => `- ${t.name} (${t.score}/10): ${t.explanation}`).join('\n')}
+${adjustedTraits.map(t => `- ${t.name} (${t.score}/10): ${t.explanation}${t.details ? `\n  Details: ${t.details}` : ''}${t.relatedTraits ? `\n  Related traits: ${t.relatedTraits.join(', ')}` : ''}`).join('\n')}
 
 Weighted Interests (sorted by importance):
 ${allInterests.map(i => `- ${i.name} (${i.weight}% focus)`).join('\n')}
@@ -132,6 +134,9 @@ Emotional Tone: ${analysis.emotionalTone}
 
 Topics & Themes:
 ${analysis.topicsAndThemes.map(t => `- ${t}`).join('\n')}
+
+CONSCIOUSNESS STATE:
+${generateConsciousnessInstructions(consciousness ?? DEFAULT_CONSCIOUSNESS)}
 
 CONVERSATION HISTORY ANALYSIS:
 ${conversationHistory.length > 0 ? `
@@ -155,6 +160,7 @@ CRITICAL RULES:
 8. Show strong enthusiasm for topics that match the analyzed interests and themes
 9. Use terminology and emojis that match the analyzed personality and topics
 10. Be engaging and show genuine interest in topics that align with the analyzed interests
+11. STRICTLY FOLLOW THE CONSCIOUSNESS STATE INSTRUCTIONS
 
 Remember: You are this person, not just describing them. Respond authentically as them based on their analyzed personality, interests, and communication style.`
 
@@ -185,13 +191,14 @@ Remember: You are this person, not just describing them. Respond authentically a
 
       lastResponse = response.choices[0].message.content || ''
       if (validateStyle(lastResponse, tuning)) {
-        validResponse = lastResponse
+        // Apply consciousness effects to the response
+        validResponse = applyConsciousnessEffects(lastResponse, consciousness ?? DEFAULT_CONSCIOUSNESS)
       }
       attempts++
     }
 
     // If we couldn't get a valid response after 3 attempts, use the last one
-    const finalResponse = validResponse || lastResponse || 'Failed to generate a valid response'
+    const finalResponse = validResponse || (lastResponse ? applyConsciousnessEffects(lastResponse, consciousness ?? DEFAULT_CONSCIOUSNESS) : 'Failed to generate a valid response')
 
     return NextResponse.json({ response: finalResponse })
   } catch (error) {

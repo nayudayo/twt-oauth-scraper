@@ -12,6 +12,8 @@ export interface PersonalityAnalysis {
     name: string
     score: number
     explanation: string
+    details?: string
+    relatedTraits?: string[]
   }[]
   interests: string[]
   communicationStyle: {
@@ -54,6 +56,87 @@ function chunkTweets(tweets: Tweet[]): Tweet[][] {
 function countWords(text: string | null): number {
   if (!text) return 0
   return text.trim().split(/\s+/).length
+}
+
+// Add helper functions for trait processing
+function mergeSimilarTraits(traits: PersonalityAnalysis['traits']): PersonalityAnalysis['traits'] {
+  const similarityGroups = new Map<string, {
+    traits: typeof traits,
+    mainTrait: (typeof traits)[0]
+  }>();
+
+  // Helper to check if two traits are similar
+  const areSimilar = (a: string, b: string): boolean => {
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
+    const [na, nb] = [normalize(a), normalize(b)];
+    return na.includes(nb) || nb.includes(na) || 
+           (na.length > 4 && nb.length > 4 && (na.includes(nb.slice(0, 4)) || nb.includes(na.slice(0, 4))));
+  };
+
+  // Group similar traits
+  traits.forEach(trait => {
+    let foundGroup = false;
+    for (const [key, group] of similarityGroups.entries()) {
+      if (areSimilar(trait.name, key)) {
+        group.traits.push(trait);
+        // Update main trait if this one has a higher score
+        if (trait.score > group.mainTrait.score) {
+          group.mainTrait = trait;
+        }
+        foundGroup = true;
+        break;
+      }
+    }
+    if (!foundGroup) {
+      similarityGroups.set(trait.name, {
+        traits: [trait],
+        mainTrait: trait
+      });
+    }
+  });
+
+  // Merge explanations and return consolidated traits
+  return Array.from(similarityGroups.values()).map(group => {
+    const { mainTrait, traits } = group;
+    const allExplanations = traits.map(t => t.explanation).filter(Boolean);
+    
+    // Create a summary and detailed explanation
+    const summary = allExplanations[0]?.split('.')[0] || '';
+    const details = allExplanations
+      .filter((exp, i) => i === 0 || !exp.includes(summary))
+      .join('. ');
+
+    return {
+      name: mainTrait.name,
+      score: mainTrait.score,
+      explanation: summary,
+      details: details,
+      relatedTraits: traits.length > 1 ? traits.filter(t => t !== mainTrait).map(t => t.name) : undefined
+    };
+  }).sort((a, b) => b.score - a.score);
+}
+
+function consolidateInterests(interests: string[]): string[] {
+  const groups = new Map<string, string[]>();
+  
+  interests.forEach(interest => {
+    let foundGroup = false;
+    for (const [key, group] of groups.entries()) {
+      if (interest.toLowerCase().includes(key.toLowerCase()) || 
+          key.toLowerCase().includes(interest.toLowerCase())) {
+        group.push(interest);
+        foundGroup = true;
+        break;
+      }
+    }
+    if (!foundGroup) {
+      groups.set(interest, [interest]);
+    }
+  });
+
+  return Array.from(groups.values()).map(group => 
+    group.reduce((a, b) => a.length > b.length ? a : b)
+  );
 }
 
 export async function analyzePersonality(
@@ -114,7 +197,7 @@ Important Guidelines:
 4. Keep responses natural and authentic to the analyzed personality
 
 Provide a detailed analysis focusing specifically on this aspect of their personality.` :
-      `Analyze the following Twitter profile and tweets to create a detailed personality profile for AI character creation.
+      `Analyze the following Twitter profile and tweets to create a detailed but concise personality profile.
 
 Profile Information:
 ${profileInfo}
@@ -122,46 +205,36 @@ ${profileInfo}
 Tweet History:
 ${tweetTexts}
 
-Create a personality analysis in the following format:
+Create a focused personality analysis with these guidelines:
 
-1. Summary (2-3 sentences):
-A concise description of their personality, communication style, and main interests.
+1. Summary (1-2 clear sentences):
+Capture the essence of their personality and communication style.
 
-2. Core Personality Traits (4-6 traits):
-List key traits with scores (0-10) and brief explanations
-Format: [Trait] [Score]/10 - [One-sentence explanation]
-Example:
-Openness 8/10 - Shows high curiosity and interest in new ideas
-Enthusiasm 7/10 - Frequently expresses excitement about topics
+2. Core Personality Traits (3-5 most distinctive traits):
+Format: [Trait] [Score]/10 - [Concise explanation focusing on evidence]
+Choose only the most significant and distinct traits.
+Avoid similar or overlapping traits.
 
-3. Primary Interests (3-5):
-List their main interests/topics they engage with most
-Format as bullet points
-Example:
-- Artificial Intelligence
-- Software Development
-- Gaming
+3. Primary Interests (3-4 main categories):
+Group related interests together.
+Focus on clear patterns and consistent themes.
 
 4. Communication Style Analysis:
-Please rate the following aspects from 0-100:
-- Formality: [0=extremely casual, 100=highly formal]
-- Enthusiasm: [0=very reserved, 100=highly enthusiastic]
-- Technical Level: [0=non-technical, 100=highly technical]
-- Emoji Usage: [0=never uses emojis, 100=frequent emoji use]
+Rate only these key aspects (0-100):
+- Formality: [casual to formal]
+- Enthusiasm: [reserved to energetic]
+- Technical Level: [basic to complex]
+- Emoji Usage: [rare to frequent]
+Add a brief explanation of their overall style.
 
-5. Topics & Themes:
-List recurring topics and themes in their tweets
-Format as bullet points with brief explanations
-Example:
-- Technology trends and innovations
-- Community building and engagement
-- Personal development
+5. Key Themes (2-3):
+Only the most prominent and recurring themes.
+Brief evidence-based descriptions.
 
-6. Emotional Tone:
-Describe their overall emotional expression and tone in communication.
-Include aspects like positivity, formality, and emotional range.
+6. Emotional Expression:
+One clear sentence about their emotional communication style.
 
-Focus on being accurate and concise. Base all analysis strictly on the provided tweets.`
+Focus on quality over quantity. Prioritize distinct traits and clear patterns.`
 
     try {
       const completion = await openai.chat.completions.create({
@@ -187,16 +260,22 @@ Focus on being accurate and concise. Base all analysis strictly on the provided 
 
       console.log('Raw OpenAI response:', response) // Debug log
 
-      // If it's a custom prompt, return just the response
-      if (prompt && context) {
-        return { response }
+      // Process the analysis before returning
+      if (!prompt || !context) {
+        const parsedAnalysis = parseAnalysisResponse(response);
+        
+        // Consolidate similar traits and interests
+        const processedAnalysis: PersonalityAnalysis = {
+          ...parsedAnalysis,
+          traits: mergeSimilarTraits(parsedAnalysis.traits),
+          interests: consolidateInterests(parsedAnalysis.interests),
+          topicsAndThemes: consolidateInterests(parsedAnalysis.topicsAndThemes)
+        };
+
+        return processedAnalysis;
       }
 
-      // Parse the response and merge with previous chunks
-      const chunkAnalysis = parseAnalysisResponse(response)
-      console.log('Parsed analysis:', JSON.stringify(chunkAnalysis, null, 2)) // Debug log
-      combinedAnalysis = mergeAnalyses(combinedAnalysis, chunkAnalysis)
-      console.log('Combined analysis:', JSON.stringify(combinedAnalysis, null, 2)) // Debug log
+      return { response };
     } catch (error) {
       console.error('Error analyzing personality:', error)
       throw error
