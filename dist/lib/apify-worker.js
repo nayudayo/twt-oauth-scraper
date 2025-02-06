@@ -56,7 +56,18 @@ dotenv.config();
 const client = new apify_client_1.ApifyClient({
     token: process.env.APIFY_API_TOKEN,
 });
+// Add termination signal handling
+let isTerminating = false;
+if (worker_threads_1.parentPort) {
+    worker_threads_1.parentPort.on('message', (message) => {
+        if (message.type === 'terminate') {
+            console.log('Received termination signal');
+            isTerminating = true;
+        }
+    });
+}
 async function runScraper() {
+    let db = null;
     try {
         const { username: targetUsername } = worker_threads_1.workerData; // This is the profile we want to scrape
         // Send initialization progress
@@ -97,6 +108,11 @@ async function runScraper() {
         let unchangedCount = 0;
         let totalAttempts = 0;
         while (true) {
+            // Check for termination signal
+            if (isTerminating) {
+                console.log('Terminating scraping process...');
+                throw new Error('Operation cancelled by user');
+            }
             totalAttempts++;
             console.log(`\nAttempt ${totalAttempts}: Fetching batch starting at offset ${offset}...`);
             // Run the Actor with current offset
@@ -166,8 +182,13 @@ async function runScraper() {
             followingCount: null,
             imageUrl: null
         };
+        // Check for termination before saving
+        if (isTerminating) {
+            console.log('Terminating before database operations...');
+            throw new Error('Operation cancelled by user');
+        }
         // Initialize database and save tweets
-        const db = await (0, db_1.initDB)();
+        db = await (0, db_1.initDB)();
         await (0, db_1.saveUserProfile)(db, targetUsername, profile);
         await (0, db_1.saveTweets)(db, targetUsername, allTweets);
         console.log('Tweets saved to database');
@@ -198,6 +219,17 @@ async function runScraper() {
     }
     catch (error) {
         console.error('❌ Scrape error:', error);
+        // Clean up database if needed
+        if (db) {
+            try {
+                // Roll back any incomplete operations
+                await db.exec('ROLLBACK');
+                await db.close();
+            }
+            catch (dbError) {
+                console.error('Failed to cleanup database:', dbError);
+            }
+        }
         worker_threads_1.parentPort.postMessage({
             error: error instanceof Error ? error.message : 'Scrape failed',
             progress: 0

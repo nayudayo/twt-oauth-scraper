@@ -125,7 +125,7 @@ export function applyConsciousnessEffects(
   // Apply intelligence level effects
   if (config.intelligenceLevel < 50) {
     // Simplify vocabulary
-    modified = modified.replace(/\b\w{7,}\b/g, match => "simple")
+    modified = modified.replace(/\b\w{7,}\b/g, () => "simple")
     // Add confusion markers
     if (Math.random() < 0.3) {
       modified += " ...um..."

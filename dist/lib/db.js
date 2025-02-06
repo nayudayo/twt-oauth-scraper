@@ -21,6 +21,7 @@ exports.getReferralStats = getReferralStats;
 exports.validateReferralCode = validateReferralCode;
 exports.getReferralCodeUsage = getReferralCodeUsage;
 exports.createReferralCode = createReferralCode;
+exports.saveProgress = saveProgress;
 const sqlite3_1 = __importDefault(require("sqlite3"));
 const sqlite_1 = require("sqlite");
 const path_1 = __importDefault(require("path"));
@@ -31,6 +32,44 @@ if (!fs_1.default.existsSync(DATA_DIR)) {
     fs_1.default.mkdirSync(DATA_DIR, { recursive: true });
 }
 const DB_PATH = path_1.default.join(DATA_DIR, 'twitter.db');
+// Helper function to generate unique IDs
+function generateId() {
+    return `user_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+}
+// Write Queue Implementation
+class WriteQueue {
+    constructor() {
+        this.queue = [];
+        this.isProcessing = false;
+    }
+    async add(operation) {
+        return new Promise((resolve, reject) => {
+            this.queue.push({ operation, resolve, reject });
+            if (!this.isProcessing) {
+                this.processQueue();
+            }
+        });
+    }
+    async processQueue() {
+        if (this.isProcessing || this.queue.length === 0)
+            return;
+        this.isProcessing = true;
+        while (this.queue.length > 0) {
+            const item = this.queue.shift();
+            try {
+                await item.operation();
+                item.resolve();
+            }
+            catch (error) {
+                console.error('Error in write queue operation:', error);
+                item.reject(error);
+            }
+        }
+        this.isProcessing = false;
+    }
+}
+// Create a singleton instance of the write queue
+const writeQueue = new WriteQueue();
 async function initDB() {
     try {
         console.log('Initializing database at:', DB_PATH);
@@ -137,38 +176,63 @@ async function initDB() {
 }
 // Helper function to save user profile
 async function saveUserProfile(db, username, profile) {
-    try {
-        console.log(`Saving profile for user: ${username}`);
-        const result = await db.run(`
-      INSERT OR REPLACE INTO users (id, username, profile_data, profile_picture_url, last_scraped)
-      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `, username, username, JSON.stringify(profile), profile.imageUrl);
-        console.log('Profile saved successfully:', result);
-        return result;
-    }
-    catch (error) {
-        console.error('Failed to save user profile:', error);
-        throw error;
-    }
+    await writeQueue.add(async () => {
+        try {
+            await db.run('BEGIN TRANSACTION');
+            const existingUser = await db.get('SELECT id FROM users WHERE username = ?', username);
+            if (existingUser) {
+                await db.run(`UPDATE users 
+           SET profile_data = ?, profile_picture_url = ?, last_scraped = CURRENT_TIMESTAMP 
+           WHERE username = ?`, [JSON.stringify(profile), profile.imageUrl, username]);
+            }
+            else {
+                await db.run(`INSERT INTO users (id, username, profile_data, profile_picture_url, last_scraped) 
+           VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`, [generateId(), username, JSON.stringify(profile), profile.imageUrl]);
+            }
+            await db.run('COMMIT');
+        }
+        catch (error) {
+            await db.run('ROLLBACK');
+            throw error;
+        }
+    });
 }
 // Helper function to save tweets in bulk
-async function saveTweets(db, userId, tweets) {
-    try {
-        console.log(`Saving ${tweets.length} tweets for user: ${userId}`);
-        const stmt = await db.prepare(`
-      INSERT OR REPLACE INTO tweets (id, user_id, text, created_at, url, is_reply, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-        for (const tweet of tweets) {
-            await stmt.run(tweet.id, userId, tweet.text, new Date(tweet.createdAt).toISOString(), tweet.url || null, tweet.isReply || false, JSON.stringify(tweet));
+async function saveTweets(db, username, tweets) {
+    await writeQueue.add(async () => {
+        try {
+            await db.run('BEGIN TRANSACTION');
+            const user = await db.get('SELECT id FROM users WHERE username = ?', username);
+            if (!user)
+                throw new Error('User not found');
+            // Process tweets in smaller batches to avoid large transactions
+            const BATCH_SIZE = 50;
+            for (let i = 0; i < tweets.length; i += BATCH_SIZE) {
+                const batch = tweets.slice(i, i + BATCH_SIZE);
+                for (const tweet of batch) {
+                    await db.run(`INSERT OR REPLACE INTO tweets 
+             (id, user_id, text, created_at, url, is_reply, metadata) 
+             VALUES (?, ?, ?, ?, ?, ?, ?)`, [
+                        tweet.id,
+                        user.id,
+                        tweet.text,
+                        tweet.timestamp,
+                        tweet.url,
+                        tweet.isReply,
+                        JSON.stringify({
+                            metrics: tweet.metrics,
+                            images: tweet.images
+                        })
+                    ]);
+                }
+            }
+            await db.run('COMMIT');
         }
-        await stmt.finalize();
-        console.log('Tweets saved successfully');
-    }
-    catch (error) {
-        console.error('Failed to save tweets:', error);
-        throw error;
-    }
+        catch (error) {
+            await db.run('ROLLBACK');
+            throw error;
+        }
+    });
 }
 // Helper function to get user's tweets for analysis
 async function getUserTweets(db, username) {
@@ -442,6 +506,28 @@ async function createReferralCode(db, code, ownerUserId) {
     }
     catch (error) {
         console.error('Failed to create referral code:', error);
+        return false;
+    }
+}
+// Helper function to save progress
+async function saveProgress(userId, currentIndex, completedCommands) {
+    try {
+        const db = await (0, sqlite_1.open)({
+            filename: DB_PATH,
+            driver: sqlite3_1.default.Database
+        });
+        await db.run(`INSERT OR REPLACE INTO funnel_progress (
+        user_id, 
+        current_command_index, 
+        completed_commands,
+        command_responses,
+        last_updated
+      ) VALUES (?, ?, ?, '{}', CURRENT_TIMESTAMP)`, [userId, currentIndex, JSON.stringify(completedCommands)]);
+        await db.close();
+        return true;
+    }
+    catch (error) {
+        console.error('Error saving progress:', error);
         return false;
     }
 }

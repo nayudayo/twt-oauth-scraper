@@ -80,7 +80,7 @@ class WriteQueue {
   private queue: Array<{
     operation: () => Promise<void>;
     resolve: (value: void | PromiseLike<void>) => void;
-    reject: (reason?: any) => void;
+    reject: (reason?: unknown) => void;
   }> = [];
   private isProcessing = false;
 

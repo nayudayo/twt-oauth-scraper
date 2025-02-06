@@ -154,7 +154,7 @@ export async function analyzePersonality(
 
   // Chunk the tweets for analysis
   const tweetChunks = chunkTweets(validTweets)
-  let combinedAnalysis: PersonalityAnalysis = {
+  const combinedAnalysis: PersonalityAnalysis = {
     summary: '',
     traits: [],
     interests: [],
@@ -404,48 +404,4 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
   }
 
   return analysis
-}
-
-function mergeAnalyses(a: PersonalityAnalysis, b: PersonalityAnalysis): PersonalityAnalysis {
-  return {
-    summary: a.summary + (a.summary && b.summary ? ' ' : '') + b.summary,
-    traits: mergeTraits(a.traits, b.traits),
-    interests: [...new Set([...a.interests, ...b.interests])],
-    communicationStyle: {
-      formality: Math.round((a.communicationStyle.formality + b.communicationStyle.formality) / 2),
-      enthusiasm: Math.round((a.communicationStyle.enthusiasm + b.communicationStyle.enthusiasm) / 2),
-      technicalLevel: Math.round((a.communicationStyle.technicalLevel + b.communicationStyle.technicalLevel) / 2),
-      emojiUsage: Math.round((a.communicationStyle.emojiUsage + b.communicationStyle.emojiUsage) / 2),
-      description: a.communicationStyle.description + (a.communicationStyle.description && b.communicationStyle.description ? ' ' : '') + b.communicationStyle.description
-    },
-    topicsAndThemes: [...new Set([...a.topicsAndThemes, ...b.topicsAndThemes])],
-    emotionalTone: a.emotionalTone + (a.emotionalTone && b.emotionalTone ? ' ' : '') + b.emotionalTone
-  }
-}
-
-function mergeTraits(a: PersonalityAnalysis['traits'], b: PersonalityAnalysis['traits']): PersonalityAnalysis['traits'] {
-  const traitMap = new Map<string, { score: number, count: number, explanations: string[] }>()
-
-  // Process all traits
-  for (const trait of [...a, ...b]) {
-    const existing = traitMap.get(trait.name)
-    if (existing) {
-      existing.score += trait.score
-      existing.count += 1
-      existing.explanations.push(trait.explanation)
-    } else {
-      traitMap.set(trait.name, {
-        score: trait.score,
-        count: 1,
-        explanations: [trait.explanation]
-      })
-    }
-  }
-
-  // Calculate averages and combine explanations
-  return Array.from(traitMap.entries()).map(([name, data]) => ({
-    name,
-    score: Math.round(data.score / data.count),
-    explanation: data.explanations.join(' ')
-  }))
 } 
