@@ -9,9 +9,9 @@ const workerPool = new WorkerPool(16, 100) // 16 concurrent workers, 100 max que
 // Helper function to chunk large data
 function chunkEventData(data: EventData): EventData[] {
   // If data contains tweets, split them into smaller chunks
-  if ('tweets' in data && Array.isArray(data.tweets) && data.tweets.length > 50) {
+  if ('tweets' in data && Array.isArray(data.tweets) && data.tweets.length > 25) {
     const chunks: EventData[] = []
-    const chunkSize = 50
+    const chunkSize = 25 // Reduced chunk size for better stability
     const baseProgress = typeof data.progress === 'number' ? data.progress : 0
     const totalChunks = Math.ceil(data.tweets.length / chunkSize)
     
@@ -24,11 +24,19 @@ function chunkEventData(data: EventData): EventData[] {
         isChunk: true,
         chunkIndex: Math.floor(i / chunkSize),
         totalChunks,
-        totalTweets: data.tweets.length // Add total tweet count to each chunk
+        totalTweets: data.tweets.length
       }
       chunks.push(chunk)
     }
     return chunks
+  }
+  
+  // If single chunk, ensure it's not too large
+  if ('tweets' in data && Array.isArray(data.tweets) && data.tweets.length > 25) {
+    return [{
+      ...data,
+      tweets: data.tweets.slice(0, 25)
+    }]
   }
   
   return [data]
@@ -97,26 +105,44 @@ export async function POST(req: NextRequest) {
               // Helper function to sanitize strings
               const sanitizeString = (str: string | null | undefined): string | null => {
                 if (!str) return null;
-                return String(str)
-                  .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
-                  .replace(/\\/g, '\\\\') // Escape backslashes
-                  .replace(/"/g, '\\"')   // Escape quotes
-                  .replace(/\n/g, ' ')    // Replace newlines with spaces
-                  .replace(/\r/g, ' ')    // Replace carriage returns with spaces
-                  .replace(/\t/g, ' ')    // Replace tabs with spaces
-                  .replace(/[\uD800-\uDFFF]/g, '') // Remove surrogate pairs
-                  .replace(/[^\x20-\x7E]/g, '') // Only keep printable ASCII
-                  .replace(/\s+/g, ' ')   // Normalize whitespace
-                  .trim();
+                try {
+                  // First pass: Basic cleanup
+                  let cleaned = String(str)
+                    .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+                    .replace(/[\uD800-\uDFFF]/g, '') // Remove surrogate pairs
+                    .replace(/[^\x20-\x7E]/g, '') // Only keep printable ASCII
+                    .replace(/\\/g, '') // Remove backslashes completely
+                    .replace(/"/g, "'") // Replace double quotes with single quotes
+                    .replace(/\n/g, ' ') // Replace newlines with spaces
+                    .replace(/\r/g, ' ') // Replace carriage returns with spaces
+                    .replace(/\t/g, ' ') // Replace tabs with spaces
+                    .replace(/\s+/g, ' ') // Normalize whitespace
+                    .trim();
+
+                  // Second pass: Specific handling for URLs and timestamps
+                  if (cleaned.includes('http') || cleaned.includes('://')) {
+                    cleaned = cleaned.replace(/[^a-zA-Z0-9\-._~:/?#\[\]@!$&'()*+,;=]/g, '');
+                  } else if (cleaned.includes('+0000')) {
+                    cleaned = cleaned.replace(/[^a-zA-Z0-9\s:+]/g, ' ');
+                  }
+
+                  return cleaned;
+                } catch (error) {
+                  console.error('Error sanitizing string:', error);
+                  return null;
+                }
               };
 
               // Limit chunk size to prevent JSON parsing issues
               const MAX_TWEETS_PER_CHUNK = 25;
-              const tweets = Array.isArray(chunk.tweets) ? chunk.tweets.slice(0, MAX_TWEETS_PER_CHUNK) : [];
+              const tweets = Array.isArray(chunk.tweets) ? 
+                chunk.tweets
+                  .slice(0, MAX_TWEETS_PER_CHUNK)
+                  .filter(tweet => tweet && typeof tweet === 'object') : [];
 
               // Clean the chunk data
               const cleanChunk = {
-                progress: chunk.progress || 0,
+                progress: typeof chunk.progress === 'number' ? chunk.progress : 0,
                 status: sanitizeString(chunk.status) || '',
                 phase: sanitizeString(chunk.phase),
                 type: sanitizeString(chunk.type),
@@ -129,37 +155,47 @@ export async function POST(req: NextRequest) {
                   profile: chunk.data.profile ? {
                     name: sanitizeString(chunk.data.profile.name),
                     bio: sanitizeString(chunk.data.profile.bio),
-                    followersCount: chunk.data.profile.followersCount,
-                    followingCount: chunk.data.profile.followingCount,
+                    followersCount: Number(chunk.data.profile.followersCount) || null,
+                    followingCount: Number(chunk.data.profile.followingCount) || null,
                     imageUrl: sanitizeString(chunk.data.profile.imageUrl)
                   } : undefined,
                   tweets: tweets.map(tweet => ({
-                    id: String(tweet.id || ''),
+                    id: String(tweet.id || '').replace(/[^a-zA-Z0-9]/g, ''),
                     text: sanitizeString(tweet.text) || '',
                     url: sanitizeString(tweet.url),
                     createdAt: sanitizeString(tweet.createdAt),
                     timestamp: sanitizeString(tweet.timestamp) || sanitizeString(tweet.createdAt),
                     metrics: {
-                      likes: tweet.metrics?.likes ? Number(tweet.metrics.likes) : null,
-                      retweets: tweet.metrics?.retweets ? Number(tweet.metrics.retweets) : null,
-                      views: tweet.metrics?.views ? Number(tweet.metrics.views) : null
+                      likes: Number(tweet.metrics?.likes) || null,
+                      retweets: Number(tweet.metrics?.retweets) || null,
+                      views: Number(tweet.metrics?.views) || null
                     },
-                    images: Array.isArray(tweet.images) ? tweet.images.filter(Boolean).map(String) : [],
+                    images: Array.isArray(tweet.images) ? 
+                      tweet.images
+                        .filter(Boolean)
+                        .map(img => sanitizeString(String(img)))
+                        .filter(Boolean) as string[] : 
+                      [],
                     isReply: Boolean(tweet.text?.startsWith('@'))
                   }))
                 } : undefined,
                 tweets: tweets.map(tweet => ({
-                  id: String(tweet.id || ''),
+                  id: String(tweet.id || '').replace(/[^a-zA-Z0-9]/g, ''),
                   text: sanitizeString(tweet.text) || '',
                   url: sanitizeString(tweet.url),
                   createdAt: sanitizeString(tweet.createdAt),
                   timestamp: sanitizeString(tweet.timestamp) || sanitizeString(tweet.createdAt),
                   metrics: {
-                    likes: tweet.metrics?.likes ? Number(tweet.metrics.likes) : null,
-                    retweets: tweet.metrics?.retweets ? Number(tweet.metrics.retweets) : null,
-                    views: tweet.metrics?.views ? Number(tweet.metrics.views) : null
+                    likes: Number(tweet.metrics?.likes) || null,
+                    retweets: Number(tweet.metrics?.retweets) || null,
+                    views: Number(tweet.metrics?.views) || null
                   },
-                  images: Array.isArray(tweet.images) ? tweet.images.filter(Boolean).map(String) : [],
+                  images: Array.isArray(tweet.images) ? 
+                    tweet.images
+                      .filter(Boolean)
+                      .map(img => sanitizeString(String(img)))
+                      .filter(Boolean) as string[] : 
+                    [],
                   isReply: Boolean(tweet.text?.startsWith('@'))
                 }))
               };
