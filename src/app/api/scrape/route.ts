@@ -68,23 +68,54 @@ export async function POST(req: NextRequest) {
           const cleanChunk = {
             ...chunk,
             tweets: chunk.tweets?.map(tweet => {
-              // Ensure all required fields are present and properly formatted
-              const cleanTweet = {
-                id: String(tweet.id || ''),
-                text: (tweet.text?.replace(/[\u0000-\u001F\u007F-\u009F]/g, '') || '').trim(),
-                url: tweet.url ? String(tweet.url) : null,
-                createdAt: tweet.createdAt ? String(tweet.createdAt) : null,
-                timestamp: tweet.timestamp ? String(tweet.timestamp) : tweet.createdAt ? String(tweet.createdAt) : null,
-                metrics: {
-                  likes: tweet.metrics?.likes ? Number(tweet.metrics.likes) : null,
-                  retweets: tweet.metrics?.retweets ? Number(tweet.metrics.retweets) : null,
-                  views: tweet.metrics?.views ? Number(tweet.metrics.views) : null
-                },
-                images: Array.isArray(tweet.images) ? tweet.images : [],
-                isReply: Boolean(tweet.text?.startsWith('@'))
+              try {
+                // Helper function to sanitize strings
+                const sanitizeString = (str: string | null | undefined): string | null => {
+                  if (!str) return null;
+                  return String(str)
+                    .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+                    .replace(/\\/g, '\\\\') // Escape backslashes
+                    .replace(/"/g, '\\"')   // Escape quotes
+                    .replace(/\n/g, ' ')    // Replace newlines with spaces
+                    .replace(/\r/g, ' ')    // Replace carriage returns with spaces
+                    .replace(/\t/g, ' ')    // Replace tabs with spaces
+                    .trim();
+                };
+
+                // Ensure all required fields are present and properly formatted
+                const cleanTweet = {
+                  id: String(tweet.id || ''),
+                  text: sanitizeString(tweet.text) || '',
+                  url: sanitizeString(tweet.url),
+                  createdAt: sanitizeString(tweet.createdAt),
+                  timestamp: sanitizeString(tweet.timestamp) || sanitizeString(tweet.createdAt),
+                  metrics: {
+                    likes: tweet.metrics?.likes ? Number(tweet.metrics.likes) : null,
+                    retweets: tweet.metrics?.retweets ? Number(tweet.metrics.retweets) : null,
+                    views: tweet.metrics?.views ? Number(tweet.metrics.views) : null
+                  },
+                  images: Array.isArray(tweet.images) ? tweet.images.filter(Boolean).map(String) : [],
+                  isReply: Boolean(tweet.text?.startsWith('@'))
+                };
+
+                // Validate the cleaned tweet can be stringified
+                JSON.stringify(cleanTweet);
+                return cleanTweet;
+              } catch (error) {
+                console.error('Error cleaning tweet:', error);
+                // Return a minimal valid tweet object if cleaning fails
+                return {
+                  id: String(tweet.id || ''),
+                  text: '',
+                  url: null,
+                  createdAt: null,
+                  timestamp: null,
+                  metrics: { likes: null, retweets: null, views: null },
+                  images: [],
+                  isReply: false
+                };
               }
-              return cleanTweet
-            }) || []
+            }).filter(Boolean) || []
           }
 
           try {
