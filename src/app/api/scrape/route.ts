@@ -65,25 +65,55 @@ export async function POST(req: NextRequest) {
           const isLastChunk = i === chunks.length - 1
           
           // Clean and validate the data before sending
-          const cleanChunk = {
-            ...chunk,
-            tweets: chunk.tweets?.map(tweet => {
-              try {
-                // Helper function to sanitize strings
-                const sanitizeString = (str: string | null | undefined): string | null => {
-                  if (!str) return null;
-                  return String(str)
-                    .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
-                    .replace(/\\/g, '\\\\') // Escape backslashes
-                    .replace(/"/g, '\\"')   // Escape quotes
-                    .replace(/\n/g, ' ')    // Replace newlines with spaces
-                    .replace(/\r/g, ' ')    // Replace carriage returns with spaces
-                    .replace(/\t/g, ' ')    // Replace tabs with spaces
-                    .trim();
-                };
+          const validateAndCleanChunk = (chunk: any) => {
+            try {
+              // Helper function to sanitize strings
+              const sanitizeString = (str: string | null | undefined): string | null => {
+                if (!str) return null;
+                return String(str)
+                  .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+                  .replace(/\\/g, '\\\\') // Escape backslashes
+                  .replace(/"/g, '\\"')   // Escape quotes
+                  .replace(/\n/g, ' ')    // Replace newlines with spaces
+                  .replace(/\r/g, ' ')    // Replace carriage returns with spaces
+                  .replace(/\t/g, ' ')    // Replace tabs with spaces
+                  .trim();
+              };
 
-                // Ensure all required fields are present and properly formatted
-                const cleanTweet = {
+              // Clean the chunk data
+              const cleanChunk = {
+                progress: chunk.progress || 0,
+                status: sanitizeString(chunk.status) || '',
+                phase: sanitizeString(chunk.phase),
+                type: sanitizeString(chunk.type),
+                error: sanitizeString(chunk.error),
+                scanProgress: chunk.scanProgress ? {
+                  phase: sanitizeString(chunk.scanProgress.phase) || 'unknown',
+                  count: Number(chunk.scanProgress.count) || 0
+                } : undefined,
+                data: chunk.data ? {
+                  profile: chunk.data.profile ? {
+                    name: sanitizeString(chunk.data.profile.name),
+                    bio: sanitizeString(chunk.data.profile.bio),
+                    followersCount: chunk.data.profile.followersCount,
+                    followingCount: chunk.data.profile.followingCount,
+                    imageUrl: sanitizeString(chunk.data.profile.imageUrl)
+                  } : undefined,
+                  tweets: chunk.data.tweets
+                } : undefined,
+                tweets: Array.isArray(chunk.tweets) ? chunk.tweets.map((tweet: { 
+                  id?: string | number;
+                  text?: string;
+                  url?: string;
+                  createdAt?: string;
+                  timestamp?: string;
+                  metrics?: {
+                    likes?: number | null;
+                    retweets?: number | null;
+                    views?: number | null;
+                  };
+                  images?: string[];
+                }) => ({
                   id: String(tweet.id || ''),
                   text: sanitizeString(tweet.text) || '',
                   url: sanitizeString(tweet.url),
@@ -96,33 +126,29 @@ export async function POST(req: NextRequest) {
                   },
                   images: Array.isArray(tweet.images) ? tweet.images.filter(Boolean).map(String) : [],
                   isReply: Boolean(tweet.text?.startsWith('@'))
-                };
+                })).filter(Boolean) : []
+              };
 
-                // Validate the cleaned tweet can be stringified
-                JSON.stringify(cleanTweet);
-                return cleanTweet;
-              } catch (error) {
-                console.error('Error cleaning tweet:', error);
-                // Return a minimal valid tweet object if cleaning fails
-                return {
-                  id: String(tweet.id || ''),
-                  text: '',
-                  url: null,
-                  createdAt: null,
-                  timestamp: null,
-                  metrics: { likes: null, retweets: null, views: null },
-                  images: [],
-                  isReply: false
-                };
-              }
-            }).filter(Boolean) || []
-          }
+              // Test stringify the entire chunk
+              const testJson = JSON.stringify(cleanChunk);
+              JSON.parse(testJson); // Validate the JSON is parseable
+              return cleanChunk;
+            } catch (error) {
+              console.error('Error validating chunk:', error);
+              // Return a minimal valid chunk
+              return {
+                progress: chunk.progress || 0,
+                status: 'Error processing data',
+                tweets: []
+              };
+            }
+          };
+
+          const cleanChunk = validateAndCleanChunk(chunk);
 
           try {
-            // Validate JSON before sending
-            const eventData = JSON.stringify(cleanChunk)
-            JSON.parse(eventData) // Test parse to validate
-            await writer.write(encoder.encode(`data: ${eventData}\n\n`))
+            const eventData = JSON.stringify(cleanChunk);
+            await writer.write(encoder.encode(`data: ${eventData}\n\n`));
           } catch (jsonError) {
             console.error('Invalid JSON chunk:', jsonError)
             // Send error notification instead of breaking
