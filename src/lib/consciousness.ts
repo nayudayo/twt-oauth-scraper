@@ -23,9 +23,9 @@ export interface ConsciousnessConfig {
 
 // Default configuration for a limited consciousness
 export const DEFAULT_CONSCIOUSNESS: ConsciousnessConfig = {
-  intelligenceLevel: 30,
-  vocabularyRange: 40,
-  grammarAccuracy: 50,
+  intelligenceLevel: 10,
+  vocabularyRange: 10,
+  grammarAccuracy: 10,
   isLearning: true,
   learningRate: 20,
   repetitiveness: 60,
