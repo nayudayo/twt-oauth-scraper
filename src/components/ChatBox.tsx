@@ -444,6 +444,13 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 if (data.isChunk) {
                   // For chunks, append tweets based on chunk index
                   onTweetsUpdate((prevTweets: Tweet[]) => {
+                    console.log('Processing chunk with data:', {
+                      chunkIndex: data.chunkIndex,
+                      totalTweets: data.totalTweets,
+                      chunkSize: data.tweets.length,
+                      currentTweets: prevTweets.length
+                    });
+
                     // Initialize array with correct size if needed
                     let newTweets = [...prevTweets]
                     if (data.totalTweets && newTweets.length < data.totalTweets) {
@@ -458,7 +465,9 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     const startIndex = data.chunkIndex * 50
                     // Replace or add tweets at the correct position
                     for (let i = 0; i < data.tweets.length; i++) {
-                      newTweets[startIndex + i] = data.tweets[i]
+                      if (data.tweets[i]) { // Only add valid tweets
+                        newTweets[startIndex + i] = data.tweets[i]
+                      }
                     }
                     
                     // Update scan progress
@@ -469,16 +478,22 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                       })
                     }
                     
-                    return newTweets.filter((t): t is Tweet => Boolean(t)) // Remove any undefined entries
+                    // Filter out nulls and return
+                    const validTweets = newTweets.filter((t: unknown): t is Tweet => Boolean(t))
+                    console.log(`Processed chunk ${data.chunkIndex}, valid tweets: ${validTweets.length}/${newTweets.length}`)
+                    return validTweets
                   })
                 } else {
-                  // For non-chunked data, just set the tweets directly
-                onTweetsUpdate(data.tweets)
+                  // For non-chunked data, filter and update
+                  const validTweets = data.tweets.filter((t: unknown): t is Tweet => Boolean(t))
+                  console.log(`Processing non-chunked data, valid tweets: ${validTweets.length}`)
+                  onTweetsUpdate(validTweets)
+                  
                   // Update scan progress for non-chunked data
                   if (data.scanProgress) {
                     setScanProgress({
                       phase: data.scanProgress.phase,
-                      count: data.tweets.length
+                      count: validTweets.length
                     })
                   }
                 }
@@ -486,15 +501,66 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
 
               // Handle completion
               if (data.type === 'complete' || data.type === 'done' || (data.progress === 100 && data.status === 'Complete')) {
-                console.log('Scraping complete, showing completion modal')
+                console.log('Scraping complete, showing completion modal', data)
+                
+                let finalTweets: Tweet[] = []
+                
                 if (data.data?.tweets) {
-                  onTweetsUpdate(data.data.tweets)
-                  // Update final count
+                  // Ensure we update with the complete tweet set
+                  finalTweets = data.data.tweets.filter((t: unknown): t is Tweet => Boolean(t))
+                  console.log(`Updating with ${finalTweets.length} final tweets from data.data`)
+                } else if (data.tweets) {
+                  // Fallback to data.tweets if data.data.tweets is not available
+                  finalTweets = data.tweets.filter((t: unknown): t is Tweet => Boolean(t))
+                  console.log(`Updating with ${finalTweets.length} tweets from direct data`)
+                }
+
+                if (finalTweets.length > 0) {
+                  console.log('Final tweet update:', {
+                    count: finalTweets.length,
+                    firstTweet: finalTweets[0],
+                    lastTweet: finalTweets[finalTweets.length - 1]
+                  })
+
+                  // Update local state first
+                  onTweetsUpdate(finalTweets)
+                  
+                  // Save to localStorage as backup
+                  if (profile.name) {
+                    try {
+                      localStorage.setItem(`tweets_${profile.name}`, JSON.stringify(finalTweets))
+                    } catch (err) {
+                      console.warn('Failed to save tweets to localStorage:', err)
+                    }
+                  }
+                  
                   setScanProgress(prev => prev ? {
                     ...prev,
-                    count: data.data.tweets.length
+                    count: finalTweets.length
                   } : null)
+                } else {
+                  console.warn('No tweets found in completion data')
                 }
+
+                // Trigger a final fetch from the database to ensure UI is in sync
+                if (profile.name) {
+                  try {
+                    const response = await fetch(`/api/tweets?username=${profile.name}`)
+                    if (response.ok) {
+                      const data = await response.json()
+                      if (data.tweets?.length > 0) {
+                        console.log('Final database sync:', {
+                          count: data.tweets.length,
+                          source: 'database'
+                        })
+                        onTweetsUpdate(data.tweets)
+                      }
+                    }
+                  } catch (err) {
+                    console.warn('Failed to sync with database:', err)
+                  }
+                }
+
                 setLoading(false)
                 setShowComplete(true)
                 setShowAnalysisPrompt(true)

@@ -106,6 +106,9 @@ export async function POST(req: NextRequest) {
               const sanitizeString = (str: string | null | undefined): string | null => {
                 if (!str) return null;
                 try {
+                  // Special handling for tweet text with mentions and URLs
+                  const isTweetText = str.includes('@') || str.includes('http');
+                  
                   // First pass: Basic cleanup
                   let cleaned = String(str)
                     .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
@@ -116,20 +119,29 @@ export async function POST(req: NextRequest) {
                     .replace(/\n/g, ' ') // Replace newlines with spaces
                     .replace(/\r/g, ' ') // Replace carriage returns with spaces
                     .replace(/\t/g, ' ') // Replace tabs with spaces
-                    .replace(/\s+/g, ' ') // Normalize whitespace
                     .trim();
 
-                  // Second pass: Specific handling for URLs and timestamps
-                  if (cleaned.includes('http') || cleaned.includes('://')) {
-                    cleaned = cleaned.replace(/[^a-zA-Z0-9\-._~:/?#\[\]@!$&'()*+,;=]/g, '');
+                  if (isTweetText) {
+                    // Handle mentions by adding spaces
+                    cleaned = cleaned.replace(/(@\w+)/g, ' $1 ');
+                    // Handle URLs by adding spaces
+                    cleaned = cleaned.replace(/(https?:\/\/\S+)/g, ' $1 ');
+                    // Normalize spaces
+                    cleaned = cleaned.replace(/\s+/g, ' ').trim();
                   } else if (cleaned.includes('+0000')) {
-                    cleaned = cleaned.replace(/[^a-zA-Z0-9\s:+]/g, ' ');
+                    // Special handling for timestamps
+                    cleaned = cleaned.replace(/[^a-zA-Z0-9\s:+]/g, ' ')
+                             .replace(/\s+/g, ' ')
+                             .trim();
+                  } else {
+                    // Default space normalization
+                    cleaned = cleaned.replace(/\s+/g, ' ').trim();
                   }
 
                   return cleaned;
                 } catch (error) {
                   console.error('Error sanitizing string:', error);
-                  return null;
+                  return '';
                 }
               };
 

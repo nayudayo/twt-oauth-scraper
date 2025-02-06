@@ -17,10 +17,37 @@ export default function Home() {
     const fetchTweets = async () => {
       if (session?.username) {
         try {
+          // First try to get from localStorage
+          const cachedTweets = localStorage.getItem(`tweets_${session.username}`)
+          if (cachedTweets) {
+            const parsedTweets = JSON.parse(cachedTweets)
+            if (Array.isArray(parsedTweets) && parsedTweets.length > 0) {
+              console.log('Using cached tweets:', {
+                count: parsedTweets.length,
+                source: 'localStorage'
+              })
+              setTweets(parsedTweets)
+              return
+            }
+          }
+
+          // If no cache, fetch from API
           const response = await fetch(`/api/tweets?username=${session.username}`)
           if (!response.ok) throw new Error('Failed to fetch tweets')
           const data = await response.json()
+          if (data.tweets?.length > 0) {
+            console.log('Fetched tweets from API:', {
+              count: data.tweets.length,
+              source: 'database'
+            })
           setTweets(data.tweets)
+            // Update cache
+            try {
+              localStorage.setItem(`tweets_${session.username}`, JSON.stringify(data.tweets))
+            } catch (err) {
+              console.warn('Failed to cache tweets:', err)
+            }
+          }
         } catch (error) {
           console.error('Error fetching tweets:', error)
         }
@@ -43,6 +70,23 @@ export default function Home() {
     setTerminalComplete(true)
     // Small delay to ensure terminal fade out starts first
     setTimeout(() => setShowContent(true), 100)
+  }
+
+  // Handle tweet updates
+  const handleTweetsUpdate = (newTweets: Tweet[]) => {
+    console.log('Updating tweets in parent:', {
+      oldCount: tweets.length,
+      newCount: newTweets.length
+    })
+    setTweets(newTweets)
+    // Update cache
+    if (session?.username) {
+      try {
+        localStorage.setItem(`tweets_${session.username}`, JSON.stringify(newTweets))
+      } catch (err) {
+        console.warn('Failed to cache updated tweets:', err)
+      }
+    }
   }
 
   // Show loading state while checking session
@@ -91,7 +135,7 @@ export default function Home() {
             imageUrl: session.user?.image || null
           }}
           onClose={() => signIn('twitter')}
-          onTweetsUpdate={setTweets}
+          onTweetsUpdate={handleTweetsUpdate}
         />
       </div>
     </main>
