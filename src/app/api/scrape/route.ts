@@ -70,22 +70,21 @@ export async function POST(req: NextRequest) {
             tweets: chunk.tweets?.map(tweet => {
               // Ensure all required fields are present and properly formatted
               const cleanTweet = {
-                id: tweet.id,
-                text: tweet.text?.replace(/[\u0000-\u001F\u007F-\u009F]/g, '') || '',
-                url: tweet.url || null,
-                createdAt: tweet.createdAt || null,
-                timestamp: tweet.timestamp || tweet.createdAt || null,
+                id: String(tweet.id || ''),
+                text: (tweet.text?.replace(/[\u0000-\u001F\u007F-\u009F]/g, '') || '').trim(),
+                url: tweet.url ? String(tweet.url) : null,
+                createdAt: tweet.createdAt ? String(tweet.createdAt) : null,
+                timestamp: tweet.timestamp ? String(tweet.timestamp) : tweet.createdAt ? String(tweet.createdAt) : null,
                 metrics: {
-                  ...tweet.metrics,
-                  likes: tweet.metrics?.likes ?? null,
-                  retweets: tweet.metrics?.retweets ?? null,
-                  views: tweet.metrics?.views ?? null
+                  likes: tweet.metrics?.likes ? Number(tweet.metrics.likes) : null,
+                  retweets: tweet.metrics?.retweets ? Number(tweet.metrics.retweets) : null,
+                  views: tweet.metrics?.views ? Number(tweet.metrics.views) : null
                 },
-                images: tweet.images || [],
-                isReply: tweet.text?.startsWith('@') || false
+                images: Array.isArray(tweet.images) ? tweet.images : [],
+                isReply: Boolean(tweet.text?.startsWith('@'))
               }
               return cleanTweet
-            })
+            }) || []
           }
 
           try {
