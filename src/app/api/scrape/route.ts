@@ -65,7 +65,34 @@ export async function POST(req: NextRequest) {
           const isLastChunk = i === chunks.length - 1
           
           // Clean and validate the data before sending
-          const validateAndCleanChunk = (chunk: any) => {
+          const validateAndCleanChunk = (chunk: EventData & {
+            data?: {
+              profile?: {
+                name?: string | null;
+                bio?: string | null;
+                followersCount?: number | null;
+                followingCount?: number | null;
+                imageUrl?: string | null;
+              };
+              tweets?: Array<{
+                id?: string | number;
+                text?: string;
+                url?: string;
+                createdAt?: string;
+                timestamp?: string;
+                metrics?: {
+                  likes?: number | null;
+                  retweets?: number | null;
+                  views?: number | null;
+                };
+                images?: string[];
+              }>;
+            };
+            scanProgress?: {
+              phase?: string;
+              count?: number;
+            };
+          }) => {
             try {
               // Helper function to sanitize strings
               const sanitizeString = (str: string | null | undefined): string | null => {
@@ -77,8 +104,15 @@ export async function POST(req: NextRequest) {
                   .replace(/\n/g, ' ')    // Replace newlines with spaces
                   .replace(/\r/g, ' ')    // Replace carriage returns with spaces
                   .replace(/\t/g, ' ')    // Replace tabs with spaces
+                  .replace(/[\uD800-\uDFFF]/g, '') // Remove surrogate pairs
+                  .replace(/[^\x20-\x7E]/g, '') // Only keep printable ASCII
+                  .replace(/\s+/g, ' ')   // Normalize whitespace
                   .trim();
               };
+
+              // Limit chunk size to prevent JSON parsing issues
+              const MAX_TWEETS_PER_CHUNK = 25;
+              const tweets = Array.isArray(chunk.tweets) ? chunk.tweets.slice(0, MAX_TWEETS_PER_CHUNK) : [];
 
               // Clean the chunk data
               const cleanChunk = {
@@ -99,21 +133,22 @@ export async function POST(req: NextRequest) {
                     followingCount: chunk.data.profile.followingCount,
                     imageUrl: sanitizeString(chunk.data.profile.imageUrl)
                   } : undefined,
-                  tweets: chunk.data.tweets
+                  tweets: tweets.map(tweet => ({
+                    id: String(tweet.id || ''),
+                    text: sanitizeString(tweet.text) || '',
+                    url: sanitizeString(tweet.url),
+                    createdAt: sanitizeString(tweet.createdAt),
+                    timestamp: sanitizeString(tweet.timestamp) || sanitizeString(tweet.createdAt),
+                    metrics: {
+                      likes: tweet.metrics?.likes ? Number(tweet.metrics.likes) : null,
+                      retweets: tweet.metrics?.retweets ? Number(tweet.metrics.retweets) : null,
+                      views: tweet.metrics?.views ? Number(tweet.metrics.views) : null
+                    },
+                    images: Array.isArray(tweet.images) ? tweet.images.filter(Boolean).map(String) : [],
+                    isReply: Boolean(tweet.text?.startsWith('@'))
+                  }))
                 } : undefined,
-                tweets: Array.isArray(chunk.tweets) ? chunk.tweets.map((tweet: { 
-                  id?: string | number;
-                  text?: string;
-                  url?: string;
-                  createdAt?: string;
-                  timestamp?: string;
-                  metrics?: {
-                    likes?: number | null;
-                    retweets?: number | null;
-                    views?: number | null;
-                  };
-                  images?: string[];
-                }) => ({
+                tweets: tweets.map(tweet => ({
                   id: String(tweet.id || ''),
                   text: sanitizeString(tweet.text) || '',
                   url: sanitizeString(tweet.url),
@@ -126,7 +161,7 @@ export async function POST(req: NextRequest) {
                   },
                   images: Array.isArray(tweet.images) ? tweet.images.filter(Boolean).map(String) : [],
                   isReply: Boolean(tweet.text?.startsWith('@'))
-                })).filter(Boolean) : []
+                }))
               };
 
               // Test stringify the entire chunk
