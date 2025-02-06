@@ -79,14 +79,34 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
           }
         } catch (error) {
           console.error('Failed to load funnel progress:', error)
-          // On error, start from beginning but maintain any existing progress
-          setLines([
-            { content: SYSTEM_MESSAGES.BOOT },
-            { 
-              content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[currentCommandIndex].command}`,
-              isSystem: true 
-            }
-          ])
+          
+          // On error, try to get progress from local state first
+          const lastIndex = currentCommandIndex || 0
+          const lastCommands = completedCommands || []
+          
+          // If we have local state, use it
+          if (lastCommands.length > 0 || lastIndex > 0) {
+            console.log('Restoring from local state:', { lastIndex, lastCommands })
+            setLines([
+              { content: SYSTEM_MESSAGES.BOOT },
+              { 
+                content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[lastIndex].command}`,
+                isSystem: true 
+              }
+            ])
+          } else {
+            // If no local state, start from beginning
+            console.log('Starting from beginning due to error')
+            setCurrentCommandIndex(0)
+            setCompletedCommands([])
+            setLines([
+              { content: SYSTEM_MESSAGES.BOOT },
+              { 
+                content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[0].command}`,
+                isSystem: true 
+              }
+            ])
+          }
         }
       }
     }

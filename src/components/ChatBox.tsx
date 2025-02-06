@@ -444,18 +444,43 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 if (data.isChunk) {
                   // For chunks, append tweets based on chunk index
                   onTweetsUpdate((prevTweets: Tweet[]) => {
-                    const newTweets = [...prevTweets]
+                    // Initialize array with correct size if needed
+                    let newTweets = [...prevTweets]
+                    if (data.totalTweets && newTweets.length < data.totalTweets) {
+                      newTweets = new Array(data.totalTweets).fill(null)
+                      // Copy over any existing tweets
+                      prevTweets.forEach((t, i) => {
+                        if (t) newTweets[i] = t
+                      })
+                    }
+                    
                     // Calculate start index for this chunk
                     const startIndex = data.chunkIndex * 50
                     // Replace or add tweets at the correct position
                     for (let i = 0; i < data.tweets.length; i++) {
                       newTweets[startIndex + i] = data.tweets[i]
                     }
+                    
+                    // Update scan progress
+                    if (data.scanProgress) {
+                      setScanProgress({
+                        phase: data.scanProgress.phase,
+                        count: data.totalTweets || data.scanProgress.count
+                      })
+                    }
+                    
                     return newTweets.filter((t): t is Tweet => Boolean(t)) // Remove any undefined entries
                   })
                 } else {
                   // For non-chunked data, just set the tweets directly
                   onTweetsUpdate(data.tweets)
+                  // Update scan progress for non-chunked data
+                  if (data.scanProgress) {
+                    setScanProgress({
+                      phase: data.scanProgress.phase,
+                      count: data.tweets.length
+                    })
+                  }
                 }
               }
 
@@ -464,9 +489,13 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 console.log('Scraping complete, showing completion modal')
                 if (data.data?.tweets) {
                   onTweetsUpdate(data.data.tweets)
+                  // Update final count
+                  setScanProgress(prev => prev ? {
+                    ...prev,
+                    count: data.data.tweets.length
+                  } : null)
                 }
                 setLoading(false)
-                setScanProgress(null)
                 setShowComplete(true)
                 setShowAnalysisPrompt(true)
                 setScrapingStartTime(null)

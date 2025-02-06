@@ -1,24 +1,36 @@
+// Normalize referral code format
+export function normalizeReferralCode(code: string): string {
+  return code.trim().toUpperCase()
+}
+
 // Validate referral code format: PUSH-XXXX-YYYY where XXXX is username and YYYY is wallet
 export function isValidReferralCode(code: string): boolean {
+  // Special case for "NO"
+  if (code.toUpperCase() === 'NO') return true
+  
   // Convert to uppercase before validation
-  const upperCode = code.toUpperCase()
-  // Only allow uppercase letters and numbers in the parts after PUSH-
-  const referralRegex = /^PUSH-[A-Z0-9]{4}-[1-9A-HJ-NP-Z]{4}$/
-  return upperCode === 'NO' || referralRegex.test(upperCode)
+  const upperCode = normalizeReferralCode(code)
+  
+  // Allow more flexible format with 3-6 chars for each part
+  const referralRegex = /^PUSH-[A-Z0-9]{3,6}-[A-Z0-9]{3,6}$/
+  return referralRegex.test(upperCode)
 }
 
 // Generate a referral code from username and wallet
 export function generateReferralCode(username: string, wallet: string): string {
   const cleanUsername = username.replace(/[^A-Za-z0-9]/g, '') // Remove special characters
   const userPart = cleanUsername.slice(0, 4).toUpperCase() // Take first 4 chars
-  const walletPart = wallet.slice(0, 4).toUpperCase() // Take first 4 chars of wallet and convert to uppercase
+  const walletPart = wallet.slice(0, 4).toUpperCase() // Take first 4 chars of wallet
   return `PUSH-${userPart}-${walletPart}`
 }
 
-// Extract referral response from command input and convert to uppercase
+// Extract referral response from command input
 export function extractReferralResponse(input: string): string | null {
   const parts = input.trim().split(/\s+/)
-  return parts.length === 2 ? parts[1].toUpperCase() : null
+  if (parts.length !== 2) return null
+  
+  const code = normalizeReferralCode(parts[1])
+  return isValidReferralCode(code) ? code : null
 }
 
 // Generate example referral code for error messages

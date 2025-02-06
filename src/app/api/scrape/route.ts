@@ -67,18 +67,41 @@ export async function POST(req: NextRequest) {
           // Clean and validate the data before sending
           const cleanChunk = {
             ...chunk,
-            tweets: chunk.tweets?.map(tweet => ({
-              ...tweet,
-              text: tweet.text?.replace(/[\u0000-\u001F\u007F-\u009F]/g, '') || '' // Remove control characters
-            }))
+            tweets: chunk.tweets?.map(tweet => {
+              // Ensure all required fields are present and properly formatted
+              const cleanTweet = {
+                id: tweet.id,
+                text: tweet.text?.replace(/[\u0000-\u001F\u007F-\u009F]/g, '') || '',
+                url: tweet.url || null,
+                createdAt: tweet.createdAt || null,
+                timestamp: tweet.timestamp || tweet.createdAt || null,
+                metrics: {
+                  ...tweet.metrics,
+                  likes: tweet.metrics?.likes ?? null,
+                  retweets: tweet.metrics?.retweets ?? null,
+                  views: tweet.metrics?.views ?? null
+                },
+                images: tweet.images || [],
+                isReply: tweet.text?.startsWith('@') || false
+              }
+              return cleanTweet
+            })
           }
-          
-          const eventData = JSON.stringify(cleanChunk)
-          await writer.write(encoder.encode(`data: ${eventData}\n\n`))
-          
-          // Small delay between chunks to prevent overwhelming the client
-          if (!isLastChunk && chunks.length > 1) {
-            await new Promise(resolve => setTimeout(resolve, 50))
+
+          try {
+            // Validate JSON before sending
+            const eventData = JSON.stringify(cleanChunk)
+            JSON.parse(eventData) // Test parse to validate
+            await writer.write(encoder.encode(`data: ${eventData}\n\n`))
+          } catch (jsonError) {
+            console.error('Invalid JSON chunk:', jsonError)
+            // Send error notification instead of breaking
+            await writer.write(
+              encoder.encode(`data: ${JSON.stringify({ 
+                error: 'Data processing error', 
+                progress: chunk.progress || 0 
+              })}\n\n`)
+            )
           }
           
           // Only close the stream after the final chunk of completion data
@@ -97,6 +120,12 @@ export async function POST(req: NextRequest) {
       console.error('Error sending event:', error)
       isStreamClosed = true
       try {
+        await writer.write(
+          encoder.encode(`data: ${JSON.stringify({ 
+            error: 'Stream error', 
+            progress: 0 
+          })}\n\n`)
+        )
         await writer.close()
       } catch (closeError) {
         console.error('Error closing writer:', closeError)

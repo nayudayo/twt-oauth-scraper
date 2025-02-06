@@ -594,11 +594,31 @@ export async function validateReferralCode(db: Database, referralCode: string) {
   try {
     await db.run('BEGIN TRANSACTION')
     
+    // Special case for "NO"
+    if (referralCode.toUpperCase() === 'NO') {
+      console.log('Validating "NO" referral code')
+      await db.run('COMMIT')
+      return true
+    }
+
+    // Normalize the code before checking
+    const normalizedCode = referralCode.trim().toUpperCase()
+    
+    console.log('Validating referral code:', normalizedCode)
+    
+    // First check if the code exists
     const result = await db.get(`
-      SELECT code, owner_user_id, usage_count
-      FROM referral_codes
-      WHERE code = ?
-    `, referralCode)
+      SELECT rc.code, rc.owner_user_id, rc.usage_count, u.username as owner_username
+      FROM referral_codes rc
+      LEFT JOIN users u ON rc.owner_user_id = u.id
+      WHERE UPPER(rc.code) = UPPER(?)
+    `, normalizedCode)
+    
+    console.log('Validation result:', {
+      code: result?.code,
+      ownerUsername: result?.owner_username,
+      usageCount: result?.usage_count
+    })
     
     await db.run('COMMIT')
     return result !== undefined
@@ -634,22 +654,42 @@ export async function createReferralCode(
   try {
     await db.run('BEGIN TRANSACTION')
     
+    // Normalize the code
+    const normalizedCode = code.trim().toUpperCase()
+    
+    console.log('Attempting to create referral code:', {
+      code: normalizedCode,
+      ownerUserId
+    })
+    
     // First check if code already exists
     const existing = await db.get(
-      'SELECT code FROM referral_codes WHERE code = ?',
-      code
+      'SELECT code, owner_user_id FROM referral_codes WHERE UPPER(code) = UPPER(?)',
+      normalizedCode
     )
     
     if (existing) {
+      console.log('Referral code already exists:', {
+        code: normalizedCode,
+        existingOwnerId: existing.owner_user_id
+      })
       await db.run('ROLLBACK')
       return false
     }
+    
+    // Get owner username for logging
+    const owner = await db.get('SELECT username FROM users WHERE id = ?', ownerUserId)
+    console.log('Creating new referral code:', {
+      code: normalizedCode,
+      ownerUserId,
+      ownerUsername: owner?.username
+    })
     
     // Create the new code
     await db.run(`
       INSERT INTO referral_codes (code, owner_user_id)
       VALUES (?, ?)
-    `, code, ownerUserId)
+    `, normalizedCode, ownerUserId)
     
     await db.run('COMMIT')
     return true
