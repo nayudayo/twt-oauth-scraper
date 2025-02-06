@@ -9,9 +9,9 @@ const workerPool = new WorkerPool(16, 100) // 16 concurrent workers, 100 max que
 // Helper function to chunk large data
 function chunkEventData(data: EventData): EventData[] {
   // If data contains tweets, split them into smaller chunks
-  if ('tweets' in data && Array.isArray(data.tweets) && data.tweets.length > 5) {
+  if ('tweets' in data && Array.isArray(data.tweets) && data.tweets.length > 50) {
     const chunks: EventData[] = []
-    const chunkSize = 5
+    const chunkSize = 50
     const baseProgress = typeof data.progress === 'number' ? data.progress : 0
     
     // Split tweets into chunks

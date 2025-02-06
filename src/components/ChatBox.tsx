@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Dispatch, SetStateAction } from 'react'
 import { Tweet, TwitterProfile } from '@/types/scraper'
 import { PersonalityAnalysis } from '@/lib/openai'
 import ReactMarkdown from 'react-markdown'
@@ -10,7 +10,7 @@ interface ChatBoxProps {
   tweets: Tweet[]
   profile: TwitterProfile
   onClose: () => void
-  onTweetsUpdate: (tweets: Tweet[]) => void
+  onTweetsUpdate: Dispatch<SetStateAction<Tweet[]>>
 }
 
 interface PersonalityTuning {
@@ -271,7 +271,8 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       // Initialize tuning with the analysis values
       const initialTuning: PersonalityTuning = {
         traitModifiers: Object.fromEntries(data.traits.map((trait: { name: string; score: number }) => 
-          [trait.name, trait.score * 10]  // Convert 0-10 score to 0-100 scale
+          // Convert trait score (0-10) to slider range (0-100)
+          [trait.name, trait.score * 10]
         )),
         interestWeights: {},
         customInterests: [],
@@ -283,10 +284,15 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
         }
       }
 
-      // Initialize interest weights with rounded values
+      // Initialize interest weights with values based on presence in topics and themes
       const initialWeights: { [key: string]: number } = {}
-      data.interests.forEach((interest: string) => {
-        initialWeights[interest] = 50 // Set default weight to Medium (50)
+      const allTopics = [...data.interests, ...data.topicsAndThemes]
+      const uniqueTopics = Array.from(new Set(allTopics))
+      
+      uniqueTopics.forEach((topic: string) => {
+        // If a topic appears in both interests and themes, give it a higher weight
+        const weight = data.interests.includes(topic) && data.topicsAndThemes.includes(topic) ? 75 : 50
+        initialWeights[topic] = weight
       })
 
       initialTuning.interestWeights = initialWeights
@@ -304,8 +310,8 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   // Helper functions for trait labels
   const getTraitLabel = (score: number) => {
     if (score === 0) return 'None'
-    if (score <= 25) return 'Low'
-    if (score <= 50) return 'Moderate'
+    if (score <= 25) return 'Very Low'
+    if (score <= 50) return 'Low'
     if (score <= 75) return 'High'
     return 'Very High'
   }
@@ -435,7 +441,22 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
 
               // Update tweets when new data is received
               if (data.tweets) {
-                onTweetsUpdate(data.tweets)
+                if (data.isChunk) {
+                  // For chunks, append tweets based on chunk index
+                  onTweetsUpdate((prevTweets: Tweet[]) => {
+                    const newTweets = [...prevTweets]
+                    // Calculate start index for this chunk
+                    const startIndex = data.chunkIndex * 50
+                    // Replace or add tweets at the correct position
+                    for (let i = 0; i < data.tweets.length; i++) {
+                      newTweets[startIndex + i] = data.tweets[i]
+                    }
+                    return newTweets.filter((t): t is Tweet => Boolean(t)) // Remove any undefined entries
+                  })
+                } else {
+                  // For non-chunked data, just set the tweets directly
+                  onTweetsUpdate(data.tweets)
+                }
               }
 
               // Handle completion
@@ -510,6 +531,12 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   useEffect(() => {
     adjustTextareaHeight()
   }, [input])
+
+  const handleUpdateAnalysis = async () => {
+    // Reset the analysis state and start a new analysis
+    setAnalysis(null)
+    await handleAnalyze()
+  }
 
   return (
     <>
@@ -653,6 +680,14 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
               >
                 {loading ? 'ABORT SEQUENCE' : 'EXECUTE DATA EXTRACTION'}
               </button>
+              {analysis && !isAnalyzing && (
+                <button
+                  onClick={handleUpdateAnalysis}
+                  className="w-full px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text"
+                >
+                  UPDATE ANALYSIS
+                </button>
+              )}
               {tweets.length > 0 && (
                 <button
                   onClick={handleClearData}
@@ -1206,6 +1241,14 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 >
                   {loading ? 'ABORT SEQUENCE' : 'EXECUTE DATA EXTRACTION'}
                 </button>
+                {analysis && !isAnalyzing && (
+                  <button
+                    onClick={handleUpdateAnalysis}
+                    className="w-full px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text"
+                  >
+                    UPDATE ANALYSIS
+                  </button>
+                )}
                 {tweets.length > 0 && (
                   <button
                     onClick={handleClearData}

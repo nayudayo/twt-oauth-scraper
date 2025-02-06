@@ -316,11 +316,11 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
           console.log('Processing trait line:', line) // Debug log
           
           // More flexible regex that handles various formats:
-          // - "Trait 8/10 - Explanation"
-          // - "Trait: 8/10 - Explanation"
-          // - "Trait (8/10): Explanation"
-          // - "Trait - 8/10 - Explanation"
-          const match = line.match(/([A-Za-z]+(?:\s+[A-Za-z]+)*)[:\s-]*(\d+)\/10[:\s-]*(.+)/)
+          // - "**Trait** 8/10 - Explanation"
+          // - "**Trait**: 8/10 - Explanation"
+          // - "**Trait** (8/10): Explanation"
+          // - "**Trait** - 8/10 - Explanation"
+          const match = line.match(/\*\*([^*]+)\*\*[:\s-]*(\d+)\/10[:\s-]*(.+)/)
           if (match) {
             const [, name, score, explanation] = match
             analysis.traits.push({
@@ -337,8 +337,8 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
       else if (section.includes('Primary Interests')) {
         const interestLines = section.split('\n').slice(1)
         analysis.interests = interestLines
-          .filter(line => line.startsWith('-'))
-          .map(line => line.replace('-', '').trim())
+          .filter(line => line.trim().match(/^[-•*]\s|^\d+\.\s/)) // Support various bullet point formats
+          .map(line => line.replace(/^[-•*]\s|\d+\.\s/, '').trim())
       }
       else if (section.includes('Communication Style Analysis') || section.includes('Communication Style')) {
         // First get the numerical scores
@@ -388,15 +388,21 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
         // Combine into a descriptive string
         analysis.communicationStyle.description = descriptionParts.join('. ')
       }
-      else if (section.toLowerCase().includes('topics & themes') || section.toLowerCase().includes('topics and themes')) {
+      else if (section.toLowerCase().includes('key themes') || 
+               section.toLowerCase().includes('topics') || 
+               section.toLowerCase().includes('themes')) {
         const lines = section.split('\n').slice(1)
         analysis.topicsAndThemes = lines
-          .filter(line => line.trim().startsWith('-'))
-          .map(line => line.replace(/^-\s*/, '').trim())
+          .filter(line => line.trim().match(/^[-•*]\s|^\d+\.\s/)) // Support various bullet point formats
+          .map(line => line.replace(/^[-•*]\s|\d+\.\s/, '').trim())
+          .filter(Boolean) // Remove empty lines
       }
-      else if (section.toLowerCase().includes('emotional tone')) {
+      else if (section.toLowerCase().includes('emotion')) {
         const lines = section.split('\n').slice(1)
-        analysis.emotionalTone = lines.join(' ').trim()
+        analysis.emotionalTone = lines
+          .filter(line => line.trim()) // Remove empty lines
+          .join(' ')
+          .trim()
       }
     }
   } catch (error) {
