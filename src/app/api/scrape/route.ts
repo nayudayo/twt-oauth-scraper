@@ -13,6 +13,7 @@ function chunkEventData(data: EventData): EventData[] {
     const chunks: EventData[] = []
     const chunkSize = 50
     const baseProgress = typeof data.progress === 'number' ? data.progress : 0
+    const totalChunks = Math.ceil(data.tweets.length / chunkSize)
     
     // Split tweets into chunks
     for (let i = 0; i < data.tweets.length; i += chunkSize) {
@@ -22,7 +23,8 @@ function chunkEventData(data: EventData): EventData[] {
         progress: Math.min(80 + Math.floor((i + chunkSize) / data.tweets.length * 20), baseProgress),
         isChunk: true,
         chunkIndex: Math.floor(i / chunkSize),
-        totalChunks: Math.ceil(data.tweets.length / chunkSize)
+        totalChunks,
+        totalTweets: data.tweets.length // Add total tweet count to each chunk
       }
       chunks.push(chunk)
     }
@@ -49,6 +51,7 @@ export async function POST(req: NextRequest) {
 
   // Helper function to send events
   let isStreamClosed = false
+  let lastChunkSent = false
 
   const send = async (data: EventData) => {
     try {
@@ -57,18 +60,47 @@ export async function POST(req: NextRequest) {
         const chunks = chunkEventData(data)
         
         // Send each chunk
-        for (const chunk of chunks) {
-          const eventData = JSON.stringify(chunk)
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i]
+          const isLastChunk = i === chunks.length - 1
+          
+          // Clean and validate the data before sending
+          const cleanChunk = {
+            ...chunk,
+            tweets: chunk.tweets?.map(tweet => ({
+              ...tweet,
+              text: tweet.text?.replace(/[\u0000-\u001F\u007F-\u009F]/g, '') || '' // Remove control characters
+            }))
+          }
+          
+          const eventData = JSON.stringify(cleanChunk)
           await writer.write(encoder.encode(`data: ${eventData}\n\n`))
+          
           // Small delay between chunks to prevent overwhelming the client
-          if (chunks.length > 1) {
+          if (!isLastChunk && chunks.length > 1) {
             await new Promise(resolve => setTimeout(resolve, 50))
           }
+          
+          // Only close the stream after the final chunk of completion data
+          if (isLastChunk && (data.progress === 100 || data.error)) {
+            lastChunkSent = true
+          }
+        }
+        
+        // Close the stream only after all data is sent and it's the final message
+        if (lastChunkSent) {
+          isStreamClosed = true
+          await writer.close()
         }
       }
     } catch (error) {
       console.error('Error sending event:', error)
       isStreamClosed = true
+      try {
+        await writer.close()
+      } catch (closeError) {
+        console.error('Error closing writer:', closeError)
+      }
     }
   }
 
@@ -82,21 +114,18 @@ export async function POST(req: NextRequest) {
     if (!token) {
       console.error('❌ No token found')
       await send({ error: 'Session expired. Please sign in again.', progress: 0 })
-      await writer.close()
       return response
     }
 
     if (!token.accessToken) {
       console.error('❌ No access token found')
       await send({ error: 'Session expired. Please sign in again.', progress: 0 })
-      await writer.close()
       return response
     }
 
     if (!token.username) {
       console.error('❌ No username found in token')
       await send({ error: 'Invalid session. Please sign in again.', progress: 0 })
-      await writer.close()
       return response
     }
 
@@ -112,7 +141,6 @@ export async function POST(req: NextRequest) {
         await workerPool.terminateJob(jobId)
       }
       await send({ error: 'Operation cancelled by user', progress: 0 })
-      await writer.close()
     })
 
     // Add the job to the worker pool
@@ -125,14 +153,10 @@ export async function POST(req: NextRequest) {
         if (data.error?.toLowerCase().includes('unauthorized') || 
             data.error?.toLowerCase().includes('forbidden')) {
           await send({ error: 'Session expired. Please sign in again.', progress: 0 })
-          await writer.close()
           return
         }
         
         await send(data)
-        if (data.progress === 100 || data.error) {
-          await writer.close()
-        }
       }
     })
 
@@ -145,7 +169,6 @@ export async function POST(req: NextRequest) {
       error: error instanceof Error ? error.message : 'Failed to start scraping',
       progress: 0
     })
-    await writer.close()
   }
 
   return response

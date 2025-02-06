@@ -592,15 +592,19 @@ export async function getReferralStats(db: Database, userId: string) {
 // Helper function to check if a referral code exists and is valid
 export async function validateReferralCode(db: Database, referralCode: string) {
   try {
+    await db.run('BEGIN TRANSACTION')
+    
     const result = await db.get(`
       SELECT code, owner_user_id, usage_count
       FROM referral_codes
       WHERE code = ?
     `, referralCode)
     
+    await db.run('COMMIT')
     return result !== undefined
   } catch (error) {
     console.error('Failed to validate referral code:', error)
+    await db.run('ROLLBACK')
     return false
   }
 }
@@ -628,13 +632,30 @@ export async function createReferralCode(
   ownerUserId: string
 ) {
   try {
+    await db.run('BEGIN TRANSACTION')
+    
+    // First check if code already exists
+    const existing = await db.get(
+      'SELECT code FROM referral_codes WHERE code = ?',
+      code
+    )
+    
+    if (existing) {
+      await db.run('ROLLBACK')
+      return false
+    }
+    
+    // Create the new code
     await db.run(`
       INSERT INTO referral_codes (code, owner_user_id)
       VALUES (?, ?)
     `, code, ownerUserId)
+    
+    await db.run('COMMIT')
     return true
   } catch (error) {
     console.error('Failed to create referral code:', error)
+    await db.run('ROLLBACK')
     return false
   }
 }
