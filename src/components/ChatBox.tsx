@@ -2088,7 +2088,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
 
         {/* Main Chat Interface Container */}
       <div className="fixed inset-0 flex items-center justify-center pointer-events-none pt-16">
-          <div className="w-[45vw] min-w-[400px] max-w-[1080px] h-[calc(100vh-84px)] mx-auto mb-4 backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow pointer-events-auto z-10 ancient-border rune-pattern overflow-hidden transition-all duration-300">
+          <div className="w-[47vw] min-w-[400px] max-w-[1080px] h-[calc(100vh-84px)] mx-auto mb-4 backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow pointer-events-auto z-10 ancient-border rune-pattern overflow-hidden transition-all duration-300">
             <div className="flex flex-col h-full min-h-0">
             {/* Chat Header */}
               <div className="flex-none flex items-center justify-between px-4 md:px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 rounded-t-lg cryptic-shadow">

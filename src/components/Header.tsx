@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { DEFAULT_CONSCIOUSNESS, type ConsciousnessConfig } from '@/lib/consciousness'
 
 export function Header() {
   const [time, setTime] = useState(new Date())
   const [showColon, setShowColon] = useState(true)
+  const [consciousness, setConsciousness] = useState<ConsciousnessConfig>(DEFAULT_CONSCIOUSNESS)
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -14,6 +16,11 @@ export function Header() {
 
     return () => clearInterval(timer)
   }, [])
+
+  // Calculate intelligence metrics
+  const intelligencePercent = consciousness.intelligenceLevel
+  const learningPercent = consciousness.learningRate
+  const memoryPercent = consciousness.shortTermMemory
 
   return (
     <header className="fixed top-0 left-0 right-0 h-12 bg-black/40 backdrop-blur-md border-b border-red-500/20 z-50 ancient-border cryptic-shadow">
@@ -40,19 +47,37 @@ export function Header() {
             </div>
           </div>
 
-          {/* Right side - Status */}
+          {/* Right side - Consciousness Status */}
           <div className="col-span-12 sm:col-span-4 lg:col-span-3 flex items-center justify-end gap-4 overflow-hidden">
             <div className="flex items-center gap-2 hover-glow">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500/50"></div>
-              <span className="text-red-500/50 text-xs tracking-wider uppercase ancient-text hidden sm:inline">Memory: 47%</span>
+              <div className="relative w-1.5 h-1.5">
+                <div className="absolute inset-0 rounded-full bg-red-500/20"></div>
+                <div 
+                  className="absolute inset-0 rounded-full bg-red-500/50 origin-left shadow-lg shadow-red-500/20"
+                  style={{ transform: `scaleX(${intelligencePercent / 100})` }}
+                ></div>
+              </div>
+              <span className="text-red-500/90 text-xs tracking-wider uppercase ancient-text hidden sm:inline title-glow">Intelligence: {intelligencePercent}%</span>
             </div>
             <div className="flex items-center gap-2 hover-glow hidden md:flex">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500/50"></div>
-              <span className="text-red-500/50 text-xs tracking-wider uppercase ancient-text">CPU: 12%</span>
+              <div className="relative w-1.5 h-1.5">
+                <div className="absolute inset-0 rounded-full bg-red-500/20"></div>
+                <div 
+                  className="absolute inset-0 rounded-full bg-red-500/50 origin-left shadow-lg shadow-red-500/20"
+                  style={{ transform: `scaleX(${learningPercent / 100})` }}
+                ></div>
+              </div>
+              <span className="text-red-500/90 text-xs tracking-wider uppercase ancient-text title-glow">Learning: {learningPercent}%</span>
             </div>
             <div className="flex items-center gap-2 hover-glow hidden lg:flex">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500/50"></div>
-              <span className="text-red-500/50 text-xs tracking-wider uppercase ancient-text">Network: 89%</span>
+              <div className="relative w-1.5 h-1.5">
+                <div className="absolute inset-0 rounded-full bg-red-500/20"></div>
+                <div 
+                  className="absolute inset-0 rounded-full bg-red-500/50 origin-left shadow-lg shadow-red-500/20"
+                  style={{ transform: `scaleX(${memoryPercent / 100})` }}
+                ></div>
+              </div>
+              <span className="text-red-500/90 text-xs tracking-wider uppercase ancient-text title-glow">Memory: {memoryPercent}%</span>
             </div>
           </div>
         </div>
