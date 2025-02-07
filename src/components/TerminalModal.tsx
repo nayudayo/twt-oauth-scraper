@@ -28,6 +28,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
   const [showMainContent, setShowMainContent] = useState(false)
   const [completedCommands, setCompletedCommands] = useState<string[]>([])
   const [commandResponses, setCommandResponses] = useState<{ [key: string]: string }>({})
+  const [showShareDialog, setShowShareDialog] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const terminalRef = useRef<HTMLDivElement>(null)
 
@@ -182,6 +183,12 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
     } else if (normalizedCommand === 'clear') {
       setLines([{ content: SYSTEM_MESSAGES.BOOT }])
       return
+    } else if (normalizedCommand === 'share') {
+      setShowShareDialog(true)
+      newLines.push({ 
+        content: "[SYSTEM] Opening share interface...",
+        isSystem: true 
+      })
     } else {
       const currentCommand = REQUIRED_COMMANDS[currentCommandIndex]
       
@@ -398,85 +405,121 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
   }
 
   return (
-    <div className={`fixed inset-0 bg-black flex items-center justify-center z-50 ${showMainContent ? 'animate-fadeOut' : ''}`}>
-      {/* Loading Overlay */}
-      {isLoading && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60]">
-          <div className="w-32 h-32 border-4 border-red-500/20 border-t-red-500 rounded-full animate-spin" />
-        </div>
-      )}
-      
-      {/* Main Terminal Container */}
-      <div className="w-full h-full md:h-[85vh] md:max-w-4xl mx-auto p-4 md:p-0 flex items-center">
-        <div className={`relative w-full h-full transition-opacity duration-500 ${isLoading ? 'opacity-30' : 'opacity-100'}`}>
-          {/* CRT Effects Layer */}
-          <div className="absolute inset-0 pointer-events-none crt">
-            <div className="absolute inset-0 bg-gradient-to-b from-red-500/5 to-transparent opacity-50" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(239,68,68,0.1),transparent_100%)]" />
+    <>
+      <div className={`fixed inset-0 bg-black flex items-center justify-center z-50 ${showMainContent ? 'animate-fadeOut' : ''}`}>
+        {/* Loading Overlay */}
+        {isLoading && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60]">
+            <div className="w-32 h-32 border-4 border-red-500/20 border-t-red-500 rounded-full animate-spin" />
           </div>
-
-          {/* Terminal Window */}
-          <div className="relative w-full h-full bg-black/40 backdrop-blur-md border border-red-500/20 rounded-lg shadow-2xl flex flex-col font-['Share_Tech_Mono'] overflow-hidden">
-            {/* Terminal Header */}
-            <div className="flex-none px-4 py-3 border-b border-red-500/20 bg-black/20">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20"></div>
-                <span className="text-red-500/70 text-sm tracking-[0.2em] uppercase terminal-text">Neural Terminal v1.0.3</span>
-              </div>
+        )}
+        
+        {/* Main Terminal Container */}
+        <div className="w-full h-full md:h-[85vh] md:max-w-4xl mx-auto p-4 md:p-0 flex items-center">
+          <div className={`relative w-full h-full transition-opacity duration-500 ${isLoading ? 'opacity-30' : 'opacity-100'}`}>
+            {/* CRT Effects Layer */}
+            <div className="absolute inset-0 pointer-events-none crt">
+              <div className="absolute inset-0 bg-gradient-to-b from-red-500/5 to-transparent opacity-50" />
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(239,68,68,0.1),transparent_100%)]" />
             </div>
 
-            {/* Terminal Content Area */}
-            <div className="flex-1 flex flex-col min-h-0">
-              {/* Terminal Output */}
-              <div 
-                ref={terminalRef}
-                className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-1"
-              >
-                {lines.map((line, i) => (
-                  <pre 
-                    key={i}
-                    className={`font-['Share_Tech_Mono'] whitespace-pre-wrap tracking-wider terminal-text ${
-                      line.isError 
-                        ? 'text-red-500/90 font-bold' 
-                        : line.isSuccess
-                          ? 'text-green-500/70'
-                          : line.isSystem
-                            ? 'text-cyan-500/70'
-                            : line.isCommand 
-                              ? 'text-red-500/70' 
-                              : 'text-red-400/60'
-                    }`}
-                  >
-                    {line.content}
-                  </pre>
-                ))}
-              </div>
-
-              {/* Input Form */}
-              <form onSubmit={handleSubmit} className="flex-none px-4 py-3 border-t border-red-500/20 bg-black/20">
+            {/* Terminal Window */}
+            <div className="relative w-full h-full bg-black/40 backdrop-blur-md border border-red-500/20 rounded-lg shadow-2xl flex flex-col font-['Share_Tech_Mono'] overflow-hidden">
+              {/* Terminal Header */}
+              <div className="flex-none px-4 py-3 border-b border-red-500/20 bg-black/20">
                 <div className="flex items-center gap-2">
-                  <span className="text-red-500/70 tracking-wider terminal-text">{'>'}</span>
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    className="flex-1 bg-transparent text-red-400/90 outline-none font-['Share_Tech_Mono'] tracking-wider terminal-text"
-                    autoFocus
-                    spellCheck={false}
-                  />
-                  <span 
-                    className={`w-2 h-5 bg-red-500/70 ${showCursor ? 'opacity-100' : 'opacity-0'}`}
-                  />
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20"></div>
+                  <span className="text-red-500/70 text-sm tracking-[0.2em] uppercase terminal-text">Neural Terminal v1.0.3</span>
                 </div>
-              </form>
-            </div>
+              </div>
 
-            {/* Scan effect */}
-            <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent via-red-500/5 to-transparent opacity-50 animate-scan" />
+              {/* Terminal Content Area */}
+              <div className="flex-1 flex flex-col min-h-0">
+                {/* Terminal Output */}
+                <div 
+                  ref={terminalRef}
+                  className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-1"
+                >
+                  {lines.map((line, i) => (
+                    <pre 
+                      key={i}
+                      className={`font-['Share_Tech_Mono'] whitespace-pre-wrap tracking-wider terminal-text ${
+                        line.isError 
+                          ? 'text-red-500/90 font-bold' 
+                          : line.isSuccess
+                            ? 'text-green-500/70'
+                            : line.isSystem
+                              ? 'text-cyan-500/70'
+                              : line.isCommand 
+                                ? 'text-red-500/70' 
+                                : 'text-red-400/60'
+                      }`}
+                    >
+                      {line.content}
+                    </pre>
+                  ))}
+                </div>
+
+                {/* Input Form */}
+                <form onSubmit={handleSubmit} className="flex-none px-4 py-3 border-t border-red-500/20 bg-black/20">
+                  <div className="flex items-center gap-2">
+                    <span className="text-red-500/70 tracking-wider terminal-text">{'>'}</span>
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      className="flex-1 bg-transparent text-red-400/90 outline-none font-['Share_Tech_Mono'] tracking-wider terminal-text"
+                      autoFocus
+                      spellCheck={false}
+                    />
+                    <span 
+                      className={`w-2 h-5 bg-red-500/70 ${showCursor ? 'opacity-100' : 'opacity-0'}`}
+                    />
+                  </div>
+                </form>
+              </div>
+
+              {/* Scan effect */}
+              <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent via-red-500/5 to-transparent opacity-50 animate-scan" />
+            </div>
           </div>
         </div>
       </div>
-    </div>
+
+      {/* Share Dialog */}
+      {showShareDialog && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60]"
+          onClick={() => setShowShareDialog(false)}
+        >
+          <div 
+            className="bg-black/40 backdrop-blur-md p-8 rounded-lg shadow-2xl w-[500px] border border-red-500/20 hover-glow float"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2 mb-4 border-b border-red-500/20 pb-4 glow-border">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+                <h3 className="text-lg font-bold text-red-500/90 tracking-wider glow-text">SHARE INTERFACE</h3>
+              </div>
+              <button
+                onClick={() => setShowShareDialog(false)}
+                className="text-red-500/70 hover:text-red-500/90 transition-colors hover-text-glow"
+              >
+                <span className="sr-only">Close</span>
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Share content will go here */}
+              <p className="text-red-400/90 uppercase tracking-wider glow-text">
+                Share interface initialized...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 } 

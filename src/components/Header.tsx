@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { DEFAULT_CONSCIOUSNESS, type ConsciousnessConfig } from '@/lib/consciousness'
+import { DEFAULT_CONSCIOUSNESS, type ConsciousnessConfig, modifyConsciousness } from '@/lib/consciousness'
 
 export function Header() {
   const [time, setTime] = useState(new Date())
@@ -17,10 +17,28 @@ export function Header() {
     return () => clearInterval(timer)
   }, [])
 
+  // Update consciousness values periodically
+  useEffect(() => {
+    const updateConsciousness = () => {
+      setConsciousness(prev => {
+        // Simulate learning by gradually increasing values
+        return modifyConsciousness(prev, {
+          intelligenceLevel: Math.min(100, prev.intelligenceLevel + (prev.learningRate / 100)),
+          shortTermMemory: Math.min(100, prev.shortTermMemory + (prev.learningRate / 200)),
+          learningRate: Math.min(100, prev.learningRate + 0.1)
+        })
+      })
+    }
+
+    // Update every 30 seconds
+    const consciousnessTimer = setInterval(updateConsciousness, 30000)
+    return () => clearInterval(consciousnessTimer)
+  }, [])
+
   // Calculate intelligence metrics
-  const intelligencePercent = consciousness.intelligenceLevel
-  const learningPercent = consciousness.learningRate
-  const memoryPercent = consciousness.shortTermMemory
+  const intelligencePercent = Math.round(consciousness.intelligenceLevel)
+  const learningPercent = Math.round(consciousness.learningRate)
+  const memoryPercent = Math.round(consciousness.shortTermMemory)
 
   return (
     <header className="fixed top-0 left-0 right-0 h-12 bg-black/40 backdrop-blur-md border-b border-red-500/20 z-50 ancient-border cryptic-shadow">
