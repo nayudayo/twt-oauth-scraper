@@ -57,6 +57,12 @@ export const REQUIRED_COMMANDS: Command[] = [
     description: 'Share your referral link on social media',
     expectedInput: 'share',
     validation: (input: string) => input.trim().toLowerCase() === 'share'
+  },
+  {
+    command: 'CLOSE',
+    description: 'Close the terminal and complete the funnel',
+    expectedInput: 'CLOSE',
+    validation: (input: string) => input.trim().toUpperCase() === 'CLOSE'
   }
 ]
 

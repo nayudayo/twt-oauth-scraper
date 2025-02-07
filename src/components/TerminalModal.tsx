@@ -5,6 +5,8 @@ import { REQUIRED_COMMANDS, HELP_MESSAGE } from '@/constants/commands'
 import { SYSTEM_MESSAGES } from '@/constants/messages'
 import { useSession } from 'next-auth/react'
 import { extractReferralResponse, generateReferralCode } from '@/utils/referral'
+import Image from 'next/image'
+import html2canvas from 'html2canvas'
 
 interface TerminalModalProps {
   onComplete: () => void
@@ -29,6 +31,10 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
   const [completedCommands, setCompletedCommands] = useState<string[]>([])
   const [commandResponses, setCommandResponses] = useState<{ [key: string]: string }>({})
   const [showShareDialog, setShowShareDialog] = useState(false)
+  const [referralCode, setReferralCode] = useState<string | null>(null)
+  const [isLoadingReferral, setIsLoadingReferral] = useState(false)
+  const [hasShared, setHasShared] = useState(false)
+  const shareModalRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const terminalRef = useRef<HTMLDivElement>(null)
 
@@ -171,6 +177,30 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
     inputRef.current?.focus()
   }, [])
 
+  // Fetch referral code when share dialog opens
+  useEffect(() => {
+    const fetchReferralCode = async () => {
+      if (showShareDialog && session?.user?.name) {
+        setIsLoadingReferral(true)
+        try {
+          const response = await fetch(`/api/referral-code/get?userId=${session.user.name}`)
+          if (!response.ok) {
+            throw new Error('Failed to fetch referral code')
+          }
+          const data = await response.json()
+          setReferralCode(data.referralCode)
+        } catch (error) {
+          console.error('Error fetching referral code:', error)
+          setReferralCode(null)
+        } finally {
+          setIsLoadingReferral(false)
+        }
+      }
+    }
+
+    fetchReferralCode()
+  }, [showShareDialog, session?.user?.name])
+
   const handleCommand = async (command: string) => {
     const normalizedCommand = command.trim().toLowerCase()
     const newLines: TerminalLine[] = [
@@ -189,6 +219,27 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
         content: "[SYSTEM] Opening share interface...",
         isSystem: true 
       })
+    } else if (normalizedCommand === 'close') {
+      if (!hasShared) {
+        newLines.push({ 
+          content: "[ERROR] You must share your referral code before closing the terminal.",
+          isError: true 
+        })
+      } else {
+        newLines.push({ 
+          content: "[SUCCESS] Terminal session complete. Closing interface...",
+          isSuccess: true 
+        })
+        
+        // Set loading state for visual feedback
+        setIsLoading(true)
+        
+        // Small delay for visual feedback
+        setTimeout(() => {
+          setShowMainContent(true)
+          setTimeout(onComplete, 500)
+        }, 1000)
+      }
     } else {
       const currentCommand = REQUIRED_COMMANDS[currentCommandIndex]
       
@@ -404,6 +455,62 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
     }
   }
 
+  const handleShareToX = async () => {
+    if (!shareModalRef.current) return;
+
+    try {
+      // First, capture the modal as an image
+      const canvas = await html2canvas(shareModalRef.current, {
+        background: '#00000000'
+      });
+
+      // Convert to blob
+      const blob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob((b: Blob | null) => {
+          if (b) resolve(b);
+        }, 'image/png');
+      });
+
+      // Save image
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = 'referral-code.png';
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      // Create Twitter intent URL
+      const tweetText = `come...: ${referralCode || commandResponses['GENERATE_REFERRAL']}`;
+      const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
+      
+      // Open Twitter intent in new window
+      window.open(twitterUrl, '_blank');
+
+      // Mark as shared and update command sequence
+      setHasShared(true);
+      
+      // Add SHARE to completed commands and update current index to CLOSE
+      const updatedCommands = [...completedCommands, 'SHARE'];
+      setCompletedCommands(updatedCommands);
+      const nextIndex = REQUIRED_COMMANDS.findIndex(cmd => cmd.command === 'CLOSE');
+      setCurrentCommandIndex(nextIndex);
+      
+      // Save progress
+      await saveProgress(nextIndex, updatedCommands);
+      
+      // Add system message about next command
+      setLines(prev => [
+        ...prev,
+        { 
+          content: "[SUCCESS] Share completed. Type 'CLOSE' to finish the process.",
+          isSuccess: true 
+        }
+      ]);
+    } catch (error) {
+      console.error('Error sharing to X:', error);
+    }
+  };
+
   return (
     <>
       <div className={`fixed inset-0 bg-black flex items-center justify-center z-50 ${showMainContent ? 'animate-fadeOut' : ''}`}>
@@ -491,9 +598,10 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
       {showShareDialog && (
         <div 
           className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60]"
-          onClick={() => setShowShareDialog(false)}
+          onClick={() => hasShared && setShowShareDialog(false)}
         >
           <div 
+            ref={shareModalRef}
             className="bg-black/40 backdrop-blur-md p-8 rounded-lg shadow-2xl w-[500px] border border-red-500/20 hover-glow float"
             onClick={e => e.stopPropagation()}
           >
@@ -502,20 +610,102 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
                 <div className="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
                 <h3 className="text-lg font-bold text-red-500/90 tracking-wider glow-text">SHARE INTERFACE</h3>
               </div>
-              <button
-                onClick={() => setShowShareDialog(false)}
-                className="text-red-500/70 hover:text-red-500/90 transition-colors hover-text-glow"
-              >
-                <span className="sr-only">Close</span>
-                ×
-              </button>
+              {hasShared && (
+                <button
+                  onClick={() => setShowShareDialog(false)}
+                  className="text-red-500/70 hover:text-red-500/90 transition-colors hover-text-glow"
+                >
+                  <span className="sr-only">Close</span>
+                  ×
+                </button>
+              )}
             </div>
 
-            <div className="space-y-4">
-              {/* Share content will go here */}
-              <p className="text-red-400/90 uppercase tracking-wider glow-text">
-                Share interface initialized...
-              </p>
+            <div className="space-y-6">
+              {/* Profile Section */}
+              <div className="flex flex-col items-center gap-4">
+                {session?.user?.image ? (
+                  <div className="w-20 h-20 rounded-full border-2 border-red-500/20 overflow-hidden hover-glow">
+                    <Image
+                      src={session.user.image}
+                      alt={session.user.name || 'Profile'}
+                      width={80}
+                      height={80}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-20 h-20 rounded-full bg-red-500/5 border-2 border-red-500/20 flex items-center justify-center">
+                    <span className="text-red-500/50 text-2xl">?</span>
+                  </div>
+                )}
+                <div className="text-center">
+                  <h4 className="text-red-500/90 font-bold tracking-wider ancient-text">
+                    {session?.user?.name || 'Anonymous User'}
+                  </h4>
+                  {session?.username && (
+                    <p className="text-red-400/70 text-sm mt-1 hover-text-glow">
+                      @{session.username}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Referral Code Section */}
+              <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                  <span className="ancient-text">Your Referral Code</span>
+                </h4>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-black/40 text-red-400/90 px-3 py-2 rounded font-mono text-sm hover-text-glow">
+                    {isLoadingReferral ? (
+                      <span className="text-red-500/70 tracking-wider">FETCHING DATA...</span>
+                    ) : (
+                      referralCode || commandResponses['GENERATE_REFERRAL'] || 'No referral code found'
+                    )}
+                  </code>
+                  <button
+                    onClick={() => {
+                      const code = referralCode || commandResponses['GENERATE_REFERRAL']
+                      if (code) {
+                        navigator.clipboard.writeText(code)
+                        // Could add a toast notification here
+                      }
+                    }}
+                    className="px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow"
+                    disabled={isLoadingReferral || (!referralCode && !commandResponses['GENERATE_REFERRAL'])}
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+
+              {/* Instructions */}
+              <div className="text-red-400/70 text-sm space-y-2">
+                <p className="hover-text-glow">Share your referral code with others to earn rewards!</p>
+                <p className="hover-text-glow">Each successful referral increases your influence in the network.</p>
+              </div>
+
+              {/* Share Button */}
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={handleShareToX}
+                  disabled={isLoadingReferral || (!referralCode && !commandResponses['GENERATE_REFERRAL'])}
+                  className="w-full px-4 py-3 bg-red-500/10 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/20 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-sm backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow flex items-center justify-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                  Share to X
+                </button>
+              </div>
+
+              {!hasShared && (
+                <div className="mt-4 text-center text-red-500/60 text-xs tracking-wider">
+                  Share to X to close this interface
+                </div>
+              )}
             </div>
           </div>
         </div>
