@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Dispatch, SetStateAction } from 'react'
+import { useState, useEffect, useRef, Dispatch, SetStateAction, useCallback } from 'react'
 import { Tweet, TwitterProfile } from '@/types/scraper'
 import { PersonalityAnalysis } from '@/lib/openai'
 import ReactMarkdown from 'react-markdown'
@@ -26,7 +26,7 @@ interface PersonalityTuning {
 }
 
 interface ScanProgress {
-  phase: 'posts' | 'replies'
+  phase: 'posts' | 'replies' | 'complete'
   count: number
 }
 
@@ -329,7 +329,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     setShowConsent(true)
   }
 
-  const handleCancelScraping = async () => {
+  const handleCancelScraping = useCallback(async () => {
     if (abortController) {
       console.log('Aborting scraping process...')
       try {
@@ -339,264 +339,451 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     setScanProgress(null)
     setShowComplete(false)
         setScrapingStartTime(null)
+        // Only set error if this was a user-initiated cancellation
+        if (!abortController.signal.aborted) {
         setError('Operation cancelled by user')
+        }
       } catch (error) {
         console.error('Error during abort:', error)
         setError('Failed to cancel operation')
       }
     }
-  }
+  }, [abortController])
 
-  const handleClearData = () => {
-    if (profile.name) {
-      localStorage.removeItem(`tweets_${profile.name}`)
-      onTweetsUpdate([]) // Clear tweets in parent component
-      onClose() // Close the interface after clearing data
+  const handleClearData = async () => {
+    if (!profile.name) {
+      setError('Profile name is required');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/tweets/clear', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          username: profile.name,
+          timestamp: Date.now() 
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to clear tweets from database');
+      }
+
+      // Only clear tweets from state, don't close the chat box
+      onTweetsUpdate([]); 
+      setAnalysis(null);
+      setScanProgress(null);
+      setShowAnalysisPrompt(false);
+      
+      // Show success message
+      setError('Tweet data cleared successfully');
+    } catch (error) {
+      console.error('Error clearing tweets:', error);
+      setError(error instanceof Error ? error.message : 'Failed to clear tweet data');
     }
   }
 
   const handleCloseModal = () => {
+    console.log('Closing modal - Current states:', { loading, showComplete })
     if (loading) {
       console.log('Closing modal and cancelling scraping...')
       handleCancelScraping()
     }
     setShowComplete(false)
+    console.log('Modal closed - showComplete set to false')
   }
 
   const startScraping = async () => {
-    setShowConsent(false)
-    setLoading(true)
-    setError(null)
-    setShowComplete(false)
-    setShowAnalysisPrompt(false)
-    setScrapingStartTime(Date.now())
+    if (!profile.name) {
+      setError('Profile name is required');
+      return;
+    }
+
+    setShowConsent(false);
+    setLoading(true);
+    setError(null);
+    setShowComplete(false);
+    setShowAnalysisPrompt(false);
+    setScrapingStartTime(Date.now());
 
     // Create new AbortController for this scraping session
-    const controller = new AbortController()
-    setAbortController(controller)
+    const controller = new AbortController();
+    setAbortController(controller);
 
     try {
+      // Include session ID and user identifier in request
+      const sessionId = `${profile.name}_${Date.now()}`;
       const response = await fetch('/api/scrape', {
         method: 'POST',
         signal: controller.signal,
         headers: {
           'Content-Type': 'application/json'
-        }
-      })
+        },
+        body: JSON.stringify({ 
+          username: profile.name,
+          sessionId,
+          timestamp: Date.now()
+        })
+      });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const reader = response.body?.getReader()
-      if (!reader) throw new Error('Failed to start scraping')
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('Failed to start scraping');
 
       while (true) {
-        const { done, value } = await reader.read()
+        const { done, value } = await reader.read();
         
-        // Check if aborted before processing
         if (controller.signal.aborted) {
-          console.log('Scraping aborted, cleaning up...')
-          reader.cancel()
-          break
+          // Include session cleanup on abort
+          try {
+            await fetch(`/api/scrape/abort`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sessionId, username: profile.name })
+            });
+          } catch (error) {
+            console.error('Error cleaning up session:', error);
+          }
+          console.log('Scraping aborted, cleaning up...');
+          reader.cancel();
+          break;
         }
         
         if (done) {
           console.log('Stream complete')
-          setLoading(false)
-          setScanProgress(null)
-          setShowComplete(true)
-          setShowAnalysisPrompt(true)
-          setScrapingStartTime(null)
-          setAbortController(null)
-          break
+          try {
+            // Fetch final tweets after stream completes
+            console.log(`Making final API call to /api/tweets/${profile.name}/all`);
+            const fetchTweetsResponse = await fetch(`/api/tweets/${profile.name}/all`);
+            
+            if (!fetchTweetsResponse.ok) {
+              throw new Error(`Failed to fetch tweets: ${fetchTweetsResponse.status}`);
+            }
+
+            const finalTweets = await fetchTweetsResponse.json();
+            console.log(`Successfully fetched ${finalTweets.length} tweets`);
+            
+            if (Array.isArray(finalTweets) && finalTweets.length > 0) {
+              // Update tweets in UI first
+              handleTweetUpdate(finalTweets);
+              console.log('Successfully updated tweets in UI');
+              
+              // Then set completion states
+              setScanProgress({ phase: 'complete', count: finalTweets.length });
+              setLoading(false);
+              setShowComplete(true);
+              setShowAnalysisPrompt(true);
+              setScrapingStartTime(null);
+              setAbortController(null);
+              console.log('Set completion states:', { 
+                loading: false, 
+                showComplete: true, 
+                scanProgress: 'complete', 
+                tweetCount: finalTweets.length 
+              });
+            }
+          } catch (error) {
+            console.error('Error in completion flow:', error);
+            setError(error instanceof Error ? error.message : 'Failed to complete processing');
+            setLoading(false);
+            setAbortController(null);
+            setScrapingStartTime(null);
+          }
+          return;
         }
 
         // Parse the SSE data
-        const text = new TextDecoder().decode(value)
-        const lines = text.split('\n')
+        const text = new TextDecoder().decode(value);
+        const lines = text.split('\n');
         
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             try {
-              const data = JSON.parse(line.slice(6))
-              console.log('Received:', data)
+              const data = JSON.parse(line.slice(6));
+              console.log('Received:', data);
 
               if (data.error) {
-                setError(data.error)
-                setLoading(false)
-                setAbortController(null)
-                setScrapingStartTime(null)
-                setScanProgress(null)
-                reader.cancel()
-                return
+                setError(data.error);
+                setLoading(false);
+                setAbortController(null);
+                setScrapingStartTime(null);
+                setScanProgress(null);
+                reader.cancel();
+                return;
               }
 
               if (data.progress) {
                 setScanProgress({
                   phase: data.phase || 'posts',
                   count: data.scanProgress?.count || 0
-                })
+                });
               }
 
-              // Update tweets when new data is received
-              if (data.tweets) {
+              // Update the data processing to maintain user isolation
+              if (data.tweets && data.username === profile.name) {
+                // Only update progress during scraping
                 if (data.isChunk) {
-                  // For chunks, append tweets based on chunk index
-                  onTweetsUpdate((prevTweets: Tweet[]) => {
-                    console.log('Processing chunk with data:', {
-                      chunkIndex: data.chunkIndex,
-                      totalTweets: data.totalTweets,
-                      chunkSize: data.tweets.length,
-                      currentTweets: prevTweets.length
+                  console.log('Processing chunk for user:', profile.name, {
+                    chunkIndex: data.chunkIndex,
+                    totalTweets: data.totalTweets,
+                    chunkSize: data.tweets.length,
+                    isLastBatch: data.isLastBatch
+                  });
+
+                  // Check if this batch is empty or marked as last
+                  if (data.tweets.length === 0 || data.isLastBatch) {
+                    console.log('Last batch or empty tweets detected, finalizing scraping')
+                    try {
+                      // Save all tweets in a single batch at the end
+                      const saveTweetsResponse = await fetch('/api/tweets/save', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                          username: profile.name,
+                          sessionId,
+                          tweets: data.tweets 
+                        })
+                      });
+
+                      if (!saveTweetsResponse.ok) {
+                        throw new Error('Failed to save tweets to database');
+                      }
+
+                      console.log('Saved tweets to database, fetching all tweets...');
+                      
+                      // Add retry mechanism for fetching tweets
+                      let retryCount = 0;
+                      const maxRetries = 3;
+                      let finalTweets = [];
+                      
+                      while (retryCount < maxRetries) {
+                        try {
+                          console.log(`Making API call to /api/tweets/${profile.name}/all`);
+                          const fetchTweetsResponse = await fetch(`/api/tweets/${profile.name}/all`);
+                          
+                          if (!fetchTweetsResponse.ok) {
+                            console.error(`API call failed with status: ${fetchTweetsResponse.status}`);
+                            throw new Error(`Failed to fetch tweets: ${fetchTweetsResponse.status}`);
+                          }
+
+                          finalTweets = await fetchTweetsResponse.json();
+                          console.log(`Successfully fetched ${finalTweets.length} tweets`);
+                          
+                          if (Array.isArray(finalTweets) && finalTweets.length > 0) {
+                            // Update tweets in UI first
+                            handleTweetUpdate(finalTweets);
+                            console.log('Successfully updated tweets in UI');
+                            
+                            // Then set completion states
+                            setScanProgress({ phase: 'complete', count: finalTweets.length });
+                            setLoading(false);
+                            setShowComplete(true);
+                            console.log('Set completion states:', { 
+                              loading: false, 
+                              showComplete: true, 
+                              scanProgress: 'complete', 
+                              tweetCount: finalTweets.length 
+                            });
+                            break;
+                          } else {
+                            throw new Error('Received empty or invalid tweet array');
+                          }
+                        } catch (error) {
+                          console.error(`Fetch attempt ${retryCount + 1} failed:`, error);
+                          retryCount++;
+                          if (retryCount === maxRetries) {
+                            throw new Error('Failed to fetch tweets after multiple attempts');
+                          }
+                          // Wait before retrying
+                          await new Promise(resolve => setTimeout(resolve, 1000));
+                        }
+                      }
+
+                      // Update UI state
+                      setShowAnalysisPrompt(true);
+                      setScrapingStartTime(null);
+                      
+                      // Cleanup
+                      const currentController = abortController;
+                      setAbortController(null);
+                      reader.cancel();
+                      if (currentController) {
+                        currentController.abort();
+                      }
+                      
+                      // Complete the session
+                      await fetch(`/api/scrape/complete`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sessionId, username: profile.name })
+                      });
+
+                    } catch (error) {
+                      console.error('Error in batch completion flow:', error);
+                      setError(error instanceof Error ? error.message : 'Failed to complete batch processing');
+                      setLoading(false);
+                      const currentController = abortController;
+                      setAbortController(null);
+                      if (currentController) {
+                        currentController.abort();
+                      }
+                      setScrapingStartTime(null);
+                      reader.cancel();
+                    }
+                  }
+                  
+                  // Update scan progress
+                  if (data.scanProgress) {
+                    setScanProgress({
+                      phase: data.scanProgress.phase,
+                      count: data.totalTweets || data.scanProgress.count
+                    });
+                  }
+
+                  // For ongoing scraping, batch save tweets and update progress
+                  try {
+                    // Save current batch
+                    const saveBatchResponse = await fetch('/api/tweets/save', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ 
+                        username: profile.name,
+                        sessionId,
+                        tweets: data.tweets 
+                      })
                     });
 
-                    // Initialize array with correct size if needed
-                    let newTweets = [...prevTweets]
-                    if (data.totalTweets && newTweets.length < data.totalTweets) {
-                      newTweets = new Array(data.totalTweets).fill(null)
-                      // Copy over any existing tweets
-                      prevTweets.forEach((t, i) => {
-                        if (t) newTweets[i] = t
-                      })
+                    if (!saveBatchResponse.ok) {
+                      console.warn('Failed to save batch to database');
                     }
-                    
-                    // Calculate start index for this chunk
-                    const startIndex = data.chunkIndex * 50
-                    // Replace or add tweets at the correct position
-                    for (let i = 0; i < data.tweets.length; i++) {
-                      if (data.tweets[i]) { // Only add valid tweets
-                        newTweets[startIndex + i] = data.tweets[i]
-                      }
-                    }
-                    
-                    // Update scan progress
+
+                    // Update progress
                     if (data.scanProgress) {
                       setScanProgress({
                         phase: data.scanProgress.phase,
                         count: data.totalTweets || data.scanProgress.count
-                      })
+                      });
                     }
-                    
-                    // Filter out nulls and return
-                    const validTweets = newTweets.filter((t: unknown): t is Tweet => Boolean(t))
-                    console.log(`Processed chunk ${data.chunkIndex}, valid tweets: ${validTweets.length}/${newTweets.length}`)
-                    return validTweets
-                  })
+
+                    // Immediately fetch and update UI after each batch save
+                    const fetchResponse = await fetch(`/api/tweets/${profile.name}/all`);
+                    if (!fetchResponse.ok) {
+                      throw new Error('Failed to fetch tweets');
+                    }
+
+                    const allTweets = await fetchResponse.json();
+                    if (Array.isArray(allTweets)) {
+                      console.log('Fetched updated tweets from database:', allTweets.length);
+                      handleTweetUpdate(allTweets);
+                      console.log('Updated frontend with latest tweets:', allTweets.length);
+                    }
+                  } catch (error) {
+                    console.error('Error updating frontend during scraping:', error);
+                  }
                 } else {
-                  // For non-chunked data, filter and update
-                  const validTweets = data.tweets.filter((t: unknown): t is Tweet => Boolean(t))
-                  console.log(`Processing non-chunked data, valid tweets: ${validTweets.length}`)
-                  onTweetsUpdate(validTweets)
-                  
-                  // Update scan progress for non-chunked data
+                  // For non-chunked updates, just update progress
                   if (data.scanProgress) {
                     setScanProgress({
                       phase: data.scanProgress.phase,
-                      count: validTweets.length
-                    })
+                      count: data.tweets.length
+                    });
                   }
                 }
               }
 
-              // Handle completion
-              if (data.type === 'complete' || data.type === 'done' || (data.progress === 100 && data.status === 'Complete')) {
-                console.log('Scraping complete, showing completion modal', data)
-                
-                let finalTweets: Tweet[] = []
-                
-                if (data.data?.tweets) {
-                  // Ensure we update with the complete tweet set
-                  finalTweets = data.data.tweets.filter((t: unknown): t is Tweet => Boolean(t))
-                  console.log(`Updating with ${finalTweets.length} final tweets from data.data`)
-                } else if (data.tweets) {
-                  // Fallback to data.tweets if data.data.tweets is not available
-                  finalTweets = data.tweets.filter((t: unknown): t is Tweet => Boolean(t))
-                  console.log(`Updating with ${finalTweets.length} tweets from direct data`)
-                }
-
-                if (finalTweets.length > 0) {
-                  console.log('Final tweet update:', {
-                    count: finalTweets.length,
-                    firstTweet: finalTweets[0],
-                    lastTweet: finalTweets[finalTweets.length - 1]
-                  })
-
-                  // Update local state first
-                  onTweetsUpdate(finalTweets)
-                  
-                  // Save to localStorage as backup
-                  if (profile.name) {
-                    try {
-                      localStorage.setItem(`tweets_${profile.name}`, JSON.stringify(finalTweets))
-                    } catch (err) {
-                      console.warn('Failed to save tweets to localStorage:', err)
-                    }
-                  }
-                  
-                  setScanProgress(prev => prev ? {
-                    ...prev,
-                    count: finalTweets.length
-                  } : null)
-                } else {
-                  console.warn('No tweets found in completion data')
-                }
-
-                // Trigger a final fetch from the database to ensure UI is in sync
-                if (profile.name) {
-                  try {
-                    const response = await fetch(`/api/tweets?username=${profile.name}`)
-                    if (response.ok) {
-                      const data = await response.json()
-                      if (data.tweets?.length > 0) {
-                        console.log('Final database sync:', {
-                          count: data.tweets.length,
-                          source: 'database'
-                        })
-                        onTweetsUpdate(data.tweets)
-                      }
-                    }
-                  } catch (err) {
-                    console.warn('Failed to sync with database:', err)
-                  }
-                }
-
-                setLoading(false)
-                setShowComplete(true)
-                setShowAnalysisPrompt(true)
-                setScrapingStartTime(null)
-                setAbortController(null)
-                reader.cancel()
-                break
+              // Handle explicit completion signal if received
+              if (data.type === 'complete' && data.username === profile.name) {
+                console.log('Received explicit completion signal');
+                setLoading(false);
+                setShowComplete(true);
+                setShowAnalysisPrompt(true);
+                setScrapingStartTime(null);
+                setAbortController(null);
+                reader.cancel();
+                break;
               }
             } catch (err) {
-              console.error('Failed to parse:', line, err)
+              console.error('Failed to parse:', line, err);
             }
           }
         }
       }
     } catch (error: unknown) {
-      console.error('Scraping error:', error)
+      console.error('Scraping error:', error);
       if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') {
-        setError('Scraping cancelled by user')
+        setError('Scraping cancelled by user');
       } else {
-        setError(error instanceof Error ? error.message : 'Failed to start scraping')
+        setError(error instanceof Error ? error.message : 'Failed to start scraping');
       }
-      setLoading(false)
-      setAbortController(null)
-      setScrapingStartTime(null)
-      setScanProgress(null)
+      setLoading(false);
+      setAbortController(null);
+      setScrapingStartTime(null);
+      setScanProgress(null);
     }
   }
 
   useEffect(() => {
-    return () => {
-      if (abortController) {
-        console.log('Cleanup: cancelling any active scraping...')
-      handleCancelScraping()
+    // Load existing tweets for this user when component mounts
+    const loadExistingTweets = async () => {
+      if (!profile.name) return;
+      
+      try {
+        setLoading(true);
+        const response = await fetch(`/api/tweets/${profile.name}/all`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch existing tweets');
+        }
+        
+        const existingTweets = await response.json();
+        if (Array.isArray(existingTweets)) {
+          const validTweets = existingTweets.filter((t: unknown): t is Tweet => Boolean(t));
+          onTweetsUpdate(validTweets);
+          
+          if (validTweets.length > 0) {
+            setScanProgress({
+              phase: 'complete',
+              count: validTweets.length
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error loading existing tweets:', error);
+        setError(error instanceof Error ? error.message : 'Failed to load existing tweets');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadExistingTweets();
+  }, [profile.name]); // Reload when profile changes
+
+  // Handle tweet updates from scraping
+  const handleTweetUpdate = (newTweets: Tweet[]) => {
+    console.log('handleTweetUpdate called with tweets:', newTweets.length)
+    if (Array.isArray(newTweets)) {
+      const validTweets = newTweets.filter((t: unknown): t is Tweet => Boolean(t))
+      console.log('Updating tweets in UI with valid tweets:', validTweets.length)
+      
+      // Ensure state updates are processed in order
+      Promise.resolve().then(() => {
+        onTweetsUpdate(validTweets)
+        setScanProgress(prev => {
+          const newProgress = {
+            phase: prev?.phase || 'posts',
+            count: validTweets.length
+          }
+          console.log('Updating scan progress:', newProgress)
+          return newProgress
+        })
+      })
     }
-    }
-  }, []) // Empty dependency array since we want this only on unmount
+  }
 
   // Add auto-scroll effect
   const scrollToBottom = () => {
@@ -632,6 +819,13 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     setAnalysis(null)
     await handleAnalyze()
   }
+
+  // Replace with a more focused effect for handling completion
+  useEffect(() => {
+    if (showComplete) {
+      console.log('Completion modal shown - current states:', { loading, showComplete, scanProgress })
+    }
+  }, [showComplete, loading, scanProgress])
 
   return (
     <>
@@ -1177,7 +1371,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     </div>
                   </div>
                 </div>
-
+                
                 {/* Interests Section */}
                 <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
@@ -1195,7 +1389,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     ))}
                   </div>
                 </div>
-
+                
                 {/* Topics & Themes Section */}
                 <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
@@ -1211,7 +1405,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     ))}
                   </ul>
                 </div>
-
+                
                 {/* Emotional Tone Section */}
                 <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
@@ -1321,7 +1515,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       {/* Desktop Layout - Preserve Existing */}
       <div className="hidden md:block">
       {/* Left Side Panels Container */}
-        <div className="fixed top-16 left-0 md:left-4 flex flex-col gap-4 h-[calc(100vh-84px)] w-[480px] px-4 md:px-0 overflow-y-auto md:overflow-visible transition-all duration-300">
+        <div className="fixed top-16 left-0 md:left-4 flex flex-col gap-4 h-[calc(100vh-84px)] w-[30vw] min-w-[300px] max-w-[480px] px-4 md:px-0 overflow-y-auto md:overflow-visible transition-all duration-300">
         {/* System Controls Panel */}
           <div className="w-full bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
             <div className="flex-none border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
@@ -1613,7 +1807,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       </div>
 
         {/* Right Side Panels Container */}
-        <div className="fixed top-16 right-0 md:right-4 h-[calc(100vh-84px)] w-[480px] flex flex-col gap-4 px-4 md:px-0 overflow-y-auto md:overflow-visible transition-all duration-300">
+        <div className="fixed top-16 right-0 md:right-4 h-[calc(100vh-84px)] w-[30vw] min-w-[300px] max-w-[480px] flex flex-col gap-4 px-4 md:px-0 overflow-y-auto md:overflow-visible transition-all duration-300">
           {/* Archives Panel - Top Half */}
           <div className="h-[calc(50%-2px)] min-h-[300px] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
             <div className="flex-none flex items-center px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 cryptic-shadow">
@@ -1659,23 +1853,29 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
 
           <div className="flex-1 overflow-y-auto custom-scrollbar p-6 backdrop-blur-sm bg-black/20 dynamic-bg">
             <div className="space-y-2">
-              {tweets.length === 0 && (
+                {tweets.length === 0 ? (
                 <div className="text-red-500/50 italic glow-text">
-                  {'>'} Awaiting data collection initialization...
+                    {'>'} {loading ? 'Fetching data...' : 'Awaiting data collection initialization...'}
                 </div>
-              )}
-
+                ) : (
+                  <>
               {tweets.map((tweet, index) => (
                 <div 
-                  key={tweet.id} 
+                        key={`${tweet.id}-${index}`}
                   className="text-red-400/80 flex gap-3 hover:bg-red-500/5 transition-all duration-300 py-2 px-3 rounded backdrop-blur-sm border border-transparent hover:border-red-500/10 hover-glow float"
                 >
-                  <div className="text-red-500/50 select-none font-bold glow-text">[{String(index + 1).padStart(4, '0')}]</div>
+                        <div className="text-red-500/50 select-none font-bold glow-text">
+                          [{String(index + 1).padStart(4, '0')}]
+                        </div>
                   
                   <div className="flex-1">
-                    <div className="text-red-300/90 hover-text-glow">{tweet.text}</div>
+                          <div className="text-red-300/90 hover-text-glow break-words">
+                            {tweet.text}
+                          </div>
                     <div className="text-red-500/40 text-xs flex items-center gap-2 mt-1.5">
-                      <span>{tweet.timestamp && new Date(tweet.timestamp).toLocaleString()}</span>
+                            <span>
+                              {tweet.timestamp && new Date(tweet.timestamp).toLocaleString()}
+                            </span>
                       {tweet.isReply && (
                         <>
                           <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box" />
@@ -1687,11 +1887,17 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 </div>
               ))}
 
-              {tweets.length > 0 && (
                 <div className="mt-6 pt-4 border-t border-red-500/10 text-red-500/60 backdrop-blur-sm glow-border">
                   {'>'} Collection Stats: {tweets.length} posts
                 </div>
-              )}
+                  </>
+                )}
+
+                {error && (
+                  <div className="mt-4 p-4 bg-red-500/5 border border-red-500/20 rounded backdrop-blur-sm text-red-400/90">
+                    {error}
+                  </div>
+                )}
             </div>
           </div>
         </div>
@@ -1882,7 +2088,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
 
         {/* Main Chat Interface Container */}
       <div className="fixed inset-0 flex items-center justify-center pointer-events-none pt-16">
-          <div className="w-[calc(100%-1040px)] min-w-[400px] max-w-[1040px] h-[calc(100vh-84px)] mx-auto mb-4 backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow pointer-events-auto z-10 ancient-border rune-pattern overflow-hidden transition-all duration-300">
+          <div className="w-[45vw] min-w-[400px] max-w-[1080px] h-[calc(100vh-84px)] mx-auto mb-4 backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow pointer-events-auto z-10 ancient-border rune-pattern overflow-hidden transition-all duration-300">
             <div className="flex flex-col h-full min-h-0">
             {/* Chat Header */}
               <div className="flex-none flex items-center justify-between px-4 md:px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 rounded-t-lg cryptic-shadow">
@@ -2059,7 +2265,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       )}
 
       {/* Completion Modal */}
-      {showComplete && !loading && (
+      {showComplete && (
         <div 
           className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
           onClick={handleCloseModal}

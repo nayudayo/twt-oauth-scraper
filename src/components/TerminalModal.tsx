@@ -125,7 +125,8 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
           body: JSON.stringify({
             userId: session.user.name,
             currentIndex: commandIndex,
-            completedCommands: commands
+            completedCommands: commands,
+            commandResponses
           }),
         })
 

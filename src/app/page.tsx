@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Dispatch, SetStateAction } from 'react'
 import { signIn, useSession } from 'next-auth/react'
 import ChatBox from '@/components/ChatBox'
 import { TerminalModal } from '@/components/TerminalModal'
@@ -17,36 +17,16 @@ export default function Home() {
     const fetchTweets = async () => {
       if (session?.username) {
         try {
-          // First try to get from localStorage
-          const cachedTweets = localStorage.getItem(`tweets_${session.username}`)
-          if (cachedTweets) {
-            const parsedTweets = JSON.parse(cachedTweets)
-            if (Array.isArray(parsedTweets) && parsedTweets.length > 0) {
-              console.log('Using cached tweets:', {
-                count: parsedTweets.length,
-                source: 'localStorage'
-              })
-              setTweets(parsedTweets)
-              return
-            }
-          }
-
-          // If no cache, fetch from API
-          const response = await fetch(`/api/tweets?username=${session.username}`)
+          // Fetch from API using the correct endpoint
+          const response = await fetch(`/api/tweets/${session.username}/all`)
           if (!response.ok) throw new Error('Failed to fetch tweets')
           const data = await response.json()
-          if (data.tweets?.length > 0) {
+          if (Array.isArray(data) && data.length > 0) {
             console.log('Fetched tweets from API:', {
-              count: data.tweets.length,
+              count: data.length,
               source: 'database'
             })
-          setTweets(data.tweets)
-            // Update cache
-            try {
-              localStorage.setItem(`tweets_${session.username}`, JSON.stringify(data.tweets))
-            } catch (err) {
-              console.warn('Failed to cache tweets:', err)
-            }
+            setTweets(data)
           }
         } catch (error) {
           console.error('Error fetching tweets:', error)
@@ -73,20 +53,22 @@ export default function Home() {
   }
 
   // Handle tweet updates
-  const handleTweetsUpdate = (newTweets: Tweet[]) => {
-    console.log('Updating tweets in parent:', {
+  const handleTweetsUpdate: Dispatch<SetStateAction<Tweet[]>> = (updater) => {
+    // Always treat as a function update since we're streaming
+    const newTweets = typeof updater === 'function' ? updater(tweets) : updater
+    
+    // Log the update for debugging
+    console.log('Tweet update:', {
+      type: typeof updater === 'function' ? 'function' : 'direct',
       oldCount: tweets.length,
-      newCount: newTweets.length
+      newCount: newTweets.length,
+      hasNulls: newTweets.some(t => t === null),
+      firstTweet: newTweets[0]?.id,
+      lastTweet: newTweets[newTweets.length - 1]?.id
     })
+    
+    // Update state
     setTweets(newTweets)
-    // Update cache
-    if (session?.username) {
-      try {
-        localStorage.setItem(`tweets_${session.username}`, JSON.stringify(newTweets))
-      } catch (err) {
-        console.warn('Failed to cache updated tweets:', err)
-      }
-    }
   }
 
   // Show loading state while checking session

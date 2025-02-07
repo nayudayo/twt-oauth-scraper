@@ -468,15 +468,34 @@ async function getReferralStats(db, userId) {
 // Helper function to check if a referral code exists and is valid
 async function validateReferralCode(db, referralCode) {
     try {
+        await db.run('BEGIN TRANSACTION');
+        // Special case for "NO"
+        if (referralCode.toUpperCase() === 'NO') {
+            console.log('Validating "NO" referral code');
+            await db.run('COMMIT');
+            return true;
+        }
+        // Normalize the code before checking
+        const normalizedCode = referralCode.trim().toUpperCase();
+        console.log('Validating referral code:', normalizedCode);
+        // First check if the code exists
         const result = await db.get(`
-      SELECT code, owner_user_id, usage_count
-      FROM referral_codes
-      WHERE code = ?
-    `, referralCode);
+      SELECT rc.code, rc.owner_user_id, rc.usage_count, u.username as owner_username
+      FROM referral_codes rc
+      LEFT JOIN users u ON rc.owner_user_id = u.id
+      WHERE UPPER(rc.code) = UPPER(?)
+    `, normalizedCode);
+        console.log('Validation result:', {
+            code: result === null || result === void 0 ? void 0 : result.code,
+            ownerUsername: result === null || result === void 0 ? void 0 : result.owner_username,
+            usageCount: result === null || result === void 0 ? void 0 : result.usage_count
+        });
+        await db.run('COMMIT');
         return result !== undefined;
     }
     catch (error) {
         console.error('Failed to validate referral code:', error);
+        await db.run('ROLLBACK');
         return false;
     }
 }
@@ -498,14 +517,41 @@ async function getReferralCodeUsage(db, referralCode) {
 // Helper function to create a new referral code
 async function createReferralCode(db, code, ownerUserId) {
     try {
+        await db.run('BEGIN TRANSACTION');
+        // Normalize the code
+        const normalizedCode = code.trim().toUpperCase();
+        console.log('Attempting to create referral code:', {
+            code: normalizedCode,
+            ownerUserId
+        });
+        // First check if code already exists
+        const existing = await db.get('SELECT code, owner_user_id FROM referral_codes WHERE UPPER(code) = UPPER(?)', normalizedCode);
+        if (existing) {
+            console.log('Referral code already exists:', {
+                code: normalizedCode,
+                existingOwnerId: existing.owner_user_id
+            });
+            await db.run('ROLLBACK');
+            return false;
+        }
+        // Get owner username for logging
+        const owner = await db.get('SELECT username FROM users WHERE id = ?', ownerUserId);
+        console.log('Creating new referral code:', {
+            code: normalizedCode,
+            ownerUserId,
+            ownerUsername: owner === null || owner === void 0 ? void 0 : owner.username
+        });
+        // Create the new code
         await db.run(`
       INSERT INTO referral_codes (code, owner_user_id)
       VALUES (?, ?)
-    `, code, ownerUserId);
+    `, normalizedCode, ownerUserId);
+        await db.run('COMMIT');
         return true;
     }
     catch (error) {
         console.error('Failed to create referral code:', error);
+        await db.run('ROLLBACK');
         return false;
     }
 }
