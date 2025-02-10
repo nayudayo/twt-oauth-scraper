@@ -533,8 +533,40 @@ export async function trackReferralUse(
   usedByUserId: string
 ) {
   try {
-    // Start a transaction to ensure both operations complete
-    await db.run('BEGIN TRANSACTION')
+    // Get the referral code details first
+    const referralDetails = await db.get(`
+      SELECT rc.code, rc.owner_user_id, u.username as owner_username
+      FROM referral_codes rc
+      LEFT JOIN users u ON rc.owner_user_id = u.id
+      WHERE UPPER(rc.code) = UPPER(?)
+    `, referralCode)
+
+    if (!referralDetails) {
+      console.error('Referral code not found:', referralCode)
+      return false
+    }
+
+    // Check if this user has already used a referral code
+    const existingUsage = await db.get(`
+      SELECT referral_code 
+      FROM referral_usage_log 
+      WHERE used_by_user_id = ?
+    `, usedByUserId)
+
+    if (existingUsage) {
+      console.error('User has already used a referral code:', {
+        userId: usedByUserId,
+        existingCode: existingUsage.referral_code
+      })
+      return false
+    }
+
+    // Get user details
+    const user = await db.get('SELECT id FROM users WHERE id = ?', usedByUserId)
+    if (!user) {
+      console.error('User not found:', usedByUserId)
+      return false
+    }
 
     // Increment the usage count
     await db.run(`
@@ -549,10 +581,21 @@ export async function trackReferralUse(
       VALUES (?, ?)
     `, referralCode, usedByUserId)
 
-    await db.run('COMMIT')
+    // Add entry to referral_tracking
+    await db.run(`
+      INSERT INTO referral_tracking (referral_code, referrer_user_id, referred_user_id)
+      VALUES (?, ?, ?)
+    `, referralCode, referralDetails.owner_user_id, usedByUserId)
+
+    console.log('Successfully tracked referral usage:', {
+      code: referralCode,
+      referrerId: referralDetails.owner_user_id,
+      referrerUsername: referralDetails.owner_username,
+      referredId: usedByUserId
+    })
+
     return true
   } catch (error) {
-    await db.run('ROLLBACK')
     console.error('Failed to track referral usage:', error)
     return false
   }
