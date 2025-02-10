@@ -231,6 +231,33 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
           isSuccess: true 
         })
         
+        // Add CLOSE to completed commands
+        const updatedCommands = [...completedCommands, 'CLOSE']
+        setCompletedCommands(updatedCommands)
+        
+        // Save final progress
+        await saveProgress(currentCommandIndex + 1, updatedCommands)
+        
+        // Mark funnel as completed
+        try {
+          await fetch('/api/funnel-completion', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              userId: session?.user?.name,
+              completionData: {
+                telegram_username: commandResponses['JOIN_TELEGRAM'] || null,
+                wallet_address: commandResponses['SOL_WALLET'] || null,
+                referral_code: commandResponses['SUBMIT_REFERRAL'] || null
+              }
+            })
+          })
+        } catch (error) {
+          console.error('Failed to mark funnel as completed:', error)
+        }
+        
         // Set loading state for visual feedback
         setIsLoading(true)
         

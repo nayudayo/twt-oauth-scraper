@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, Dispatch, SetStateAction } from 'react'
-import { signIn, useSession } from 'next-auth/react'
+import { signIn, signOut, useSession } from 'next-auth/react'
 import ChatBox from '@/components/ChatBox'
 import { TerminalModal } from '@/components/TerminalModal'
 import { Tweet } from '@/types/scraper'
@@ -50,6 +50,14 @@ export default function Home() {
     setTerminalComplete(true)
     // Small delay to ensure terminal fade out starts first
     setTimeout(() => setShowContent(true), 100)
+  }
+
+  // Handle session termination
+  const handleTerminateSession = async () => {
+    await signOut({ redirect: false })
+    setTerminalComplete(false)
+    setShowContent(false)
+    setTweets([])
   }
 
   // Handle tweet updates
@@ -103,23 +111,23 @@ export default function Home() {
     return <TerminalModal onComplete={handleTerminalComplete} />
   }
 
-  // Show main content after terminal completion
+  // Show main content
   return (
-    <main className={`min-h-screen bg-gradient-to-br from-black via-red-950/20 to-black text-red-500 font-mono flex ${showContent ? 'animate-fadeIn' : 'opacity-0'}`}>
-      <div className="flex-1 flex items-center justify-center p-3">
+    <main className="min-h-screen bg-gradient-to-br from-black via-red-950/20 to-black text-red-500 font-mono">
+      {showContent && (
         <ChatBox
           tweets={tweets}
           profile={{
-            name: session.username || null,
+            name: session?.user?.name || null,
+            imageUrl: session?.user?.image || null,
             bio: null,
             followersCount: null,
-            followingCount: null,
-            imageUrl: session.user?.image || null
+            followingCount: null
           }}
-          onClose={() => signIn('twitter')}
+          onClose={handleTerminateSession}
           onTweetsUpdate={handleTweetsUpdate}
         />
-      </div>
+      )}
     </main>
   )
 }
