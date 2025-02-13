@@ -9,6 +9,7 @@ import { DatabaseError, PostgresError } from '../errors';
 interface ReferralOperations {
   createReferralCode(code: DBReferralCode): Promise<void>;
   validateReferralCode(code: string): Promise<boolean>;
+  getReferralCodeDetails(code: string): Promise<DBReferralCode | null>;
   trackReferralUse(tracking: DBReferralTracking): Promise<void>;
   logReferralUsage(usage: DBReferralUsage): Promise<void>;
   getReferralStats(userId: string): Promise<{
@@ -57,6 +58,24 @@ export class PostgresReferralOperations implements ReferralOperations {
         [code]
       );
       return result.rows[0].exists;
+    } catch (error) {
+      if (this.isPostgresError(error)) {
+        throw DatabaseError.fromPgError(error);
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getReferralCodeDetails(code: string): Promise<DBReferralCode | null> {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(
+        'SELECT * FROM referral_codes WHERE code = $1',
+        [code]
+      );
+      return result.rows[0] || null;
     } catch (error) {
       if (this.isPostgresError(error)) {
         throw DatabaseError.fromPgError(error);

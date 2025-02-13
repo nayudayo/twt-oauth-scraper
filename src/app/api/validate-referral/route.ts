@@ -51,17 +51,22 @@ export async function POST(req: NextRequest) {
     const db = await initDB()
 
     try {
-      // First validate the code exists and get its details in one query
-      const referralStats = await db.getReferralStats(userId)
-      const code = referralStats.codes.find(c => c.code === referralCode)
-      
-      if (!code) {
-        console.error('Invalid or non-existent referral code:', { referralCode })
+      // First validate if the code exists in the database
+      const isValid = await db.validateReferralCode(referralCode)
+      if (!isValid) {
+        console.error('Invalid referral code:', { referralCode })
         return NextResponse.json({ error: 'Invalid referral code' }, { status: 400 })
       }
 
+      // Get referral code details
+      const codeDetails = await db.getReferralCodeDetails(referralCode)
+      if (!codeDetails) {
+        console.error('Failed to get referral code details:', { referralCode })
+        return NextResponse.json({ error: 'Failed to process referral code' }, { status: 500 })
+      }
+
       // Prevent self-referral
-      if (code.owner_user_id === userId) {
+      if (codeDetails.owner_user_id === userId) {
         console.error('Self-referral attempt:', { userId, referralCode })
         return NextResponse.json({ error: 'Cannot use your own referral code' }, { status: 400 })
       }
@@ -86,7 +91,7 @@ export async function POST(req: NextRequest) {
       await db.trackReferralUse({
         id: 0, // Auto-generated
         referral_code: referralCode,
-        referrer_user_id: code.owner_user_id,
+        referrer_user_id: codeDetails.owner_user_id,
         referred_user_id: userId,
         used_at: new Date()
       })
@@ -102,7 +107,7 @@ export async function POST(req: NextRequest) {
       console.log('Successfully validated and tracked referral:', {
         referralCode,
         userId,
-        referrerId: code.owner_user_id
+        referrerId: codeDetails.owner_user_id
       })
 
       return NextResponse.json({ 
@@ -110,7 +115,7 @@ export async function POST(req: NextRequest) {
         message: 'Referral code successfully applied',
         details: {
           referralCode,
-          referrerId: code.owner_user_id,
+          referrerId: codeDetails.owner_user_id,
           appliedAt: new Date().toISOString()
         }
       })
