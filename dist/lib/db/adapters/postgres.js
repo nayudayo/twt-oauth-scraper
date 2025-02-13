@@ -172,28 +172,31 @@ class PostgresAdapter {
         return this.funnelOperations.getFunnelStats();
     }
     // Referral operations
-    createReferralCode(code) {
+    async getReferralCodeDetails(code) {
+        return this.referralOperations.getReferralCodeDetails(code);
+    }
+    async createReferralCode(code) {
         return this.referralOperations.createReferralCode(code);
     }
-    validateReferralCode(code) {
+    async validateReferralCode(code) {
         return this.referralOperations.validateReferralCode(code);
     }
-    trackReferralUse(tracking) {
+    async trackReferralUse(tracking) {
         return this.referralOperations.trackReferralUse(tracking);
     }
-    logReferralUsage(usage) {
+    async logReferralUsage(usage) {
         return this.referralOperations.logReferralUsage(usage);
     }
-    getReferralStats(userId) {
+    async getReferralStats(userId) {
         return this.referralOperations.getReferralStats(userId);
     }
-    getReferralHistory(userId) {
+    async getReferralHistory(userId) {
         return this.referralOperations.getReferralHistory(userId);
     }
-    incrementReferralUses(code) {
+    async incrementReferralUses(code) {
         return this.referralOperations.incrementReferralUses(code);
     }
-    getTopReferrers(limit) {
+    async getTopReferrers(limit) {
         return this.referralOperations.getTopReferrers(limit);
     }
     // Transaction support

@@ -3,6 +3,7 @@ import { initDB } from '@/lib/db/index'
 import { getServerSession } from 'next-auth'
 import { generateReferralCode } from '@/utils/referral'
 import { authOptions } from '@/lib/auth/config'
+import { extractSolanaAddress } from '@/utils/solana'
 
 // POST /api/referral-code
 export async function POST(req: NextRequest) {
@@ -56,10 +57,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Find the wallet address in command responses
-    const walletAddress = Object.entries(progress.command_responses)
-      .find(([key]) => key.startsWith('SOL_WALLET'))?.[1]
+    const walletCommand = Object.entries(progress.command_responses)
+      .find(([key]) => key.includes('SOL_WALLET'))?.[1]
 
-    if (!walletAddress) {
+    if (!walletCommand) {
       console.error('No wallet address found:', { 
         userId, 
         hasProgress: !!progress,
@@ -68,14 +69,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Wallet address not found in funnel progress' }, { status: 400 })
     }
 
-    // Extract just the wallet address if it includes the command
-    const cleanWalletAddress = walletAddress.includes('sol_wallet') 
-      ? walletAddress.split(' ').slice(1).join(' ')
-      : walletAddress
+    // Extract the wallet address from the command
+    const walletAddress = extractSolanaAddress(walletCommand)
+    if (!walletAddress) {
+      console.error('Failed to extract wallet address from command:', { walletCommand })
+      return NextResponse.json({ error: 'Invalid wallet address format' }, { status: 400 })
+    }
 
-    // Generate referral code using username and stored wallet address
-    const referralCode = generateReferralCode(userId, cleanWalletAddress)
-    console.log('Generated referral code:', { userId, referralCode })
+    // Generate referral code using username and wallet address
+    const referralCode = generateReferralCode(userId, walletAddress)
+    console.log('Generated referral code:', { userId, referralCode, walletAddress })
 
     // Create referral code using the database user ID
     await db.createReferralCode({

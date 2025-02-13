@@ -39,6 +39,22 @@ class PostgresReferralOperations {
             client.release();
         }
     }
+    async getReferralCodeDetails(code) {
+        const client = await this.pool.connect();
+        try {
+            const result = await client.query('SELECT * FROM referral_codes WHERE code = $1', [code]);
+            return result.rows[0] || null;
+        }
+        catch (error) {
+            if (this.isPostgresError(error)) {
+                throw errors_1.DatabaseError.fromPgError(error);
+            }
+            throw error;
+        }
+        finally {
+            client.release();
+        }
+    }
     async trackReferralUse(tracking) {
         const client = await this.pool.connect();
         try {
