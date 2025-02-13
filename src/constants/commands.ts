@@ -17,7 +17,7 @@ export const REQUIRED_COMMANDS: Command[] = [
     validation: (input: string) => input.trim().toLowerCase() === 'join_telegram'
   },
   {
-    command: 'SOL_WALLET',
+    command: 'SOL_WALLET <add wallet address>',
     description: 'Connect or update your Solana wallet',
     expectedInput: `sol_wallet ${generateExampleSolanaAddress()}`,
     validation: (input: string) => {

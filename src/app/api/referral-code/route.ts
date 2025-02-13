@@ -2,31 +2,37 @@ import { NextRequest, NextResponse } from 'next/server'
 import { initDB } from '@/lib/db/index'
 import { getServerSession } from 'next-auth'
 import { generateReferralCode } from '@/utils/referral'
+import { authOptions } from '@/lib/auth/config'
 
 // POST /api/referral-code
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession()
+    // Get and validate session
+    const session = await getServerSession(authOptions)
     if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      console.error('No session or user found:', { session })
+      return NextResponse.json({ error: 'Unauthorized - No session' }, { status: 401 })
     }
 
     const body = await req.json()
     const { userId } = body
 
     if (!userId) {
+      console.error('No userId provided in request body')
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
     }
 
     // Get the session username from either location
     const sessionUsername = session.username || session.user.name
     if (!sessionUsername) {
+      console.error('No username in session:', { session })
       return NextResponse.json({ error: 'No username found in session' }, { status: 401 })
     }
 
     // Verify the user is creating their own referral code
     if (userId !== sessionUsername) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      console.error('User ID mismatch:', { userId, sessionUsername })
+      return NextResponse.json({ error: 'Unauthorized - User mismatch' }, { status: 401 })
     }
 
     const db = await initDB()
@@ -34,6 +40,7 @@ export async function POST(req: NextRequest) {
     // First get or create user
     let user = await db.getUserByUsername(userId)
     if (!user) {
+      console.log('Creating new user:', userId)
       user = await db.createUser({
         username: userId,
         created_at: new Date()
@@ -44,13 +51,18 @@ export async function POST(req: NextRequest) {
     // Get funnel progress to get the wallet address
     const progress = await db.getFunnelProgress(user.id)
     if (!progress || !progress.command_responses['SOL_WALLET']) {
+      console.error('No wallet address found:', { 
+        userId, 
+        hasProgress: !!progress,
+        commandResponses: progress?.command_responses 
+      })
       return NextResponse.json({ error: 'Wallet address not found in funnel progress' }, { status: 400 })
     }
 
     // Generate referral code using username and stored wallet address
     const walletAddress = progress.command_responses['SOL_WALLET']
     const referralCode = generateReferralCode(userId, walletAddress)
-    console.log('Generated referral code:', referralCode)
+    console.log('Generated referral code:', { userId, referralCode })
 
     // Create referral code using the database user ID
     await db.createReferralCode({
@@ -63,6 +75,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, referralCode })
   } catch (error) {
     console.error('Failed to create referral code:', error)
-    return NextResponse.json({ error: 'Failed to create referral code' }, { status: 500 })
+    return NextResponse.json({ 
+      error: 'Failed to create referral code',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
   }
 } 

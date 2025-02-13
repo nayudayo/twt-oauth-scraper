@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server'
-import OpenAI from 'openai'
 import { TwitterProfile } from '@/types/scraper'
 import { PersonalityAnalysis } from '@/lib/openai'
 import { ConsciousnessConfig, DEFAULT_CONSCIOUSNESS, generateConsciousnessInstructions, applyConsciousnessEffects } from '@/lib/consciousness'
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
+import { OpenAIQueueManager } from '@/lib/queue/openai-queue'
+import { getServerSession } from 'next-auth'
+import { ChatCompletionMessage } from 'openai/resources/chat/completions'
 
 interface RequestBody {
   message: string
@@ -56,6 +54,15 @@ const calculateTemperature = (tuning: RequestBody['tuning']): number => {
 
 export async function POST(req: Request) {
   try {
+    // Get user session for rate limiting
+    const session = await getServerSession()
+    if (!session?.username) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
     const { message, profile, analysis, tuning, consciousness, conversationHistory = [] } = await req.json() as RequestBody
 
     if (!message || !analysis) {
@@ -166,41 +173,65 @@ Remember: You are this person, not just describing them. Respond authentically a
 
     // Create messages array with conversation history
     const messages = [
-      { role: "system" as const, content: baseSystemPrompt },
+      { role: "system", content: baseSystemPrompt },
       ...conversationHistory.map(msg => ({ 
-        role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
-        content: msg.content 
+        role: msg.role,
+        content: msg.content
       })),
-      { role: "user" as const, content: message }
-    ]
+      { role: "user", content: message }
+    ] as ChatCompletionMessage[]
 
-    // Try up to 3 times to get a response that matches style requirements
-    let attempts = 0
-    let validResponse: string | null = null
-    let lastResponse: string | null = null
+    // Get queue instance
+    const queue = OpenAIQueueManager.getInstance()
 
-    while (!validResponse && attempts < 3) {
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages,
-        temperature: calculateTemperature(tuning),
-        max_tokens: 150,
-        presence_penalty: 0.6,
-        frequency_penalty: 0.3
-      })
-
-      lastResponse = response.choices[0].message.content || ''
-      if (validateStyle(lastResponse, tuning)) {
-        // Apply consciousness effects to the response
-        validResponse = applyConsciousnessEffects(lastResponse, consciousness ?? DEFAULT_CONSCIOUSNESS)
+    // Create a promise to handle the queued request
+    const response = await new Promise<string>((resolve, reject) => {
+      const config = consciousness ?? DEFAULT_CONSCIOUSNESS
+      const effects = config.quirks.length > 0 ? config.quirks : ['normal conversation']
+      
+      // Ensure username is available (we already checked this at the start of the function)
+      if (!session.username) {
+        reject(new Error('User session not found'))
+        return
       }
-      attempts++
-    }
+      
+      queue.enqueueRequest(
+        'chat',
+        {
+          messages,
+          tuning: {
+            temperature: calculateTemperature(tuning),
+            maxTokens: 150,
+            presencePenalty: 0.6,
+            frequencyPenalty: 0.3
+          },
+          consciousness: {
+            state: generateConsciousnessInstructions(config),
+            effects
+          }
+        },
+        session.username,
+        (result) => {
+          // Validate style and apply consciousness effects
+          const content = typeof result === 'object' && result !== null && 'content' in result 
+            ? result.content as string 
+            : String(result)
 
-    // If we couldn't get a valid response after 3 attempts, use the last one
-    const finalResponse = validResponse || (lastResponse ? applyConsciousnessEffects(lastResponse, consciousness ?? DEFAULT_CONSCIOUSNESS) : 'Failed to generate a valid response')
+          if (validateStyle(content, tuning)) {
+            resolve(applyConsciousnessEffects(content, config))
+          } else {
+            reject(new Error('Generated response does not match style requirements'))
+          }
+        },
+        reject
+      )
+    }).catch(error => {
+      // If style validation fails, return a generic response
+      console.error('Chat generation error:', error)
+      return 'Failed to generate a valid response'
+    })
 
-    return NextResponse.json({ response: finalResponse })
+    return NextResponse.json({ response })
   } catch (error) {
     console.error('Chat error:', error)
     return NextResponse.json(
