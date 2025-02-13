@@ -50,18 +50,31 @@ export async function POST(req: NextRequest) {
 
     // Get funnel progress to get the wallet address
     const progress = await db.getFunnelProgress(user.id)
-    if (!progress || !progress.command_responses['SOL_WALLET']) {
+    if (!progress || !progress.command_responses) {
+      console.error('No funnel progress found:', { userId })
+      return NextResponse.json({ error: 'Funnel progress not found' }, { status: 400 })
+    }
+
+    // Find the wallet address in command responses
+    const walletAddress = Object.entries(progress.command_responses)
+      .find(([key]) => key.startsWith('SOL_WALLET'))?.[1]
+
+    if (!walletAddress) {
       console.error('No wallet address found:', { 
         userId, 
         hasProgress: !!progress,
-        commandResponses: progress?.command_responses 
+        commandResponses: progress.command_responses 
       })
       return NextResponse.json({ error: 'Wallet address not found in funnel progress' }, { status: 400 })
     }
 
+    // Extract just the wallet address if it includes the command
+    const cleanWalletAddress = walletAddress.includes('sol_wallet') 
+      ? walletAddress.split(' ').slice(1).join(' ')
+      : walletAddress
+
     // Generate referral code using username and stored wallet address
-    const walletAddress = progress.command_responses['SOL_WALLET']
-    const referralCode = generateReferralCode(userId, walletAddress)
+    const referralCode = generateReferralCode(userId, cleanWalletAddress)
     console.log('Generated referral code:', { userId, referralCode })
 
     // Create referral code using the database user ID
