@@ -1,71 +1,70 @@
-import { NextResponse } from 'next/server'
-import { initDB, markFunnelCompleted, checkFunnelCompletion } from '@/lib/db'
-import { getServerSession } from 'next-auth'
+import { NextRequest, NextResponse } from 'next/server'
+import { initDB } from '@/lib/db/index'
 
 // POST /api/funnel-completion
-export async function POST(request: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession()
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const body = await request.json()
+    const body = await req.json()
     const { userId, completionData } = body
 
-    if (!userId || typeof completionData !== 'object') {
-      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
-    }
-
-    // Verify the user is marking their own completion
-    if (userId !== session.user.name) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!userId) {
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
     }
 
     const db = await initDB()
-    
+
+    // First get or create user to get the database user ID
+    let user = await db.getUserByUsername(userId)
+    if (!user) {
+      user = await db.createUser({
+        username: userId,
+        created_at: new Date()
+      })
+      console.log('Created new user:', user)
+    }
+
     // Check if already completed
-    const existing = await checkFunnelCompletion(db, userId)
+    const existing = await db.getFunnelCompletion(user.id)
     if (existing) {
       return NextResponse.json({ error: 'Funnel already completed' }, { status: 400 })
     }
 
-    // Mark as completed
-    await markFunnelCompleted(db, userId, completionData)
+    // Mark as completed using the database user ID
+    await db.markFunnelComplete({
+      user_id: user.id,
+      completed_at: new Date(),
+      completion_data: completionData
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error marking funnel as completed:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('Failed to mark funnel as completed:', error)
+    return NextResponse.json({ error: 'Failed to update completion status' }, { status: 500 })
   }
 }
 
 // GET /api/funnel-completion?userId={userId}
-export async function GET(request: Request) {
+export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession()
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const userId = searchParams.get('userId')
-
+    const url = new URL(req.url)
+    const userId = url.searchParams.get('userId')
+    
     if (!userId) {
-      return NextResponse.json({ error: 'Missing userId parameter' }, { status: 400 })
-    }
-
-    // Verify the user is checking their own completion status
-    if (userId !== session.user.name) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
     }
 
     const db = await initDB()
-    const completion = await checkFunnelCompletion(db, userId)
 
+    // Get user to get the database user ID
+    const user = await db.getUserByUsername(userId)
+    if (!user) {
+      return NextResponse.json({ completion: null })
+    }
+
+    const completion = await db.getFunnelCompletion(user.id)
     return NextResponse.json({ completion })
   } catch (error) {
-    console.error('Error checking funnel completion:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('Failed to get funnel completion:', error)
+    return NextResponse.json({ error: 'Failed to get completion status' }, { status: 500 })
   }
-} 
+}

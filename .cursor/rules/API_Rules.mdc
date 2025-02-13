@@ -1,8 +1,4 @@
----
-description: 
-globs: 
----
- # Chat API Rules
+# Chat API Rules
 
 ## Overview
 - The chat API endpoint must accept only HTTP POST requests.
@@ -23,4 +19,4 @@ globs:
 - All responses must be in JSON format.
 
 ## Logging & Error Handling
-- Log errors using `console.error` without exposing sensitive data.
+- Log errors using `console.error` without exposing sensitive data. 

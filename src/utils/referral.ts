@@ -29,8 +29,14 @@ export function extractReferralResponse(input: string): string | null {
   const parts = input.trim().split(/\s+/)
   if (parts.length !== 2) return null
   
-  const code = normalizeReferralCode(parts[1])
-  return isValidReferralCode(code) ? code : null
+  const code = parts[1].trim().toUpperCase()
+  
+  // Special case for "NO"
+  if (code === 'NO') return code
+  
+  // For regular referral codes
+  const normalizedCode = normalizeReferralCode(code)
+  return isValidReferralCode(normalizedCode) ? normalizedCode : null
 }
 
 // Generate example referral code for error messages

@@ -36,7 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const worker_threads_1 = require("worker_threads");
 const apify_client_1 = require("apify-client");
 const dotenv = __importStar(require("dotenv"));
-const db_1 = require("./db");
+const index_1 = require("./db/index");
 if (!worker_threads_1.parentPort) {
     throw new Error('This file must be run as a worker thread');
 }
@@ -188,9 +188,45 @@ async function runScraper() {
             throw new Error('Operation cancelled by user');
         }
         // Initialize database and save tweets
-        db = await (0, db_1.initDB)();
-        await (0, db_1.saveUserProfile)(db, targetUsername, profile);
-        await (0, db_1.saveTweets)(db, targetUsername, allTweets);
+        db = await (0, index_1.initDB)();
+        // Create user profile
+        const dbUser = {
+            username: targetUsername,
+            profile_data: {
+                bio: profile.bio || undefined,
+                followersCount: profile.followersCount || undefined,
+                followingCount: profile.followingCount || undefined
+            },
+            profile_picture_url: profile.imageUrl || undefined,
+            created_at: new Date()
+        };
+        // Save user profile
+        await db.saveUserProfile(targetUsername, dbUser);
+        // Get user to get the ID
+        const user = await db.getUserByUsername(targetUsername);
+        if (!user) {
+            throw new Error('Failed to create user profile');
+        }
+        // Convert tweets to database format
+        const dbTweets = allTweets.map(tweet => ({
+            id: tweet.id,
+            user_id: user.id,
+            text: tweet.text,
+            created_at: new Date(tweet.timestamp),
+            url: tweet.url,
+            is_reply: tweet.isReply,
+            metadata: {
+                metrics: {
+                    likes: tweet.metrics.likes || undefined,
+                    retweets: tweet.metrics.retweets || undefined,
+                    replies: tweet.metrics.views || undefined
+                },
+                images: tweet.images
+            },
+            created_in_db: new Date()
+        }));
+        // Save tweets
+        await db.saveTweets(user.id, dbTweets);
         console.log('Tweets saved to database');
         // Send progress update
         worker_threads_1.parentPort.postMessage({
@@ -222,9 +258,7 @@ async function runScraper() {
         // Clean up database if needed
         if (db) {
             try {
-                // Roll back any incomplete operations
-                await db.exec('ROLLBACK');
-                await db.close();
+                await db.disconnect();
             }
             catch (dbError) {
                 console.error('Failed to cleanup database:', dbError);

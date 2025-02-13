@@ -1,8 +1,4 @@
----
-description: 
-globs: 
----
- # OpenAI Integration Rules
+# OpenAI Integration Rules
 
 ## Overview
 - This module integrates with the OpenAI API for generating chat responses.
@@ -27,4 +23,4 @@ globs:
 
 ## Testing & Maintenance
 - Regularly test prompt construction to ensure that adjustments (e.g., personality traits, interests) are accurately reflected.
-- Keep track of any changes in the OpenAI API and update integration strategies accordingly.
+- Keep track of any changes in the OpenAI API and update integration strategies accordingly. 

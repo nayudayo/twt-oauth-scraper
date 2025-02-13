@@ -6,7 +6,7 @@ import { SYSTEM_MESSAGES } from '@/constants/messages'
 import { useSession } from 'next-auth/react'
 import { extractReferralResponse, generateReferralCode } from '@/utils/referral'
 import Image from 'next/image'
-import html2canvas from 'html2canvas'
+import { toPng } from 'html-to-image'
 
 interface TerminalModalProps {
   onComplete: () => void
@@ -38,12 +38,12 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const terminalRef = useRef<HTMLDivElement>(null)
 
-  // Load saved progress and check completion when component mounts
+  // Load saved progress when component mounts
   useEffect(() => {
     const loadProgress = async () => {
-      if (session?.user?.name) {
+      if (session?.username) {
         try {
-          const response = await fetch(`/api/command-progress?userId=${session.user.name}`)
+          const response = await fetch(`/api/command-progress?userId=${session.username}`)
           
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}))
@@ -61,16 +61,18 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
             
           // Otherwise just set up for the next required command
           if (data.progress) {
-            const { current_command_index, completed_commands } = data.progress
+            const { current_command_index, completed_commands, command_responses } = data.progress
             
-            setCurrentCommandIndex(current_command_index)
+            // Set the current state
+            setCurrentCommandIndex(current_command_index || 0)
             setCompletedCommands(completed_commands || [])
+            setCommandResponses(command_responses || {})
               
             // Only show boot message and next command prompt
             setLines([
               { content: SYSTEM_MESSAGES.BOOT },
               { 
-                content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[current_command_index].command}`,
+                content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[current_command_index || 0].command}`,
                 isSystem: true 
               }
             ])
@@ -106,6 +108,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
             console.log('Starting from beginning due to error')
             setCurrentCommandIndex(0)
             setCompletedCommands([])
+            setCommandResponses({})
             setLines([
               { content: SYSTEM_MESSAGES.BOOT },
               { 
@@ -118,33 +121,40 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
       }
     }
     loadProgress()
-  }, [session?.user?.name, onComplete])
+  }, [session?.username, onComplete])
 
   // Save progress when commands are completed
   const saveProgress = async (commandIndex: number, commands: string[]) => {
-    if (session?.user?.name) {
+    if (session?.username) {
       try {
+        console.log('Saving progress:', {
+          userId: session.username,
+          commandIndex,
+          commands,
+          responses: commandResponses
+        });
+
         const response = await fetch('/api/command-progress', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            userId: session.user.name,
+            userId: session.username,
             currentIndex: commandIndex,
             completedCommands: commands,
             commandResponses
           }),
-        })
+        });
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}))
           throw new Error(errorData.error || 'Failed to save progress')
         }
 
-        // Just check if we can parse the response, but don't store it
-        await response.json().catch(() => ({}))
-        return true
+        const result = await response.json();
+        console.log('Progress saved:', result);
+        return true;
       } catch (error) {
         console.error('Failed to save funnel progress:', error)
         setLines(prev => [
@@ -180,26 +190,34 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
   // Fetch referral code when share dialog opens
   useEffect(() => {
     const fetchReferralCode = async () => {
-      if (showShareDialog && session?.user?.name) {
-        setIsLoadingReferral(true)
+      if (showShareDialog && session?.username) {
+        setIsLoadingReferral(true);
         try {
-          const response = await fetch(`/api/referral-code/get?userId=${session.user.name}`)
+          // First try to get from database
+          const response = await fetch(`/api/referral-code/get?userId=${session.username}`);
           if (!response.ok) {
-            throw new Error('Failed to fetch referral code')
+            throw new Error('Failed to fetch referral code');
           }
-          const data = await response.json()
-          setReferralCode(data.referralCode)
+          const data = await response.json();
+          
+          if (data.referralCode) {
+            setReferralCode(data.referralCode);
+          } else {
+            // If not found in database, use the one from command responses
+            setReferralCode(commandResponses['GENERATE_REFERRAL']);
+          }
         } catch (error) {
-          console.error('Error fetching referral code:', error)
-          setReferralCode(null)
+          console.error('Error fetching referral code:', error);
+          // Fallback to command responses if database fetch fails
+          setReferralCode(commandResponses['GENERATE_REFERRAL']);
         } finally {
-          setIsLoadingReferral(false)
+          setIsLoadingReferral(false);
         }
       }
-    }
+    };
 
-    fetchReferralCode()
-  }, [showShareDialog, session?.user?.name])
+    fetchReferralCode();
+  }, [showShareDialog, session?.username, commandResponses]);
 
   const handleCommand = async (command: string) => {
     const normalizedCommand = command.trim().toLowerCase()
@@ -246,7 +264,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              userId: session?.user?.name,
+              userId: session?.username,
               completionData: {
                 telegram_username: commandResponses['JOIN_TELEGRAM'] || null,
                 wallet_address: commandResponses['SOL_WALLET'] || null,
@@ -281,8 +299,12 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
           ...commandResponses,
           [currentCommand.command]: currentCommand.command === 'SUBMIT_REFERRAL' ? 
             extractReferralResponse(command) || command : // Fallback to full command if extraction fails
+            currentCommand.command === 'SOL_WALLET' ?
+            command.split(' ').slice(1).join(' ') : // Extract just the wallet address
             command
         }
+        
+        // Update responses state immediately
         setCommandResponses(updatedResponses)
 
         // Add command-specific responses
@@ -291,9 +313,22 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
             content: SYSTEM_MESSAGES.COMMAND_RESPONSES.REFERRAL_INFO,
             isSystem: true 
           })
-        } else if (currentCommand.command === 'SOL_WALLET') {
+        } else if (currentCommand.command === 'JOIN_TELEGRAM') {
+          // Try to open Telegram channel
+          window.open('https://t.me/+nwdyk8qAM8o1ZTg0', '_blank')
+          
+          newLines.push({ 
+            content: "[SUCCESS] Command accepted: " + currentCommand.description,
+            isSuccess: true 
+          })
           newLines.push({
-            content: "[SUCCESS] Wallet address verified and stored successfully",
+            content: "[SYSTEM] If you weren't redirected automatically, please click this link to join: https://t.me/+nwdyk8qAM8o1ZTg0",
+            isSystem: true
+          })
+        } else if (currentCommand.command === 'SOL_WALLET') {
+          const walletAddress = command.split(' ').slice(1).join(' ')
+          newLines.push({
+            content: `[SUCCESS] Wallet address ${walletAddress} verified and stored successfully`,
             isSuccess: true
           })
         } else if (currentCommand.command === 'SUBMIT_REFERRAL') {
@@ -304,7 +339,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
               throw new Error('Invalid referral code format')
             }
 
-            if (!session?.user?.name) {
+            if (!session?.username) {
               throw new Error('Not authenticated')
             }
 
@@ -314,7 +349,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                userId: session.user.name,
+                userId: session.username,
                 referralCode: referralCode
               }),
               credentials: 'include' // Include cookies for authentication
@@ -340,7 +375,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
           }
         } else if (currentCommand.command === 'GENERATE_REFERRAL') {
           // Generate referral code based on username and wallet address
-          const username = session?.user?.name
+          const username = session?.username
           if (!username) {
             newLines.push({
               content: '[ERROR] Not authenticated. Please sign in again.',
@@ -350,8 +385,16 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
             return
           }
 
-          const walletAddress = commandResponses['SOL_WALLET']?.split(' ')[1] || ''
+          // Use the stored wallet address directly (no need to split)
+          const walletAddress = commandResponses['SOL_WALLET'] || ''
           const referralCode = generateReferralCode(username, walletAddress)
+          
+          // Store the generated code in command responses
+          const updatedResponses = {
+            ...commandResponses,
+            'GENERATE_REFERRAL': referralCode
+          }
+          setCommandResponses(updatedResponses)
           
           // Store the referral code in the database
           try {
@@ -364,7 +407,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
                 userId: username,
                 referralCode: referralCode
               }),
-              credentials: 'include' // Include cookies for authentication
+              credentials: 'include'
             })
 
             if (!response.ok) {
@@ -393,61 +436,71 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
         }
         
         const updatedCompletedCommands = [...completedCommands, currentCommand.command]
-        setCompletedCommands(updatedCompletedCommands)
-        
-        if (currentCommandIndex === REQUIRED_COMMANDS.length - 1) {
-          newLines.push({ 
-            content: SYSTEM_MESSAGES.COMMAND_RESPONSES.SEQUENCE_COMPLETE,
-            isSystem: true
-          })
-          newLines.push({
-            content: SYSTEM_MESSAGES.ACCESS_GRANTED,
-            isSuccess: true
-          })
-          
-          setLines(newLines)
-          setIsLoading(true)
-          
-          // Save final progress
-          await saveProgress(currentCommandIndex + 1, updatedCompletedCommands)
-          
-          // Mark funnel as completed
-          try {
-            await fetch('/api/funnel-completion', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                userId: session?.user?.name,
-                completionData: {
-                  telegram_username: updatedResponses['JOIN_TELEGRAM'] || null,
-                  wallet_address: updatedResponses['SOL_WALLET'] || null,
-                  referral_code: updatedResponses['SUBMIT_REFERRAL'] || null
-                }
-              })
-            })
-          } catch (error) {
-            console.error('Failed to mark funnel as completed:', error)
-          }
-          
-          // Simulate loading and transition
-          setTimeout(() => {
-            setIsLoading(false)
-            setShowMainContent(true)
-            setTimeout(onComplete, 500) // Give time for fade-in animation
-          }, 2000)
-          
-          return
-        } else {
-          newLines.push({ 
-            content: SYSTEM_MESSAGES.COMMAND_RESPONSES.NEXT_COMMAND(REQUIRED_COMMANDS[currentCommandIndex + 1].command),
-            isSystem: true
-          })
-          const nextIndex = currentCommandIndex + 1
-          setCurrentCommandIndex(nextIndex)
-          // Save progress after each successful command
+        const nextIndex = currentCommandIndex + 1
+
+        try {
+          // Save progress BEFORE updating UI
           await saveProgress(nextIndex, updatedCompletedCommands)
+          
+          // After successful save, update state and UI
+          setCompletedCommands(updatedCompletedCommands)
+          setCurrentCommandIndex(nextIndex)
+
+          if (nextIndex >= REQUIRED_COMMANDS.length) {
+            newLines.push({ 
+              content: SYSTEM_MESSAGES.COMMAND_RESPONSES.SEQUENCE_COMPLETE,
+              isSystem: true
+            })
+            newLines.push({
+              content: SYSTEM_MESSAGES.ACCESS_GRANTED,
+              isSuccess: true
+            })
+            
+            setLines(newLines)
+            setIsLoading(true)
+            
+            // Mark funnel as completed
+            try {
+              await fetch('/api/funnel-completion', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  userId: session?.username,
+                  completionData: {
+                    telegram_username: updatedResponses['JOIN_TELEGRAM'] || null,
+                    wallet_address: updatedResponses['SOL_WALLET'] || null,
+                    referral_code: updatedResponses['SUBMIT_REFERRAL'] || null
+                  }
+                })
+              })
+            } catch (error) {
+              console.error('Failed to mark funnel as completed:', error)
+            }
+            
+            // Simulate loading and transition
+            setTimeout(() => {
+              setIsLoading(false)
+              setShowMainContent(true)
+              setTimeout(onComplete, 500) // Give time for fade-in animation
+            }, 2000)
+            
+            return
+          } else {
+            // Show next command using nextIndex directly
+            const nextCommand = REQUIRED_COMMANDS[nextIndex]
+            newLines.push({ 
+              content: SYSTEM_MESSAGES.COMMAND_RESPONSES.NEXT_COMMAND(nextCommand.command),
+              isSystem: true
+            })
+          }
+        } catch (error) {
+          console.error('Failed to save progress:', error)
+          newLines.push({ 
+            content: '[ERROR] Failed to save progress. Please try the command again.',
+            isError: true 
+          })
         }
       } else {
         newLines.push({ 
@@ -486,25 +539,33 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
     if (!shareModalRef.current) return;
 
     try {
-      // First, capture the modal as an image
-      const canvas = await html2canvas(shareModalRef.current, {
-        background: '#00000000'
+      // Get modal dimensions
+      const modalElement = shareModalRef.current;
+      const { width, height } = modalElement.getBoundingClientRect();
+
+      // Generate PNG with better quality
+      const dataUrl = await toPng(modalElement, {
+        quality: 1.0,
+        width: width * 2, // Double the resolution
+        height: height * 2,
+        backgroundColor: 'rgba(0, 0, 0, 0)',
+        style: {
+          transform: 'scale(2)',
+          transformOrigin: 'top left',
+          width: `${width}px`,
+          height: `${height}px`
+        },
+        filter: (node) => {
+          // Filter out the close button from the image
+          return !node.classList?.contains('close-button');
+        }
       });
 
-      // Convert to blob
-      const blob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob((b: Blob | null) => {
-          if (b) resolve(b);
-        }, 'image/png');
-      });
-
-      // Save image
-      const url = URL.createObjectURL(blob);
+      // Download image
       const link = document.createElement('a');
       link.download = 'referral-code.png';
-      link.href = url;
+      link.href = dataUrl;
       link.click();
-      URL.revokeObjectURL(url);
 
       // Create Twitter intent URL
       const tweetText = `come...: ${referralCode || commandResponses['GENERATE_REFERRAL']}`;
@@ -629,18 +690,22 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
         >
           <div 
             ref={shareModalRef}
-            className="bg-black/40 backdrop-blur-md p-8 rounded-lg shadow-2xl w-[500px] border border-red-500/20 hover-glow float"
+            className="bg-gradient-to-br from-black to-black/95 backdrop-blur-md p-8 rounded-lg shadow-2xl w-[500px] border border-red-500/20 hover-glow float"
+            style={{
+              backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(239,68,68,0.05), rgba(0,0,0,0.98) 100%)',
+              boxShadow: '0 0 40px rgba(239,68,68,0.1)'
+            }}
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-2 mb-4 border-b border-red-500/20 pb-4 glow-border">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                <h3 className="text-lg font-bold text-red-500/90 tracking-wider glow-text">SHARE INTERFACE</h3>
+                <h3 className="text-lg font-bold text-red-500/80 tracking-wider glow-text">SHARE INTERFACE</h3>
               </div>
               {hasShared && (
                 <button
                   onClick={() => setShowShareDialog(false)}
-                  className="text-red-500/70 hover:text-red-500/90 transition-colors hover-text-glow"
+                  className="close-button text-red-500/70 hover:text-red-500/90 transition-colors hover-text-glow"
                 >
                   <span className="sr-only">Close</span>
                   ×
@@ -655,7 +720,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
                   <div className="w-20 h-20 rounded-full border-2 border-red-500/20 overflow-hidden hover-glow">
                     <Image
                       src={session.user.image}
-                      alt={session.user.name || 'Profile'}
+                      alt={session?.username || 'Profile'}
                       width={80}
                       height={80}
                       className="w-full h-full object-cover"
@@ -667,11 +732,11 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
                   </div>
                 )}
                 <div className="text-center">
-                  <h4 className="text-red-500/90 font-bold tracking-wider ancient-text">
-                    {session?.user?.name || 'Anonymous User'}
+                  <h4 className="text-red-500/80 font-bold tracking-wider ancient-text">
+                    {session?.username || 'Anonymous User'}
                   </h4>
                   {session?.username && (
-                    <p className="text-red-400/70 text-sm mt-1 hover-text-glow">
+                    <p className="text-red-400/60 text-sm mt-1 hover-text-glow">
                       @{session.username}
                     </p>
                   )}
@@ -679,13 +744,13 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
               </div>
 
               {/* Referral Code Section */}
-              <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
+              <div className="bg-black/80 rounded-lg p-4 backdrop-blur-sm border border-red-500/20 hover-glow ancient-border">
+                <h4 className="text-sm font-bold text-red-500/80 tracking-wider uppercase flex items-center gap-2 mb-3">
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
                   <span className="ancient-text">Your Referral Code</span>
                 </h4>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 bg-black/40 text-red-400/90 px-3 py-2 rounded font-mono text-sm hover-text-glow">
+                  <code className="flex-1 bg-black/80 text-red-400/80 px-3 py-2 rounded font-mono text-sm hover-text-glow">
                     {isLoadingReferral ? (
                       <span className="text-red-500/70 tracking-wider">FETCHING DATA...</span>
                     ) : (
@@ -697,10 +762,9 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
                       const code = referralCode || commandResponses['GENERATE_REFERRAL']
                       if (code) {
                         navigator.clipboard.writeText(code)
-                        // Could add a toast notification here
                       }
                     }}
-                    className="px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow"
+                    className="px-3 py-2 bg-red-500/10 text-red-500/80 border border-red-500/20 rounded hover:bg-red-500/20 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow"
                     disabled={isLoadingReferral || (!referralCode && !commandResponses['GENERATE_REFERRAL'])}
                   >
                     Copy
@@ -709,7 +773,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
               </div>
 
               {/* Instructions */}
-              <div className="text-red-400/70 text-sm space-y-2">
+              <div className="text-red-400/60 text-sm space-y-2">
                 <p className="hover-text-glow">Share your referral code with others to earn rewards!</p>
                 <p className="hover-text-glow">Each successful referral increases your influence in the network.</p>
               </div>
@@ -724,13 +788,13 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                   </svg>
-                  Share to X
+                  Download and Share to X
                 </button>
               </div>
 
               {!hasShared && (
                 <div className="mt-4 text-center text-red-500/60 text-xs tracking-wider">
-                  Share to X to close this interface
+                 Download the Image and  Share to X to close this interface
                 </div>
               )}
             </div>

@@ -2,7 +2,8 @@ import { parentPort, workerData } from 'worker_threads'
 import { ApifyClient } from 'apify-client'
 import * as dotenv from 'dotenv'
 import type { Tweet, TwitterProfile } from '@/types/scraper'
-import { initDB, saveUserProfile, saveTweets } from './db'
+import { initDB } from './db/index'
+import type { DBUser } from './db/adapters/types'
 
 if (!parentPort) {
   throw new Error('This file must be run as a worker thread')
@@ -197,8 +198,49 @@ async function runScraper() {
 
     // Initialize database and save tweets
     db = await initDB()
-    await saveUserProfile(db, targetUsername, profile)
-    await saveTweets(db, targetUsername, allTweets)
+    
+    // Create user profile
+    const dbUser: Partial<DBUser> = {
+      username: targetUsername,
+      profile_data: {
+        bio: profile.bio || undefined,
+        followersCount: profile.followersCount || undefined,
+        followingCount: profile.followingCount || undefined
+      },
+      profile_picture_url: profile.imageUrl || undefined,
+      created_at: new Date()
+    }
+    
+    // Save user profile
+    await db.saveUserProfile(targetUsername, dbUser)
+    
+    // Get user to get the ID
+    const user = await db.getUserByUsername(targetUsername)
+    if (!user) {
+      throw new Error('Failed to create user profile')
+    }
+    
+    // Convert tweets to database format
+    const dbTweets = allTweets.map(tweet => ({
+      id: tweet.id,
+      user_id: user.id,
+      text: tweet.text,
+      created_at: new Date(tweet.timestamp),
+      url: tweet.url,
+      is_reply: tweet.isReply,
+      metadata: {
+        metrics: {
+          likes: tweet.metrics.likes || undefined,
+          retweets: tweet.metrics.retweets || undefined,
+          replies: tweet.metrics.views || undefined
+        },
+        images: tweet.images
+      },
+      created_in_db: new Date()
+    }))
+    
+    // Save tweets
+    await db.saveTweets(user.id, dbTweets)
     console.log('Tweets saved to database')
 
     // Send progress update
@@ -233,9 +275,7 @@ async function runScraper() {
     // Clean up database if needed
     if (db) {
       try {
-        // Roll back any incomplete operations
-        await db.exec('ROLLBACK')
-        await db.close()
+        await db.disconnect()
       } catch (dbError) {
         console.error('Failed to cleanup database:', dbError)
       }

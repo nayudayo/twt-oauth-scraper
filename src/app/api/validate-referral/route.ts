@@ -1,141 +1,71 @@
-import { NextResponse } from 'next/server'
-import { initDB, validateReferralCode, trackReferralUse } from '@/lib/db'
-import { getServerSession } from 'next-auth'
-import { isValidReferralCode, normalizeReferralCode } from '@/utils/referral'
+import { NextRequest, NextResponse } from 'next/server'
+import { initDB } from '@/lib/db/index'
 
 // POST /api/validate-referral
-export async function POST(request: Request) {
-  let db;
+export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession()
-    if (!session?.user) {
-      console.log('Unauthorized: No session user')
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const body = await request.json()
+    const body = await req.json()
     const { userId, referralCode } = body
 
-    console.log('Received validation request:', {
-      userId,
-      referralCode,
-      sessionUser: session.user.name
-    })
-
     if (!userId || !referralCode) {
-      console.log('Invalid request body:', { userId, referralCode })
-      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+      return NextResponse.json({ error: 'User ID and referral code are required' }, { status: 400 })
     }
 
-    // Verify the user is submitting their own referral
-    if (userId !== session.user.name) {
-      console.log('Unauthorized: User ID mismatch', {
-        requestUserId: userId,
-        sessionUserId: session.user.name
-      })
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // First validate the format
-    if (!isValidReferralCode(referralCode)) {
-      console.log('Invalid referral code format:', referralCode)
-      return NextResponse.json({ 
-        error: 'Invalid referral code format',
-        details: 'Code must be in format PUSH-XXXX-YYYY or NO'
-      }, { status: 400 })
-    }
-
-    // Special case for "NO" referral code
-    const normalizedCode = normalizeReferralCode(referralCode)
-    if (normalizedCode === 'NO') {
-      console.log('NO referral code submitted')
+    // Special case for "NO"
+    if (referralCode.toUpperCase() === 'NO') {
       return NextResponse.json({ success: true })
     }
 
-    console.log('Validating referral code:', { 
-      original: referralCode,
-      normalized: normalizedCode,
-      userId 
-    })
+    const db = await initDB()
 
-    db = await initDB()
+    // First validate the code exists in database
+    const isValid = await db.validateReferralCode(referralCode)
+    if (!isValid) {
+      return NextResponse.json({ error: 'Invalid referral code' }, { status: 400 })
+    }
 
-    // Start transaction
-    await db.run('BEGIN TRANSACTION')
+    // Get referral code details
+    const referralCodes = await db.getReferralStats(userId)
+    const code = referralCodes.codes.find(c => c.code === referralCode)
+    if (!code) {
+      return NextResponse.json({ error: 'Referral code not found' }, { status: 400 })
+    }
+
+    // Prevent self-referral
+    if (code.owner_user_id === userId) {
+      return NextResponse.json({ error: 'Cannot use your own referral code' }, { status: 400 })
+    }
 
     try {
-      // Check if user exists in database
-      const user = await db.get('SELECT id FROM users WHERE username = ?', userId)
-      let userIdForTracking = user?.id
-
-      if (!user) {
-        // Create user if they don't exist
-        const newUserId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
-        await db.run(`
-          INSERT INTO users (id, username)
-          VALUES (?, ?)
-        `, newUserId, userId)
-        console.log('Created new user:', { userId: newUserId, username: userId })
-        userIdForTracking = newUserId
-      }
-
-      const isValid = await validateReferralCode(db, normalizedCode)
-
-      if (!isValid) {
-        console.log('Invalid referral code:', {
-          code: normalizedCode,
-          userId
-        })
-        await db.run('ROLLBACK')
-        return NextResponse.json({ 
-          error: 'Invalid referral code',
-          details: 'Code does not exist in the system'
-        }, { status: 400 })
-      }
-
-      console.log('Valid referral code, tracking usage:', {
-        code: normalizedCode,
-        userId: userIdForTracking
+      // Track the usage in a transaction
+      await db.trackReferralUse({
+        id: 0, // Will be auto-generated
+        referral_code: referralCode,
+        referrer_user_id: code.owner_user_id,
+        referred_user_id: userId,
+        used_at: new Date()
       })
 
-      // Track the referral code usage
-      const tracked = await trackReferralUse(db, normalizedCode, userIdForTracking)
-      if (!tracked) {
-        console.log('Failed to track referral usage:', {
-          code: normalizedCode,
-          userId: userIdForTracking
-        })
-        await db.run('ROLLBACK')
-        return NextResponse.json({ 
-          error: 'Failed to track referral usage',
-          details: 'Database error while tracking usage'
-        }, { status: 500 })
-      }
-
-      await db.run('COMMIT')
-
-      console.log('Successfully validated and tracked referral code:', {
-        code: normalizedCode,
-        userId: userIdForTracking
+      // Also log the usage
+      await db.logReferralUsage({
+        id: 0, // Will be auto-generated
+        referral_code: referralCode,
+        used_by_user_id: userId,
+        used_at: new Date()
       })
 
       return NextResponse.json({ success: true })
     } catch (error) {
-      console.error('Error in transaction:', error)
-      await db.run('ROLLBACK')
-      throw error
+      console.error('Failed to track referral usage:', error)
+      return NextResponse.json({ 
+        error: 'Failed to track referral usage',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }, { status: 500 })
     }
   } catch (error) {
-    console.error('Error validating referral code:', error)
-    if (db) {
-      try {
-        await db.run('ROLLBACK')
-      } catch (rollbackError) {
-        console.error('Error rolling back transaction:', rollbackError)
-      }
-    }
+    console.error('Failed to validate referral code:', error)
     return NextResponse.json({ 
-      error: 'Internal server error',
+      error: 'Failed to validate referral code',
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 })
   }

@@ -1,4 +1,5 @@
-import { initDB } from './db'
+import { initDB } from './db/index'
+import { DBTweet } from './db/adapters/types'
 
 interface Tweet {
   id: string;
@@ -92,49 +93,32 @@ class DatabaseQueue {
       
       const db = await initDB();
       
-      // Get user ID first
-      const user = await db.get('SELECT id FROM users WHERE username = ?', item.username);
+      // Get user by username
+      const user = await db.getUserByUsername(item.username);
       
       if (!user) {
         throw new Error('User not found');
       }
 
-      // Start transaction
-      await db.run('BEGIN TRANSACTION');
+      // Use transaction to ensure atomic operation
+      await db.transaction(async () => {
+        // Convert tweets to database format
+        const dbTweets: DBTweet[] = item.tweets.map(tweet => ({
+          id: tweet.id,
+          user_id: user.id,
+          text: tweet.text,
+          created_at: new Date(tweet.timestamp),
+          url: tweet.url,
+          is_reply: tweet.isReply || false,
+          metadata: tweet.metadata || {},
+          created_in_db: new Date()
+        }));
 
-      try {
-        const stmt = await db.prepare(`
-          INSERT OR REPLACE INTO tweets (
-            id,
-            user_id,
-            text,
-            created_at,
-            url,
-            is_reply,
-            metadata
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        `);
-
-        for (const tweet of item.tweets) {
-          await stmt.run([
-            tweet.id,
-            user.id,
-            tweet.text,
-            tweet.timestamp,
-            tweet.url || null,
-            tweet.isReply || false,
-            tweet.metadata ? JSON.stringify(tweet.metadata) : null
-          ]);
-        }
-
-        await stmt.finalize();
-        await db.run('COMMIT');
+        // Save tweets in batch
+        await db.saveTweets(user.id, dbTweets);
         
         console.log(`Successfully processed item ${item.id}`);
-      } catch (error) {
-        await db.run('ROLLBACK');
-        throw error;
-      }
+      });
     } catch (error) {
       console.error(`Error processing item ${item.id}:`, error);
       

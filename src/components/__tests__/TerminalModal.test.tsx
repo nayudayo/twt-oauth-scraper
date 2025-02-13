@@ -153,7 +153,6 @@ describe('TerminalModal', () => {
     const input = screen.getByRole('textbox')
     const commandInputs = [
       'join_telegram',
-      'verify_telegram',
       'sol_wallet F7AniHYnsdX6uGnntoSGfUmouZg4fnWp5ea',
       'refer',
       'submit_referral NO',
@@ -303,7 +302,6 @@ describe('TerminalModal', () => {
     const input = screen.getByRole('textbox')
     const commandInputs = [
       'join_telegram',
-      'verify_telegram',
       'sol_wallet F7AniHYnsdX6uGnntoSGfUmouZg4fnWp5ea',
       'refer',
       'submit_referral NO',
@@ -457,7 +455,6 @@ describe('TerminalModal', () => {
     const input = screen.getByRole('textbox')
     const commandInputs = [
       'join_telegram',
-      'verify_telegram',
       'sol_wallet F7AniHYnsdX6uGnntoSGfUmouZg4fnWp5ea',
       'refer',
       'submit_referral NO',
@@ -630,7 +627,7 @@ describe('TerminalModal', () => {
         json: () => Promise.resolve({
           progress: {
             current_command_index: 2, // SOL_WALLET index
-            completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM']
+            completed_commands: ['JOIN_TELEGRAM']
           },
           completion: null
         })
@@ -683,7 +680,7 @@ describe('TerminalModal', () => {
         json: () => Promise.resolve({
           progress: {
             current_command_index: 4, // SUBMIT_REFERRAL index
-            completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM', 'SOL_WALLET', 'REFER']
+            completed_commands: ['JOIN_TELEGRAM', 'SOL_WALLET', 'REFER']
           },
           completion: null
         })
@@ -732,7 +729,7 @@ describe('TerminalModal', () => {
         json: () => Promise.resolve({
           progress: {
             current_command_index: 4, // SUBMIT_REFERRAL index
-            completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM', 'SOL_WALLET', 'REFER']
+            completed_commands: ['JOIN_TELEGRAM', 'SOL_WALLET', 'REFER']
           },
           completion: null
         })
@@ -819,7 +816,7 @@ describe('TerminalModal Command Tests', () => {
           json: () => Promise.resolve({
             progress: {
               current_command_index: 2, // SOL_WALLET index
-              completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM']
+              completed_commands: ['JOIN_TELEGRAM']
             },
             completion: null
           })
@@ -880,7 +877,7 @@ describe('TerminalModal Command Tests', () => {
           json: () => Promise.resolve({
             progress: {
               current_command_index: 3, // REFER
-              completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM', 'SOL_WALLET']
+              completed_commands: ['JOIN_TELEGRAM', 'SOL_WALLET']
             },
             completion: null
           })
@@ -917,7 +914,7 @@ describe('TerminalModal Command Tests', () => {
           json: () => Promise.resolve({
             progress: {
               current_command_index: 4, // SUBMIT_REFERRAL
-              completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM', 'SOL_WALLET', 'REFER']
+              completed_commands: ['JOIN_TELEGRAM', 'SOL_WALLET', 'REFER']
             },
             completion: null
           })
@@ -1033,7 +1030,7 @@ describe('TerminalModal Command Tests', () => {
           json: () => Promise.resolve({
             progress: {
               current_command_index: 5, // GENERATE_REFERRAL
-              completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM', 'SOL_WALLET', 'REFER', 'SUBMIT_REFERRAL']
+              completed_commands: ['JOIN_TELEGRAM', 'SOL_WALLET', 'REFER', 'SUBMIT_REFERRAL']
             },
             completion: null
           })
@@ -1131,7 +1128,7 @@ describe('Edge Cases and Error Handling', () => {
           json: () => Promise.resolve({
             progress: {
               current_command_index: 4, // SUBMIT_REFERRAL index
-              completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM', 'SOL_WALLET', 'REFER']
+              completed_commands: ['JOIN_TELEGRAM', 'SOL_WALLET', 'REFER']
             },
             completion: null
           })
@@ -1201,7 +1198,7 @@ describe('Edge Cases and Error Handling', () => {
           json: () => Promise.resolve({
             progress: {
               current_command_index: 4, // SUBMIT_REFERRAL index
-              completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM', 'SOL_WALLET', 'REFER']
+              completed_commands: ['JOIN_TELEGRAM', 'SOL_WALLET', 'REFER']
             },
             completion: null
           })
@@ -1238,7 +1235,7 @@ describe('Edge Cases and Error Handling', () => {
           json: () => Promise.resolve({
             progress: {
               current_command_index: 2, // SOL_WALLET index
-              completed_commands: ['JOIN_TELEGRAM', 'VERIFY_TELEGRAM']
+              completed_commands: ['JOIN_TELEGRAM']
             },
             completion: null
           })

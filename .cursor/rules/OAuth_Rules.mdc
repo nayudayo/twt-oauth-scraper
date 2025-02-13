@@ -1,8 +1,4 @@
----
-description: 
-globs: 
----
- # OAuth Integration Rules
+# OAuth Integration Rules
 
 ## Overview
 - This module handles secure Twitter OAuth authentication for the application.
@@ -27,4 +23,4 @@ globs:
 
 ## Testing & Maintenance
 - Write unit and integration tests specifically for the OAuth flow.
-- Regularly audit the OAuth implementation for potential vulnerabilities.
+- Regularly audit the OAuth implementation for potential vulnerabilities. 

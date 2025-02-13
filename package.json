@@ -13,7 +13,8 @@
     "test-db": "tsx src/scripts/test-db.ts",
     "postinstall": "bash scripts/setup-db.sh",
     "check-db": "bash scripts/check-db-permissions.sh",
-    "inspect-db": "tsx scripts/check-db.ts"
+    "inspect-db": "tsx scripts/check-db.ts",
+    "purge-db": "tsx src/scripts/purge-db.ts"
   },
   "dependencies": {
     "@auth/core": "^0.37.4",
@@ -25,6 +26,7 @@
     "clsx": "^2.1.1",
     "dotenv": "^16.4.7",
     "framer-motion": "^12.1.0",
+    "html-to-image": "^1.11.11",
     "html2canvas": "^1.4.1",
     "ioredis": "^5.4.2",
     "lucide-react": "^0.473.0",

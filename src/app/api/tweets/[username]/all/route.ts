@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { initDB } from '@/lib/db'
+import { initDB } from '@/lib/db/index'
+import type { DBTweet } from '@/lib/db/adapters/types'
+import { getServerSession } from 'next-auth'
 
 export async function GET(req: NextRequest) {
   try {
     console.log('GET /api/tweets/[username]/all called')
-    // Get username from URL instead of params
     const url = new URL(req.url)
     const pathParts = url.pathname.split('/')
-    const username = pathParts[pathParts.length - 2] // Get username from path
+    const username = pathParts[pathParts.length - 2]
     console.log('Fetching tweets for username:', username)
     
     // Validate username parameter
@@ -22,41 +23,59 @@ export async function GET(req: NextRequest) {
     const db = await initDB()
     console.log('Database initialized')
 
-    // Get user ID first, create if doesn't exist
-    let user = await db.get('SELECT id FROM users WHERE username = ?', username)
-    console.log('User found:', user ? 'yes' : 'no')
+    // Try to find user by OAuth username first
+    let user = await db.getUserByUsername(username)
+    console.log('User found by OAuth username:', user ? 'yes' : 'no')
     
     if (!user) {
-      // Create a basic user record if it doesn't exist
-      const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
-      await db.run(
-        `INSERT INTO users (id, username) VALUES (?, ?)`,
-        [userId, username]
-      )
-      user = { id: userId }
-      console.log('Created new user with ID:', userId)
+      // If not found, try to find by Twitter username
+      user = await db.getUserByTwitterUsername(username)
+      console.log('User found by Twitter username:', user ? 'yes' : 'no')
+    } else {
+      // If found by OAuth username, check if they have a Twitter username and get that user instead
+      if (user.twitter_username) {
+        const twitterUser = await db.getUserByTwitterUsername(user.twitter_username)
+        if (twitterUser) {
+          console.log('Found user by linked Twitter username:', twitterUser.twitter_username)
+          user = twitterUser
+        }
+      }
+    }
+    
+    if (!user) {
+      // Create new user only if this is the authenticated user's request
+      const session = await getServerSession()
+      if (session?.user?.name === username) {
+        user = await db.createUser({
+          username: username,
+          twitter_username: undefined, // Will be set when tweets are scraped
+          created_at: new Date()
+        })
+        console.log('Created new user with ID:', user.id)
+      } else {
+        return NextResponse.json(
+          { error: 'User not found' },
+          { status: 404 }
+        )
+      }
     }
 
-    // Fetch all tweets for this user, ordered by timestamp
-    const tweets = await db.all(`
-      SELECT 
-        t.id,
-        t.text,
-        t.created_at as timestamp,
-        t.url,
-        t.is_reply as isReply,
-        t.metadata
-      FROM tweets t
-      WHERE t.user_id = ?
-      ORDER BY t.created_at DESC
-    `, user.id)
+    // Fetch tweets using the user's ID
+    const tweets = await db.getTweetsByUserId(user.id, {
+      limit: 1000,
+      includeReplies: true
+    })
 
     console.log('Found tweets:', tweets.length)
 
-    // Parse metadata JSON if it exists
-    const processedTweets = tweets.map(tweet => ({
-      ...tweet,
-      metadata: tweet.metadata ? JSON.parse(tweet.metadata) : null
+    // Process tweets - metadata is already parsed by the PostgreSQL adapter
+    const processedTweets = tweets.map((tweet: DBTweet) => ({
+      id: tweet.id,
+      text: tweet.text,
+      timestamp: tweet.created_at,
+      url: tweet.url,
+      isReply: tweet.is_reply,
+      metadata: tweet.metadata
     }))
 
     console.log('Returning processed tweets:', processedTweets.length)

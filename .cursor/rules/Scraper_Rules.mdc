@@ -1,8 +1,4 @@
----
-description: 
-globs: 
----
- # Twitter Scraper Rules
+# Twitter Scraper Rules
 
 ## Overview
 - This component is responsible for scraping Twitter profiles and related data.
@@ -22,4 +18,4 @@ globs:
 
 ## Legal & Ethical Guidelines
 - Do not violate Twitter's terms of service during scraping.
-- Respect user privacy by only accessing publicly available data.
+- Respect user privacy by only accessing publicly available data. 

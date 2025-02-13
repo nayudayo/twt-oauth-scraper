@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { initDB } from '@/lib/db'
+import { initDB } from '@/lib/db/index'
 
 export async function DELETE(request: NextRequest) {
   try {
@@ -14,8 +14,8 @@ export async function DELETE(request: NextRequest) {
 
     const db = await initDB()
 
-    // Get user ID first
-    const user = await db.get('SELECT id FROM users WHERE username = ?', username)
+    // Get user by username
+    const user = await db.getUserByUsername(username)
     
     if (!user) {
       return NextResponse.json(
@@ -24,18 +24,18 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // Delete all tweets for this user
-    await db.run('DELETE FROM tweets WHERE user_id = ?', user.id)
-
-    // Delete user profile data but keep the user record
-    await db.run(
-      `UPDATE users 
-       SET profile_data = NULL, 
-           profile_picture_url = NULL, 
-           last_scraped = NULL 
-       WHERE id = ?`, 
-      user.id
-    )
+    // Use transaction to ensure both operations complete or neither does
+    await db.transaction(async () => {
+      // Delete all tweets for this user
+      await db.saveTweets(user.id, []) // Empty array to clear tweets
+      
+      // Update user profile to clear data
+      await db.updateUser(user.id, {
+        profile_data: {},
+        profile_picture_url: undefined,
+        last_scraped: undefined
+      })
+    })
 
     return NextResponse.json({ success: true })
 

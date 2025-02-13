@@ -118,7 +118,7 @@ export default function Home() {
         <ChatBox
           tweets={tweets}
           profile={{
-            name: session?.user?.name || null,
+            name: session?.username || null,
             imageUrl: session?.user?.image || null,
             bio: null,
             followersCount: null,

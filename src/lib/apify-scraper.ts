@@ -1,13 +1,15 @@
 import { ApifyClient } from 'apify-client';
 import * as dotenv from 'dotenv';
-import { initDB, saveTweets, saveUserProfile } from './db';
+import { initDB } from './db/index';
 import { ApifyTweet } from '@/types/apify';
-import { Tweet, TwitterProfile } from '@/types/scraper';
+import { TwitterProfile } from '@/types/scraper';
+import { DBTweet, DBUser } from './db/adapters/types';
 
-// Load environment variables
-dotenv.config({ path: '.env.local' });
+// Load environment variables from both files
+dotenv.config({ path: '.env' });  // Load main .env first
+dotenv.config({ path: '.env.local', override: true });  // Then load .env.local with override
 
-// Initialize the ApifyClient with API token
+// Initialize Apify client
 const client = new ApifyClient({
     token: process.env.APIFY_API_TOKEN,
 });
@@ -107,21 +109,40 @@ async function getAllTweets(username: string): Promise<ApifyTweet[]> {
     return allTweets;
 }
 
-// Convert Apify tweet to database tweet format
-function convertTweetFormat(tweet: ApifyTweet): Tweet {
+interface TweetMetrics {
+    likes?: number;
+    retweets?: number;
+    replies?: number;
+}
+
+function convertTweetFormat(tweet: ApifyTweet): DBTweet {
+    const timestamp = typeof tweet.timestamp === 'string' ? new Date(tweet.timestamp) : 
+                     typeof tweet.timestamp === 'number' ? new Date(tweet.timestamp) :
+                     new Date();
+
+    const metrics = typeof tweet.metrics === 'object' && tweet.metrics ? tweet.metrics as TweetMetrics : {};
+    const images = Array.isArray(tweet.images) ? tweet.images : [];
+    const url = typeof tweet.url === 'string' ? tweet.url : undefined;
+    const text = typeof tweet.text === 'string' ? tweet.text : '';
+    const id = typeof tweet.id === 'string' ? tweet.id : String(tweet.id || Date.now());
+    const userId = typeof tweet.userId === 'string' ? tweet.userId : String(tweet.userId || 'unknown');
+
     return {
-        id: tweet.id,
-        url: tweet.url,
-        text: tweet.text,
-        createdAt: tweet.createdAt,
-        timestamp: tweet.createdAt,
-        isReply: tweet.isReply || false,
-        metrics: {
-            likes: null,
-            retweets: null,
-            views: null
+        id,
+        user_id: userId,
+        text,
+        created_at: timestamp,
+        url,
+        is_reply: Boolean(tweet.isReply),
+        metadata: {
+            metrics: {
+                likes: metrics.likes,
+                retweets: metrics.retweets,
+                replies: metrics.replies
+            },
+            images: images.filter((img): img is string => typeof img === 'string')
         },
-        images: []
+        created_in_db: new Date()
     };
 }
 
@@ -133,16 +154,13 @@ export async function scrapeTweetsForUser(username: string) {
         // Initialize database
         const db = await initDB();
         
-        // Convert tweets to database format
-        const tweets = apifyTweets.map(convertTweetFormat);
-        
-        // Create profile
+        // Create profile first
         const profile: TwitterProfile = {
             name: username,
             bio: null,
             followersCount: null,
             followingCount: null,
-            imageUrl: null // Add profile picture URL field
+            imageUrl: null
         };
         
         // Get profile picture URL from Apify data if available
@@ -150,11 +168,50 @@ export async function scrapeTweetsForUser(username: string) {
             profile.imageUrl = apifyTweets[0].profilePicture;
         }
         
-        // Save user profile
-        await saveUserProfile(db, username, profile);
+        // Save user profile first and wait for it to complete
+        console.log('Creating user profile...');
+        const dbUser: Partial<DBUser> = {
+            username: username,
+            twitter_username: username, // Set Twitter username to the actual Twitter username
+            profile_data: {
+                bio: profile.bio || undefined,
+                followersCount: profile.followersCount || undefined,
+                followingCount: profile.followingCount || undefined
+            },
+            profile_picture_url: profile.imageUrl || undefined,
+            created_at: new Date()
+        };
         
-        // Save tweets to database
-        await saveTweets(db, username, tweets);
+        // First try to find existing user by OAuth username
+        const existingUser = await db.getUserByUsername(username);
+        if (existingUser) {
+            // Update existing user with Twitter username
+            await db.updateUser(existingUser.id, {
+                twitter_username: username,
+                profile_data: dbUser.profile_data,
+                profile_picture_url: dbUser.profile_picture_url
+            });
+            console.log('Updated existing user with Twitter username');
+        } else {
+            // Create new user
+            await db.saveUserProfile(username, dbUser);
+            console.log('Created new user profile');
+        }
+        
+        // Get the user's database ID
+        const user = await db.getUserByUsername(username);
+        if (!user) {
+            throw new Error('Failed to retrieve user after creation');
+        }
+        
+        // Then convert and save tweets with the correct user ID
+        console.log('Converting and saving tweets...');
+        const tweets = apifyTweets.map(tweet => ({
+            ...convertTweetFormat(tweet),
+            user_id: user.id  // Use the actual database user ID
+        }));
+        
+        await db.saveTweets(username, tweets);
         
         console.log(`Successfully saved ${tweets.length} tweets for user ${username} to database`);
         return tweets;

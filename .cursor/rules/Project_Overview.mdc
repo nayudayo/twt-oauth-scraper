@@ -1,8 +1,4 @@
----
-description: 
-globs: 
----
- # Project Overview: twt-oauth-scraper
+# Project Overview: twt-oauth-scraper
 
 ## Description
 - This project integrates Twitter OAuth authentication with Twitter scraping capabilities, personality analysis using OpenAI, and a chat API to generate responses mimicking a Twitter user's personality.
@@ -22,7 +18,7 @@ globs:
 
 4. OpenAI Integration
    - Interacts with the OpenAI API to generate chat responses based on personality analysis and tuning inputs.
-   - Constructs dynamic system prompts to reflect the user’s personality and communication style.
+   - Constructs dynamic system prompts to reflect the user's personality and communication style.
 
 ## Technology Stack
 - Next.js for server-side API routes
@@ -44,4 +40,4 @@ globs:
 ## Development Best Practices
 - Keep code changes minimal and well-documented.
 - Validate inputs and ensure proper error handling.
-- Modularize documentation to align with respective components for easier maintenance.
+- Modularize documentation to align with respective components for easier maintenance. 
