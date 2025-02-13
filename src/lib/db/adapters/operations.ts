@@ -113,11 +113,12 @@ export interface FunnelOperations {
 export interface ReferralOperations {
   // Create operations
   createReferralCode(code: DBReferralCode): Promise<void>;
+  validateReferralCode(code: string): Promise<boolean>;
+  getReferralCodeDetails(code: string): Promise<DBReferralCode | null>;
   trackReferralUse(tracking: DBReferralTracking): Promise<void>;
   logReferralUsage(usage: DBReferralUsage): Promise<void>;
   
   // Read operations
-  validateReferralCode(code: string): Promise<boolean>;
   getReferralStats(userId: string): Promise<{
     codes: DBReferralCode[];
     usages: DBReferralUsage[];

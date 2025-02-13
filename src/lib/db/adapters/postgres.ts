@@ -290,23 +290,27 @@ export class PostgresAdapter implements DatabaseAdapter {
   }
 
   // Referral operations
-  createReferralCode(code: DBReferralCode): Promise<void> {
+  async getReferralCodeDetails(code: string): Promise<DBReferralCode | null> {
+    return this.referralOperations.getReferralCodeDetails(code);
+  }
+
+  async createReferralCode(code: DBReferralCode): Promise<void> {
     return this.referralOperations.createReferralCode(code);
   }
 
-  validateReferralCode(code: string): Promise<boolean> {
+  async validateReferralCode(code: string): Promise<boolean> {
     return this.referralOperations.validateReferralCode(code);
   }
 
-  trackReferralUse(tracking: DBReferralTracking): Promise<void> {
+  async trackReferralUse(tracking: DBReferralTracking): Promise<void> {
     return this.referralOperations.trackReferralUse(tracking);
   }
 
-  logReferralUsage(usage: DBReferralUsage): Promise<void> {
+  async logReferralUsage(usage: DBReferralUsage): Promise<void> {
     return this.referralOperations.logReferralUsage(usage);
   }
 
-  getReferralStats(userId: string): Promise<{
+  async getReferralStats(userId: string): Promise<{
     codes: DBReferralCode[];
     usages: DBReferralUsage[];
     totalUses: number;
@@ -314,18 +318,18 @@ export class PostgresAdapter implements DatabaseAdapter {
     return this.referralOperations.getReferralStats(userId);
   }
 
-  getReferralHistory(userId: string): Promise<{
+  async getReferralHistory(userId: string): Promise<{
     referred: DBReferralTracking[];
     referredBy: DBReferralTracking | null;
   }> {
     return this.referralOperations.getReferralHistory(userId);
   }
 
-  incrementReferralUses(code: string): Promise<void> {
+  async incrementReferralUses(code: string): Promise<void> {
     return this.referralOperations.incrementReferralUses(code);
   }
 
-  getTopReferrers(limit?: number): Promise<Array<{
+  async getTopReferrers(limit?: number): Promise<Array<{
     userId: string;
     totalReferrals: number;
   }>> {
