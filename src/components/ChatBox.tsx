@@ -830,7 +830,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   return (
     <>
       {/* Main Container - Mobile First Layout */}
-      <div className="flex flex-col md:hidden w-full min-h-screen pt-16 px-4 pb-4 gap-4">
+      <div className="flex flex-col md:hidden w-full min-h-screen pt-20 px-4 pb-6 gap-4">
         {/* Chat Interface */}
         <div className="w-full backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow ancient-border rune-pattern overflow-hidden">
           <div className="flex flex-col min-h-[50vh]">
@@ -1322,7 +1322,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     ))}
                   </div>
                 </div>
-
+                
                 {/* Communication Style Section */}
                 <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
@@ -1515,7 +1515,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       {/* Desktop Layout - Preserve Existing */}
       <div className="hidden md:block">
       {/* Left Side Panels Container */}
-        <div className="fixed top-16 left-0 md:left-4 flex flex-col gap-4 h-[calc(100vh-84px)] w-[30vw] min-w-[300px] max-w-[480px] px-4 md:px-0 overflow-y-auto md:overflow-visible transition-all duration-300">
+        <div className="fixed top-20 left-0 md:left-4 flex flex-col gap-4 h-[calc(100vh-104px)] w-[30vw] min-w-[300px] max-w-[480px] px-4 md:px-0 overflow-y-auto md:overflow-visible transition-all duration-300">
         {/* System Controls Panel */}
           <div className="w-full bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
             <div className="flex-none border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
@@ -1807,7 +1807,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       </div>
 
         {/* Right Side Panels Container */}
-        <div className="fixed top-16 right-0 md:right-4 h-[calc(100vh-84px)] w-[30vw] min-w-[300px] max-w-[480px] flex flex-col gap-4 px-4 md:px-0 overflow-y-auto md:overflow-visible transition-all duration-300">
+        <div className="fixed top-20 right-0 md:right-4 h-[calc(100vh-104px)] w-[30vw] min-w-[300px] max-w-[480px] flex flex-col gap-4 px-4 md:px-0 overflow-y-auto md:overflow-visible transition-all duration-300">
           {/* Archives Panel - Top Half */}
           <div className="h-[calc(50%-2px)] min-h-[300px] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
             <div className="flex-none flex items-center px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 cryptic-shadow">
@@ -2087,8 +2087,8 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       </div>
 
         {/* Main Chat Interface Container */}
-      <div className="fixed inset-0 flex items-center justify-center pointer-events-none pt-16">
-          <div className="w-[47vw] min-w-[400px] max-w-[1080px] h-[calc(100vh-84px)] mx-auto mb-4 backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow pointer-events-auto z-10 ancient-border rune-pattern overflow-hidden transition-all duration-300">
+      <div className="fixed inset-0 flex items-center justify-center pointer-events-none pt-20 pb-6">
+          <div className="w-[47vw] min-w-[400px] max-w-[1080px] h-[calc(100vh-104px)] mx-auto backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow pointer-events-auto z-10 ancient-border rune-pattern overflow-hidden transition-all duration-300">
             <div className="flex flex-col h-full min-h-0">
             {/* Chat Header */}
               <div className="flex-none flex items-center justify-between px-4 md:px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 rounded-t-lg cryptic-shadow">
