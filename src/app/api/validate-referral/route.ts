@@ -87,12 +87,23 @@ export async function POST(req: NextRequest) {
         }, { status: 400 })
       }
 
+      // Ensure user exists in database
+      let user = await db.getUserByUsername(userId)
+      if (!user) {
+        // Create the user if they don't exist
+        user = await db.createUser({
+          username: userId,
+          created_at: new Date()
+        })
+        console.log('Created new user for referral:', user)
+      }
+
       // Track the usage in a transaction
       await db.trackReferralUse({
         id: 0, // Auto-generated
         referral_code: referralCode,
         referrer_user_id: codeDetails.owner_user_id,
-        referred_user_id: userId,
+        referred_user_id: user.id, // Use the user.id instead of userId
         used_at: new Date()
       })
 
@@ -100,13 +111,13 @@ export async function POST(req: NextRequest) {
       await db.logReferralUsage({
         id: 0, // Auto-generated
         referral_code: referralCode,
-        used_by_user_id: userId,
+        used_by_user_id: user.id, // Use the user.id instead of userId
         used_at: new Date()
       })
 
       console.log('Successfully validated and tracked referral:', {
         referralCode,
-        userId,
+        userId: user.id,
         referrerId: codeDetails.owner_user_id
       })
 

@@ -62,5 +62,29 @@ export const authOptions: AuthOptions = {
       return session
     },
   },
+  events: {
+    async signOut({ token }) {
+      // Clear any server-side session data if needed
+      if (token?.accessToken) {
+        try {
+          await fetch('https://api.twitter.com/2/oauth2/revoke', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Authorization': `Basic ${Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString('base64')}`
+            },
+            body: `token=${token.accessToken}&token_type_hint=access_token`
+          })
+        } catch (error) {
+          console.error('Failed to revoke token during signOut event:', error)
+        }
+      }
+    }
+  },
+  // Set short session lifetime
+  session: {
+    maxAge: 24 * 60 * 60, // 24 hours
+    updateAge: 60 * 60, // Update session every hour
+  },
   debug: true,
 } 

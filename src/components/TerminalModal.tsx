@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { REQUIRED_COMMANDS, HELP_MESSAGE } from '@/constants/commands'
 import { SYSTEM_MESSAGES } from '@/constants/messages'
 import { useSession } from 'next-auth/react'
-import { extractReferralResponse, generateReferralCode } from '@/utils/referral'
+import { extractReferralResponse } from '@/utils/referral'
 import Image from 'next/image'
 import { toPng } from 'html-to-image'
 
@@ -385,18 +385,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
             return
           }
 
-          // Use the stored wallet address directly (no need to split)
-          const walletAddress = commandResponses['SOL_WALLET'] || ''
-          const referralCode = generateReferralCode(username, walletAddress)
-          
-          // Store the generated code in command responses
-          const updatedResponses = {
-            ...commandResponses,
-            'GENERATE_REFERRAL': referralCode
-          }
-          setCommandResponses(updatedResponses)
-          
-          // Store the referral code in the database
+          // Request referral code from the API
           try {
             const response = await fetch('/api/referral-code', {
               method: 'POST',
@@ -404,23 +393,32 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                userId: username,
-                referralCode: referralCode
+                userId: username
               }),
               credentials: 'include'
             })
 
             if (!response.ok) {
               const errorData = await response.json().catch(() => ({}))
-              throw new Error(errorData.error || 'Failed to store referral code')
+              throw new Error(errorData.error || 'Failed to generate referral code')
             }
 
+            const data = await response.json()
+            const generatedCode = data.referralCode
+
+            // Store the generated code in command responses
+            const updatedResponses = {
+              ...commandResponses,
+              'GENERATE_REFERRAL': generatedCode
+            }
+            setCommandResponses(updatedResponses)
+
             newLines.push({
-              content: `[SUCCESS] Your unique referral code has been generated:\n\n${referralCode}\n\nShare this code with others to earn rewards!`,
+              content: `[SUCCESS] Your unique referral code has been generated:\n\n${generatedCode}\n\nShare this code with others to earn rewards!`,
               isSuccess: true
             })
           } catch (error) {
-            console.error('Failed to store referral code:', error)
+            console.error('Failed to generate referral code:', error)
             newLines.push({
               content: '[ERROR] Failed to generate referral code. Please try again.',
               isError: true

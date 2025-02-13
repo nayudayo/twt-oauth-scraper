@@ -54,10 +54,28 @@ export default function Home() {
 
   // Handle session termination
   const handleTerminateSession = async () => {
+    try {
+      // First revoke the Twitter OAuth token
+      await fetch('/api/auth/revoke', {
+        method: 'POST',
+        credentials: 'include'
+      })
+    } catch (error) {
+      console.error('Failed to revoke token:', error)
+      // Continue with logout even if revocation fails
+    }
+
+    // Sign out from NextAuth
     await signOut({ redirect: false })
+    
+    // Clear local state
     setTerminalComplete(false)
     setShowContent(false)
     setTweets([])
+
+    // Clear any cached data
+    localStorage.removeItem('twitter-oauth-state')
+    sessionStorage.clear()
   }
 
   // Handle tweet updates
