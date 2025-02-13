@@ -1,69 +1,128 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { initDB } from '@/lib/db/index'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth/config'
 
 // POST /api/validate-referral
 export async function POST(req: NextRequest) {
   try {
+    // Get and validate session
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      console.error('No session found')
+      return NextResponse.json({ error: 'Unauthorized - Please sign in' }, { status: 401 })
+    }
+
+    // Ensure username is available
+    const sessionUsername = session.username || session.user.name
+    if (!sessionUsername) {
+      console.error('No username in session:', { session })
+      return NextResponse.json({ error: 'Unauthorized - No username found' }, { status: 401 })
+    }
+
     const body = await req.json()
     const { userId, referralCode } = body
 
     if (!userId || !referralCode) {
-      return NextResponse.json({ error: 'User ID and referral code are required' }, { status: 400 })
+      console.error('Missing required fields:', { userId, referralCode })
+      return NextResponse.json({ 
+        error: 'Missing required fields',
+        details: {
+          userId: !userId ? 'User ID is required' : null,
+          referralCode: !referralCode ? 'Referral code is required' : null
+        }
+      }, { status: 400 })
+    }
+
+    // Verify the user is submitting for themselves
+    if (userId !== sessionUsername) {
+      console.error('User mismatch:', { sessionUsername, userId })
+      return NextResponse.json({ error: 'Unauthorized - Cannot submit for another user' }, { status: 401 })
     }
 
     // Special case for "NO"
     if (referralCode.toUpperCase() === 'NO') {
-      return NextResponse.json({ success: true })
+      return NextResponse.json({ 
+        success: true,
+        message: 'No referral code used'
+      })
     }
 
     const db = await initDB()
 
-    // First validate the code exists in database
-    const isValid = await db.validateReferralCode(referralCode)
-    if (!isValid) {
-      return NextResponse.json({ error: 'Invalid referral code' }, { status: 400 })
-    }
-
-    // Get referral code details
-    const referralCodes = await db.getReferralStats(userId)
-    const code = referralCodes.codes.find(c => c.code === referralCode)
-    if (!code) {
-      return NextResponse.json({ error: 'Referral code not found' }, { status: 400 })
-    }
-
-    // Prevent self-referral
-    if (code.owner_user_id === userId) {
-      return NextResponse.json({ error: 'Cannot use your own referral code' }, { status: 400 })
-    }
-
     try {
+      // First validate the code exists and get its details in one query
+      const referralStats = await db.getReferralStats(userId)
+      const code = referralStats.codes.find(c => c.code === referralCode)
+      
+      if (!code) {
+        console.error('Invalid or non-existent referral code:', { referralCode })
+        return NextResponse.json({ error: 'Invalid referral code' }, { status: 400 })
+      }
+
+      // Prevent self-referral
+      if (code.owner_user_id === userId) {
+        console.error('Self-referral attempt:', { userId, referralCode })
+        return NextResponse.json({ error: 'Cannot use your own referral code' }, { status: 400 })
+      }
+
+      // Check if user has already used a referral code
+      const referralHistory = await db.getReferralHistory(userId)
+      if (referralHistory.referredBy) {
+        console.error('User already used a referral code:', { 
+          userId,
+          existingReferral: referralHistory.referredBy
+        })
+        return NextResponse.json({ 
+          error: 'You have already used a referral code',
+          details: {
+            usedAt: referralHistory.referredBy.used_at,
+            referralCode: referralHistory.referredBy.referral_code
+          }
+        }, { status: 400 })
+      }
+
       // Track the usage in a transaction
       await db.trackReferralUse({
-        id: 0, // Will be auto-generated
+        id: 0, // Auto-generated
         referral_code: referralCode,
         referrer_user_id: code.owner_user_id,
         referred_user_id: userId,
         used_at: new Date()
       })
 
-      // Also log the usage
+      // Log the usage
       await db.logReferralUsage({
-        id: 0, // Will be auto-generated
+        id: 0, // Auto-generated
         referral_code: referralCode,
         used_by_user_id: userId,
         used_at: new Date()
       })
 
-      return NextResponse.json({ success: true })
-    } catch (error) {
-      console.error('Failed to track referral usage:', error)
+      console.log('Successfully validated and tracked referral:', {
+        referralCode,
+        userId,
+        referrerId: code.owner_user_id
+      })
+
       return NextResponse.json({ 
-        error: 'Failed to track referral usage',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        success: true,
+        message: 'Referral code successfully applied',
+        details: {
+          referralCode,
+          referrerId: code.owner_user_id,
+          appliedAt: new Date().toISOString()
+        }
+      })
+    } catch (error) {
+      console.error('Database operation failed:', error)
+      return NextResponse.json({ 
+        error: 'Failed to process referral code',
+        details: error instanceof Error ? error.message : 'Unknown database error'
       }, { status: 500 })
     }
   } catch (error) {
-    console.error('Failed to validate referral code:', error)
+    console.error('Validation process failed:', error)
     return NextResponse.json({ 
       error: 'Failed to validate referral code',
       details: error instanceof Error ? error.message : 'Unknown error'
