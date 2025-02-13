@@ -21,6 +21,7 @@
     "@radix-ui/react-slot": "^1.1.1",
     "@types/html2canvas": "^0.5.35",
     "apify-client": "^2.11.1",
+    "cfonts": "^3.3.0",
     "chromadb": "^1.10.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

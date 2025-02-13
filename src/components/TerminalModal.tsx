@@ -642,7 +642,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
                           : line.isSuccess
                             ? 'text-green-500/70'
                             : line.isSystem
-                              ? 'text-cyan-500/70'
+                              ? 'text-yellow-500/70'
                               : line.isCommand 
                                 ? 'text-red-500/70' 
                                 : 'text-red-400/60'
