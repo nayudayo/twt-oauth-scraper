@@ -70,25 +70,22 @@
   .mobile-layout {
     display: block !important;
   }
-  .tablet-layout,
   .desktop-layout {
     display: none !important;
   }
 }
 
 @media (min-width: 768px) and (max-width: 1023px) {
-  .mobile-layout,
   .desktop-layout {
     display: none !important;
   }
-  .tablet-layout {
+  .mobile-layout {
     display: block !important;
   }
 }
 
 @media (min-width: 1024px) {
-  .mobile-layout,
-  .tablet-layout {
+  .mobile-layout {
     display: none !important;
   }
 }
