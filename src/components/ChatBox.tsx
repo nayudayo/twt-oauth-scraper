@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, Dispatch, SetStateAction, useCallback } from 'react'
-import { Tweet, TwitterProfile } from '@/types/scraper'
-import { PersonalityAnalysis } from '@/lib/openai'
+import { Tweet, TwitterProfile } from '../types/scraper'
+import { PersonalityAnalysis } from '../lib/openai'
+import type { Conversation, Message } from '../types/conversation'
 import ReactMarkdown from 'react-markdown'
-import { Spinner } from '@/components/ui/spinner'
-import '@/styles/glow.css'
+import { Spinner } from '../components/ui/spinner'
+import '../styles/glow.css'
 import Image from 'next/image'
+import { ConversationList } from './ConversationList'
 
 interface ChatBoxProps {
   tweets: Tweet[]

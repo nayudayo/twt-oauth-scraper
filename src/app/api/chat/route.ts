@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
-import { TwitterProfile } from '@/types/scraper'
-import { PersonalityAnalysis } from '@/lib/openai'
-import { ConsciousnessConfig, DEFAULT_CONSCIOUSNESS, generateConsciousnessInstructions, applyConsciousnessEffects } from '@/lib/consciousness'
-import { OpenAIQueueManager } from '@/lib/queue/openai-queue'
+import { TwitterProfile } from '../../../types/scraper'
+import { PersonalityAnalysis } from '../../../lib/openai'
+import { ConsciousnessConfig, DEFAULT_CONSCIOUSNESS, generateConsciousnessInstructions, applyConsciousnessEffects } from '../../../lib/consciousness'
+import { OpenAIQueueManager } from '../../../lib/queue/openai-queue'
 import { getServerSession } from 'next-auth'
+import { authOptions } from '../../../lib/auth/config'
 import { ChatCompletionMessage } from 'openai/resources/chat/completions'
 
 interface RequestBody {
