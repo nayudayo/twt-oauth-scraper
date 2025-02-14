@@ -922,7 +922,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   return (
     <>
       {/* Main Container - Mobile First Layout */}
-      <div className="flex flex-col w-full min-h-screen pt-16 sm:pt-20 px-2 sm:px-4 pb-6 gap-4">
+      <div className="flex flex-col w-full min-h-screen pt-16 sm:pt-20 px-2 sm:px-4 pb-6 gap-4 mobile-layout">
         {/* Chat Interface */}
         <div className="w-full backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow ancient-border rune-pattern overflow-hidden">
           <div className="flex flex-col h-[50vh] sm:h-[40vh] md:h-[40vh]">
@@ -1605,7 +1605,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       </div>
 
       {/* Desktop Layout - Preserve Existing */}
-      <div className="hidden lg:block">
+      <div className="hidden lg:block desktop-layout">
         {/* Left Side Panels Container */}
         <div className="fixed top-20 left-0 md:left-6 lg:left-8 flex flex-col gap-4 h-[calc(100vh-104px)] w-[26vw] lg:w-[22vw] xl:w-[20vw] min-w-[280px] max-w-[400px] px-4 md:px-0 overflow-y-auto md:overflow-visible transition-all duration-300">
         {/* System Controls Panel */}
