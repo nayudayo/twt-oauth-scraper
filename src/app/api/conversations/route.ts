@@ -30,8 +30,20 @@ export async function POST(req: NextRequest) {
     const { initialMessage, title, metadata } = await req.json();
     const db = await initDB();
     
+    // First, ensure the user exists
+    let user = await db.getUserByUsername(session.username);
+    if (!user) {
+      // Create the user if they don't exist
+      user = await db.createUser({
+        username: session.username,
+        twitter_username: session.username,
+        created_at: new Date()
+      });
+    }
+    
+    // Then create the conversation using the user's ID
     const conversation = await db.conversation.startNewChat({
-      userId: session.username,
+      userId: user.id,
       initialMessage,
       title,
       metadata
@@ -82,7 +94,22 @@ export async function GET() {
     }
 
     const db = await initDB();
-    const conversations = await db.conversation.getUserConversations(session.username);
+    
+    // First get the user
+    const user = await db.getUserByUsername(session.username);
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'User not found',
+          metadata: generateResponseMetadata()
+        } as ConversationListResponse,
+        { status: 404 }
+      );
+    }
+    
+    // Then get their conversations
+    const conversations = await db.conversation.getUserConversations(user.id);
 
     return NextResponse.json({
       success: true,
