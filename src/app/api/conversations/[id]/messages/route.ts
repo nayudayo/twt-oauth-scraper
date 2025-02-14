@@ -16,8 +16,11 @@ function generateResponseMetadata(conversationId: number) {
 
 export async function GET(request: NextRequest) {
   try {
-    // Extract ID from URL
-    const id = request.url.split('/').pop();
+    // Extract ID from URL using URL parsing
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split('/');
+    const id = pathParts[pathParts.indexOf('conversations') + 1];
+    
     if (!id) {
       return NextResponse.json(
         {
@@ -53,8 +56,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // First get the user
     const db = await initDB();
-    const messages = await db.conversation.getMessages(conversationId, session.username);
+    const user = await db.getUserByUsername(session.username);
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'User not found',
+          metadata: generateResponseMetadata(conversationId)
+        } as MessageListResponse,
+        { status: 404 }
+      );
+    }
+
+    // Then get the messages using the user's ID
+    const messages = await db.conversation.getMessages(conversationId, user.id);
 
     return NextResponse.json({
       success: true,

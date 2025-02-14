@@ -59,7 +59,7 @@ export class OpenAIQueueManager {
   private static instance: OpenAIQueueManager
   private queue: QueueItem[] = []
   private processing: boolean = false
-  private maxConcurrent: number = 2
+  private maxConcurrent: number = 5
   private activeRequests: number = 0
   private openai: OpenAI
   private rateLimiter: RateLimiter
@@ -68,7 +68,11 @@ export class OpenAIQueueManager {
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY
     })
-    this.rateLimiter = new RateLimiter()
+    this.rateLimiter = new RateLimiter({
+      windowMs: 60 * 1000,
+      maxRequests: 50,
+      maxConcurrent: 3
+    })
   }
 
   public static getInstance(): OpenAIQueueManager {

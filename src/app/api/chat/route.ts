@@ -6,6 +6,7 @@ import { OpenAIQueueManager } from '../../../lib/queue/openai-queue'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '../../../lib/auth/config'
 import { ChatCompletionMessage } from 'openai/resources/chat/completions'
+import { initDB } from '@/lib/db'
 
 interface RequestBody {
   message: string
@@ -27,6 +28,7 @@ interface RequestBody {
     role: 'user' | 'assistant'
     content: string
   }>
+  conversationId?: number
 }
 
 // Style validation function
@@ -53,9 +55,22 @@ const calculateTemperature = (tuning: RequestBody['tuning']): number => {
   return Math.min(Math.max((enthusiasmTemp + (1 - formalityTemp)) / 2, 0.3), 0.9)
 }
 
+const MAX_RETRIES = 3;
+const TIMEOUT_MS = 30000; // 30 seconds
+const MIN_RESPONSE_LENGTH = 20;
+const MAX_TOKENS = 500; // Increased from 150
+
+// Add response validation
+function isValidResponse(response: string): boolean {
+  if (!response || response.length < MIN_RESPONSE_LENGTH) return false;
+  if (response === 'Failed to generate a valid response') return false;
+  // Check for common error patterns
+  if (response.toLowerCase().includes('error') && response.toLowerCase().includes('generating')) return false;
+  return true;
+}
+
 export async function POST(req: Request) {
   try {
-    // Get user session for rate limiting
     const session = await getServerSession(authOptions)
     if (!session?.username) {
       return NextResponse.json(
@@ -64,13 +79,70 @@ export async function POST(req: Request) {
       )
     }
 
-    const { message, profile, analysis, tuning, consciousness, conversationHistory = [] } = await req.json() as RequestBody
+    // Store username in a const to preserve type narrowing
+    const username = session.username
+
+    const { message, profile, analysis, tuning, consciousness, conversationHistory = [], conversationId } = await req.json() as RequestBody
 
     if (!message || !analysis) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       )
+    }
+
+    console.log(`Processing chat request for user ${username}`)
+
+    // Initialize database
+    const db = await initDB()
+
+    // First, ensure the user exists
+    let user = await db.getUserByUsername(username)
+    if (!user) {
+      console.log(`Creating new user for ${username}`)
+      // Create the user if they don't exist
+      user = await db.createUser({
+        username: username,
+        twitter_username: username,
+        created_at: new Date()
+      })
+    }
+    console.log(`User found/created with ID: ${user.id}`)
+
+    // Get or create conversation with proper error handling
+    let activeConversationId: number = conversationId || 0
+    if (!activeConversationId) {
+      console.log('Creating new conversation')
+      try {
+        const conversation = await db.conversation.startNewChat({
+          userId: user.id,
+          initialMessage: message,
+          title: `Chat with ${profile.name}`,
+          metadata: {
+            profileName: profile.name,
+            lastMessageAt: new Date()
+          }
+        })
+        activeConversationId = conversation.id
+        console.log(`Created new conversation with ID: ${activeConversationId}`)
+      } catch (error) {
+        console.error('Failed to create conversation:', error)
+        throw new Error('Failed to create conversation')
+      }
+    }
+
+    // Save user message with error handling
+    try {
+      console.log('Saving user message to database')
+      await db.conversation.addMessage({
+        conversationId: activeConversationId,
+        content: message,
+        role: 'user'
+      })
+      console.log('User message saved successfully')
+    } catch (error) {
+      console.error('Failed to save user message:', error)
+      throw new Error('Failed to save user message')
     }
 
     // Adjust traits based on modifiers
@@ -185,58 +257,98 @@ Remember: You are this person, not just describing them. Respond authentically a
     // Get queue instance
     const queue = OpenAIQueueManager.getInstance()
 
-    // Create a promise to handle the queued request
-    const response = await new Promise<string>((resolve, reject) => {
-      const config = consciousness ?? DEFAULT_CONSCIOUSNESS
-      const effects = config.quirks.length > 0 ? config.quirks : ['normal conversation']
-      
-      // Ensure username is available (we already checked this at the start of the function)
-      if (!session.username) {
-        reject(new Error('User session not found'))
-        return
+    // Create a function to generate response with retries
+    const generateResponse = async (retryCount = 0): Promise<string> => {
+      try {
+        const config = consciousness ?? DEFAULT_CONSCIOUSNESS
+        const effects = config.quirks.length > 0 ? config.quirks : ['normal conversation']
+
+        const response = await Promise.race([
+          new Promise<string>((resolve, reject) => {
+            queue.enqueueRequest(
+              'chat',
+              {
+                messages,
+                tuning: {
+                  temperature: calculateTemperature(tuning),
+                  maxTokens: MAX_TOKENS,
+                  presencePenalty: 0.6,
+                  frequencyPenalty: 0.3
+                },
+                consciousness: {
+                  state: generateConsciousnessInstructions(config),
+                  effects
+                }
+              },
+              username,  // Use the stored username instead of session.username
+              (result) => {
+                const content = typeof result === 'object' && result !== null && 'content' in result 
+                  ? result.content as string 
+                  : String(result)
+
+                if (validateStyle(content, tuning) && isValidResponse(content)) {
+                  resolve(applyConsciousnessEffects(content, config))
+                } else {
+                  reject(new Error('Response validation failed'))
+                }
+              },
+              reject
+            )
+          }),
+          new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('Request timeout')), TIMEOUT_MS)
+          )
+        ])
+
+        if (!isValidResponse(response)) {
+          throw new Error('Invalid response received')
+        }
+
+        return response
+      } catch (error) {
+        console.error(`Chat generation attempt ${retryCount + 1} failed:`, error)
+        
+        if (retryCount < MAX_RETRIES - 1) {
+          console.log(`Retrying... (${retryCount + 2}/${MAX_RETRIES})`)
+          // Exponential backoff
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000))
+          return generateResponse(retryCount + 1)
+        }
+        
+        throw new Error('Failed to generate valid response after multiple attempts')
       }
-      
-      queue.enqueueRequest(
-        'chat',
-        {
-          messages,
-          tuning: {
-            temperature: calculateTemperature(tuning),
-            maxTokens: 150,
-            presencePenalty: 0.6,
-            frequencyPenalty: 0.3
-          },
-          consciousness: {
-            state: generateConsciousnessInstructions(config),
-            effects
-          }
-        },
-        session.username,
-        (result) => {
-          // Validate style and apply consciousness effects
-          const content = typeof result === 'object' && result !== null && 'content' in result 
-            ? result.content as string 
-            : String(result)
+    }
 
-          if (validateStyle(content, tuning)) {
-            resolve(applyConsciousnessEffects(content, config))
-          } else {
-            reject(new Error('Generated response does not match style requirements'))
-          }
-        },
-        reject
-      )
-    }).catch(error => {
-      // If style validation fails, return a generic response
-      console.error('Chat generation error:', error)
-      return 'Failed to generate a valid response'
+    // Generate response with retries and validation
+    console.log('Generating AI response')
+    const response = await generateResponse()
+    console.log('AI response generated successfully')
+
+    // Save AI response with error handling
+    try {
+      console.log('Saving assistant response to database')
+      await db.conversation.addMessage({
+        conversationId: activeConversationId,
+        content: response,
+        role: 'assistant'
+      })
+      console.log('Assistant response saved successfully')
+    } catch (error) {
+      console.error('Failed to save assistant response:', error)
+      // Don't throw here - we want to return the response even if saving fails
+    }
+
+    return NextResponse.json({
+      response,
+      conversationId: activeConversationId
     })
-
-    return NextResponse.json({ response })
   } catch (error) {
     console.error('Chat error:', error)
     return NextResponse.json(
-      { error: 'Failed to generate response' },
+      { 
+        error: 'Failed to process chat request',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     )
   }

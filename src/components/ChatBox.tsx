@@ -211,7 +211,8 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
           profile,
           analysis,
           tuning,
-          conversationHistory
+          conversationHistory,
+          conversationId: activeConversationId
         }),
       })
       
@@ -220,6 +221,20 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       }
       
       const data = await response.json()
+      
+      // Update active conversation ID if this is a new conversation
+      if (data.conversationId && !activeConversationId) {
+        setActiveConversationId(data.conversationId)
+        // Fetch updated conversation list
+        const convsResponse = await fetch('/api/conversations')
+        if (convsResponse.ok) {
+          const convsData = await convsResponse.json()
+          if (convsData.success && Array.isArray(convsData.data)) {
+            setConversations(convsData.data)
+          }
+        }
+      }
+
       setIsTyping(false)
       return data.response
     } catch (err) {
@@ -237,14 +252,34 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
 
     const userMessage = input.trim()
     setInput('')
-    setMessages(prev => [...prev, { text: userMessage, isUser: true }])
 
-    // Only generate response if we have personality analysis
+    // Only proceed if we have personality analysis
     if (analysis) {
-      const response = await generatePersonalityResponse(userMessage)
+      // Add user message to UI immediately
+      setMessages(prev => [...prev, { text: userMessage, isUser: true }])
       
+      // Generate and add AI response
+      const response = await generatePersonalityResponse(userMessage)
       if (response) {
         setMessages(prev => [...prev, { text: response, isUser: false }])
+      }
+
+      // If this is a new conversation, fetch messages to ensure consistency
+      if (!activeConversationId) {
+        try {
+          const response = await fetch('/api/conversations/' + activeConversationId + '/messages')
+          if (response.ok) {
+            const data = await response.json()
+            if (data.success && Array.isArray(data.data)) {
+              setMessages(data.data.map((msg: Message) => ({
+                text: msg.content,
+                isUser: msg.role === 'user'
+              })))
+            }
+          }
+        } catch (error) {
+          console.error('Error syncing messages:', error)
+        }
       }
     }
   }
@@ -2183,7 +2218,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
         <div className="w-[40vw] lg:w-[48vw] xl:w-[54vw] min-w-[380px] max-w-[1200px] h-[calc(100vh-104px)] mx-auto backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow pointer-events-auto z-1 ancient-border rune-pattern overflow-hidden transition-all duration-300 md:mx-6 lg:mx-8">
           <div className="flex flex-col h-full min-h-0">
             {/* Chat Header */}
-            <div className="flex-none flex items-center justify-between px-4 md:px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 rounded-t-lg cryptic-shadow">
+            <div className="flex-none flex items-center justify-between px-4 md:px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 rounded-t-lg cryptic-shadow relative z-40">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
                 <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">NEURAL INTERFACE</h3>
@@ -2198,7 +2233,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
             </div>
 
             {/* Chat Messages Container */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar backdrop-blur-sm bg-black/20 ancient-scroll min-h-0">
+            <div className="flex-1 overflow-y-auto custom-scrollbar backdrop-blur-sm bg-black/20 ancient-scroll min-h-0 relative z-30">
               {!analysis ? (
                 <div className="text-red-500/70 italic text-center glow-text p-4">
                   Start personality analysis to begin chat interaction
@@ -2206,7 +2241,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
               ) : (
                 <>
                   {/* Sticky Profile Section */}
-                  <div className="sticky top-0 z-10 p-4 bg-black/40 backdrop-blur-md">
+                  <div className="sticky top-0 z-35 p-4 bg-black/40 backdrop-blur-md">
                     <div className="flex flex-col items-center gap-4 border border-red-500/10 rounded-lg hover-glow ancient-border p-4">
                       <div className="w-20 h-20 rounded-full border-2 border-red-500/20 overflow-hidden hover-glow">
                         {profile.imageUrl ? (
@@ -2237,7 +2272,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   </div>
 
                   {/* Messages Section with padding to account for sticky header */}
-                  <div className="p-4 space-y-4">
+                  <div className="p-4 space-y-4 relative z-30">
                     {messages.map((msg, i) => (
                       <div 
                         key={i}
@@ -2275,7 +2310,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
 
             {/* Chat Input */}
             {analysis && (
-              <div className="flex-none p-3 md:p-4 border-t border-red-500/10 bg-black/40 backdrop-blur-sm cryptic-shadow">
+              <div className="flex-none p-3 md:p-4 border-t border-red-500/10 bg-black/40 backdrop-blur-sm cryptic-shadow relative z-40">
                 <form onSubmit={handleSubmit} className="flex gap-2">
                   <textarea
                     ref={textareaRef}
