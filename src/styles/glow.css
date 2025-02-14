@@ -64,3 +64,28 @@
 .custom-scrollbar::-webkit-scrollbar {
   display: none; /* WebKit */
 } 
+
+/* Responsive layout classes */
+@media (max-width: 767px) {
+  .mobile-layout {
+    display: block !important;
+  }
+  .desktop-layout {
+    display: none !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .desktop-layout {
+    display: none !important;
+  }
+  .mobile-layout {
+    display: block !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .mobile-layout {
+    display: none !important;
+  }
+}
