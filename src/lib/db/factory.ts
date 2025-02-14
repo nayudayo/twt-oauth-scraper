@@ -3,7 +3,7 @@ import { PostgresAdapter } from './adapters/postgres';
 import { DatabaseError } from './adapters/errors';
 import os from 'os';
 
-interface DBConfig {
+export interface DBConfig {
   type: 'postgres';
   connectionString?: string;
   host?: string;

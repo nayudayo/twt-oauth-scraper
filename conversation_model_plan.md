@@ -1,666 +1,603 @@
 # Conversation Model Implementation Plan
 
 ## Overview
-This document outlines the implementation plan for a streamlined conversational model with dual memory system (Redis for short-term, Chroma for long-term) optimized for high concurrent users.
+This document outlines the simplified implementation plan for conversation persistence using PostgreSQL for long-term storage, while leveraging GPT-4-mini's built-in session context handling. The implementation ensures data privacy and proper user isolation through Twitter OAuth integration.
 
 ## Key Features
-1. Dual memory system without caching layer
-2. Activity-based Redis TTL
-3. Long-term memory in Chroma for historical context
-4. Single LLM (GPT-4o-mini) implementation
-5. Error recovery mechanisms
-6. Concurrent user handling
+1. Multiple chat conversations per user
+2. Session persistence across page refreshes
+3. Integration with existing PostgreSQL setup
+4. Built-in context handling by GPT-4-mini
+5. User data isolation and privacy
+6. Twitter OAuth integration
 
-## Memory Architecture
+## Security & Privacy Considerations
 
-### Short-Term Memory (Redis)
-```typescript
-interface RedisConfig {
-  // Basic configuration
-  keyPrefix: 'chat:',
-  
-  // TTL configuration
-  ttl: {
-    active: 24 * 60 * 60,    // 24 hours for active users
-    inactive: 1 * 60 * 60    // 1 hour for inactive users
-  },
-  
-  // Rate limiting
-  rateLimit: {
-    perUser: 30,             // requests per minute
-    global: 10000            // total requests per minute
-  }
-}
+1. **User Isolation**
+   - Each user can only access their own conversations
+   - Queries always filter by user_id (Twitter username)
+   - Session validation on every request
+   - No cross-user data access possible
 
-interface RedisMessage {
-  user_id: string
-  last_message: string
-  timestamp: string
-  activity_level: 'active' | 'inactive'
-}
+2. **Data Privacy**
+   - Conversations tied to Twitter OAuth sessions
+   - No sharing of conversation context between users
+   - Proper data cleanup on session termination
+   - Input sanitization for all user data
+
+3. **Session Management**
+   - Leveraging NextAuth.js security features
+   - Twitter OAuth token handling
+   - Automatic session expiration
+   - Secure session storage
+
+## Database Schema
+
+```sql
+-- Schema already added to src/scripts/purge-db.ts
+CREATE TABLE conversations (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL REFERENCES users(id),  -- References existing users table
+    title VARCHAR(255),                                  -- Auto-generated from first message
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    metadata JSONB DEFAULT '{}'                         -- For active status and other metadata
+);
+
+CREATE TABLE messages (
+    id SERIAL PRIMARY KEY,
+    conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    role VARCHAR(50) NOT NULL,      -- 'user' or 'assistant'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    metadata JSONB DEFAULT '{}'     -- For future extensibility
+);
+
+-- Indexes for performance (already added to purge-db.ts)
+CREATE INDEX idx_conversations_user_id ON conversations(user_id);
+CREATE INDEX idx_conversations_updated ON conversations(updated_at DESC);
+CREATE INDEX idx_messages_conversation_id ON messages(conversation_id);
+CREATE INDEX idx_messages_created ON messages(created_at ASC);
+
+-- Consider adding if we need to query by active status frequently
+CREATE INDEX idx_conversations_active ON conversations((metadata->>'isActive')) WHERE metadata->>'isActive' = 'true';
 ```
 
-### Long-Term Memory (Chroma)
+## Type Definitions
+
 ```typescript
-interface ChromaMessage {
-  id: string
-  user_id: string
-  content: string
-  embedding: number[]
-  metadata: {
-    timestamp: string
-    type: 'user' | 'assistant'
-    conversation_id: string  // Added for multi-conversation support
-  }
+// src/types/conversation.ts
+
+// Base metadata type for extensibility
+interface BaseMetadata {
+  isActive?: boolean;
+  lastMessageAt?: Date;
+  [key: string]: any;  // Allow additional metadata fields
 }
-```
 
-## Memory System Architecture
+// Conversation metadata extends base
+interface ConversationMetadata extends BaseMetadata {
+  lastMessagePreview?: string;
+  messageCount?: number;
+}
 
-```typescript
-class DualMemoryHandler {
-  private redis: Redis.Client;
-  private chroma: ChromaClient;
-  private openai: OpenAI;
+// Message metadata extends base
+interface MessageMetadata extends BaseMetadata {
+  isEdited?: boolean;
+  editedAt?: Date;
+}
 
-  // Configuration
-  private config = {
-    redis: {
-      keyPrefix: 'chat:',
-      ttl: {
-        active: 24 * 60 * 60,
-        inactive: 1 * 60 * 60
-      }
-    },
-    chroma: {
-      collectionPrefix: 'user_',
-      maxResults: 5
-    },
-    llm: {
-      maxTokens: 150,
-      temperature: 0.7
-    }
+// Core types
+interface Conversation {
+  id: number;
+  userId: string;
+  title: string;
+  createdAt: Date;
+  updatedAt: Date;
+  metadata: ConversationMetadata;
+  messages?: Message[];
+}
+
+interface Message {
+  id: number;
+  conversationId: number;
+  content: string;
+  role: 'user' | 'assistant';
+  createdAt: Date;
+  metadata: MessageMetadata;
+}
+
+// Operation types
+interface NewChatOptions {
+  userId: string;
+  initialMessage?: string;
+  title?: string;
+  metadata?: Partial<ConversationMetadata>;
+}
+
+interface UpdateConversationOptions {
+  title?: string;
+  metadata?: Partial<ConversationMetadata>;
+}
+
+interface AddMessageOptions {
+  conversationId: number;
+  content: string;
+  role: 'user' | 'assistant';
+  metadata?: Partial<MessageMetadata>;
+}
+
+// Database operations interface
+interface ConversationOperations {
+  // Conversation operations
+  createConversation(userId: string, initialMessage?: string): Promise<Conversation>;
+  getConversation(id: number, userId: string): Promise<Conversation>;
+  getUserConversations(userId: string): Promise<Conversation[]>;
+  updateConversation(id: number, userId: string, options: UpdateConversationOptions): Promise<Conversation>;
+  deleteConversation(id: number, userId: string): Promise<void>;
+  
+  // Message operations
+  addMessage(options: AddMessageOptions): Promise<Message>;
+  getMessages(conversationId: number, userId: string): Promise<Message[]>;
+  updateMessage(id: number, userId: string, content: string): Promise<Message>;
+  
+  // Active conversation handling
+  startNewChat(options: NewChatOptions): Promise<Conversation>;
+  setActiveConversation(userId: string, conversationId: number): Promise<void>;
+  getActiveConversation(userId: string): Promise<Conversation | null>;
+}
+
+// API response types
+interface APIResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  metadata?: {
+    timestamp: Date;
+    requestId: string;
   };
+}
 
-  async processMessage(userId: string, message: string): Promise<string> {
-    // 1. Check rate limits
-    if (!await this.checkRateLimits(userId)) {
-      throw new Error('Rate limit exceeded');
-    }
+interface ConversationResponse extends APIResponse<Conversation> {}
+interface MessageResponse extends APIResponse<Message> {}
+interface ConversationListResponse extends APIResponse<Conversation[]> {}
 
-    // 2. Store in Chroma first (source of truth)
-    try {
-      await this.storeLongTerm(userId, message);
-    } catch (error) {
-      throw new Error('Failed to store in long-term memory');
-    }
-
-    // 3. Get historical context
-    const historicalContext = await this.getHistoricalContext(userId, message);
-
-    // 4. Update Redis (can be recovered if fails)
-    try {
-      await this.storeShortTerm(userId, message);
-    } catch (error) {
-      console.error('Short-term memory update failed:', error);
-      // Continue as Redis is recoverable
-    }
-
-    // 5. Generate response
-    const response = await this.generateResponse(message, historicalContext);
-    
-    return response;
-  }
-
-  private async checkRateLimits(userId: string): Promise<boolean> {
-    const key = `${this.config.redis.keyPrefix}${userId}:rate`;
-    const count = await this.redis.incr(key);
-    
-    if (count === 1) {
-      await this.redis.expire(key, 60); // 1 minute window
-    }
-    
-    return count <= 30; // 30 requests per minute
-  }
-
-  private async storeShortTerm(userId: string, message: string) {
-    const activityLevel = await this.getUserActivityLevel(userId);
-    const ttl = this.config.redis.ttl[activityLevel];
-    
-    await this.redis.set(
-      `${this.config.redis.keyPrefix}${userId}:last`,
-      message,
-      'EX',
-      ttl
-    );
-  }
-
-  private async getUserActivityLevel(userId: string): Promise<'active' | 'inactive'> {
-    const lastActivity = await this.redis.get(
-      `${this.config.redis.keyPrefix}${userId}:last_active`
-    );
-    
-    return lastActivity && 
-           Date.now() - parseInt(lastActivity) < 24 * 60 * 60 * 1000 
-           ? 'active' 
-           : 'inactive';
+// Error types
+class ConversationError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public status: number = 500
+  ) {
+    super(message);
+    this.name = 'ConversationError';
   }
 }
+
+// Export all types
+export type {
+  BaseMetadata,
+  ConversationMetadata,
+  MessageMetadata,
+  Conversation,
+  Message,
+  NewChatOptions,
+  UpdateConversationOptions,
+  AddMessageOptions,
+  ConversationOperations,
+  APIResponse,
+  ConversationResponse,
+  MessageResponse,
+  ConversationListResponse,
+};
+
+export { ConversationError };
 ```
 
-## Memory Recovery
+## Database Operations Implementation
 
 ```typescript
-class MemoryRecovery {
-  async recoverRedisContext(userId: string) {
+// src/lib/db/conversation.ts
+export class ConversationDB implements ConversationOperations {
+  constructor(private db: Pool) {}
+
+  async createConversation(userId: string, initialMessage?: string): Promise<Conversation> {
+    const title = initialMessage 
+      ? initialMessage.slice(0, 50) + '...'
+      : 'New Conversation';
+
+    const result = await this.db.query(
+      'INSERT INTO conversations (user_id, title) VALUES ($1, $2) RETURNING *',
+      [userId, title]
+    );
+    
+    return result.rows[0];
+  }
+
+  async getConversation(id: number): Promise<Conversation> {
+    const result = await this.db.query(
+      'SELECT * FROM conversations WHERE id = $1',
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      throw new Error('Conversation not found');
+    }
+
+    const messages = await this.getMessages(id);
+    return { ...result.rows[0], messages };
+  }
+
+  async getUserConversations(userId: string): Promise<Conversation[]> {
+    const result = await this.db.query(
+      'SELECT * FROM conversations WHERE user_id = $1 ORDER BY updated_at DESC',
+      [userId]
+    );
+    
+    return result.rows;
+  }
+
+  async addMessage(conversationId: number, content: string, role: 'user' | 'assistant'): Promise<Message> {
+    const result = await this.db.query(
+      'INSERT INTO messages (conversation_id, content, role) VALUES ($1, $2, $3) RETURNING *',
+      [conversationId, content, role]
+    );
+
+    // Update conversation's updated_at timestamp
+    await this.db.query(
+      'UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [conversationId]
+    );
+    
+    return result.rows[0];
+  }
+
+  async getMessages(conversationId: number): Promise<Message[]> {
+    const result = await this.db.query(
+      'SELECT * FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC',
+      [conversationId]
+    );
+    
+    return result.rows;
+  }
+
+  async startNewChat(options: NewChatOptions): Promise<Conversation> {
+    const { userId, initialMessage, title, metadata } = options;
+    
+    // Start a transaction
+    const client = await this.db.connect();
     try {
-      // Get most recent from Chroma
-      const recent = await this.getRecentFromChroma(userId);
+      await client.query('BEGIN');
       
-      // Restore to Redis
-      await this.redis.set(
-        `chat:${userId}:last`,
-        recent,
-        'EX',
-        this.config.redis.ttl.active
+      // Clear active status from other conversations if needed
+      await client.query(
+        `UPDATE conversations 
+         SET metadata = metadata - 'isActive'
+         WHERE user_id = $1 
+         AND metadata->>'isActive' = 'true'`,
+        [userId]
       );
+      
+      // Create new conversation
+      const result = await client.query(
+        `INSERT INTO conversations (
+          user_id, 
+          title, 
+          metadata
+        ) VALUES ($1, $2, $3) 
+        RETURNING *`,
+        [
+          userId,
+          title || (initialMessage ? `${initialMessage.slice(0, 50)}...` : 'New Chat'),
+          JSON.stringify({ isActive: true, ...metadata })
+        ]
+      );
+      
+      await client.query('COMMIT');
+      return result.rows[0];
     } catch (error) {
-      console.error('Recovery failed:', error);
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
+  }
+
+  async setActiveConversation(userId: string, conversationId: number): Promise<void> {
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      
+      // Clear other active conversations
+      await client.query(
+        `UPDATE conversations 
+         SET metadata = metadata - 'isActive'
+         WHERE user_id = $1 
+         AND metadata->>'isActive' = 'true'`,
+        [userId]
+      );
+      
+      // Set new active conversation
+      await client.query(
+        `UPDATE conversations 
+         SET metadata = jsonb_set(
+           COALESCE(metadata, '{}'), 
+           '{isActive}', 
+           'true'
+         )
+         WHERE id = $1 AND user_id = $2`,
+        [conversationId, userId]
+      );
+      
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getActiveConversation(userId: string): Promise<Conversation | null> {
+    const result = await this.db.query(
+      `SELECT * FROM conversations 
+       WHERE user_id = $1 
+       AND metadata->>'isActive' = 'true'
+       LIMIT 1`,
+      [userId]
+    );
+    
+    return result.rows[0] || null;
   }
 }
 ```
 
-## Implementation Checklist
+## API Routes Implementation
 
-### Phase 1: Core Infrastructure (Day 1)
-- [x] Directory Setup
-  - [x] Create `src/lib/memory` directory
-  - [x] Create `src/lib/memory/types` directory
-  - [x] Create `src/lib/memory/utils` directory
-
-- [✓] Type Definitions (Redis)
-  - [✓] Create `types/redis.ts`
     ```typescript
-    // Activity level type
-    type ActivityLevel = 'active' | 'inactive'
+// src/app/api/conversations/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/config';
+import { initDB } from '@/lib/db';
 
-    // Redis configuration
-    interface RedisConfig {
-      host: string
-      port: number
-      password?: string
-      keyPrefix: string
-      ttl: {
-        active: number    // 24 hours
-        inactive: number  // 1 hour
-      }
-      rateLimit: {
-        perUser: number   // requests per minute
-        global: number    // total requests per minute
-        window: number    // time window in seconds
-      }
+export async function POST(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.username) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Redis message structure
-    interface RedisMessage {
-      content: string
-      userId: string
-      timestamp: number
-      type: 'user' | 'assistant'
-      conversationId: string
-      metadata?: {
-        activityLevel: ActivityLevel
-        lastActive: number
-      }
-    }
+    const { initialMessage } = await req.json();
+    const db = await initDB();
+    const conversation = await db.createConversation(session.username, initialMessage);
 
-    // Additional implemented types:
-    // - RedisOptions (connection pool, retry strategy)
-    // - RateLimitInfo
-    // - RedisOperationResult
-    // - REDIS_KEYS constants
-    // - Default configurations
-    ```
-
-- [✓] Type Definitions (Next)
-  - [✓] Create `types/chroma.ts`
-    ```typescript
-    // ChromaDB client interfaces
-    interface IChromaClient {
-      createCollection(name: string, metadata?: Record<string, unknown>): Promise<IChromaCollection>;
-      getCollection(name: string): Promise<IChromaCollection>;
-      deleteCollection(name: string): Promise<void>;
-      listCollections(): Promise<string[]>;
-    }
-
-    interface IChromaCollection {
-      name: string;
-      metadata: Record<string, unknown>;
-      add(documents: string[], metadatas?: Record<string, unknown>[], ids?: string[]): Promise<void>;
-      query(queryTexts: string[], nResults?: number, where?: Record<string, unknown>): Promise<{
-        ids: string[][];
-        distances: number[][];
-        metadatas: Record<string, unknown>[][];
-        documents: string[][];
-      }>;
-    }
-
-    // Additional implemented types:
-    // - ChromaConfig (connection, collection settings, embedding settings)
-    // - ChromaMessage (message structure with metadata)
-    // - ChromaCollectionOptions (collection creation options)
-    // - ChromaQueryOptions (query parameters)
-    // - ChromaOperationResult (operation results with error handling)
-    // - ChromaCollectionManager (collection management interface)
-    // - Default configurations and key patterns
-    ```
-
-- [ ] Type Definitions (Next)
-  - [ ] Create `types/index.ts`
-    ```typescript
-    // Common types
-    interface MemoryOptions
-    type ActivityLevel
-    interface RateLimitConfig
-    ```
-
-- [ ] Redis Setup
-  - [ ] Install dependencies
-    ```bash
-    npm install ioredis @types/ioredis
-    ```
-  - [ ] Implement RedisMemory class
-  - [ ] Set up connection pooling
-  - [ ] Add error handling
-  - [ ] Implement activity tracking
-  - [ ] Add rate limiting
-
-- [ ] Chroma Setup
-  - [ ] Install dependencies
-    ```bash
-    npm install chromadb @xenova/transformers
-    ```
-  - [ ] Implement ChromaMemory class
-  - [ ] Set up collections management
-  - [ ] Add error handling
-  - [ ] Configure embeddings
-
-- [ ] Error Recovery
-  - [ ] Implement MemoryRecovery class
-  - [ ] Add Redis recovery mechanisms
-  - [ ] Set up Chroma backup strategies
-  - [ ] Add logging
-
-### Phase 2: Memory Integration (Day 2)
-- [ ] Core Integration
-  - [ ] Implement DualMemorySystem
-  - [ ] Set up message processing flow
-  - [ ] Add context retrieval
-  - [ ] Implement rate limiting
-
-- [ ] Type Definitions
-  - [ ] Define message interfaces
-  - [ ] Define configuration types
-  - [ ] Define error types
-  - [ ] Define response types
-
-- [ ] Utils
-  - [ ] Add retry mechanisms
-  - [ ] Implement logging utilities
-  - [ ] Add monitoring helpers
-  - [ ] Create test utilities
-
-### Phase 3: Testing & Monitoring (Day 3)
-- [ ] Unit Tests
-  - [ ] Test Redis operations
-  - [ ] Test ChromaDB Integration (Next)
-    - [ ] Test collection creation and management
-    - [ ] Test document storage and retrieval
-    - [ ] Test query operations
-    - [ ] Test error handling
-
-- [ ] Integration Tests
-  - [ ] Test dual memory system
-  - [ ] Test concurrent access
-  - [ ] Test error scenarios
-  - [ ] Test recovery flows
-
-- [ ] Monitoring
-  - [ ] Set up metrics collection
-  - [ ] Add performance monitoring
-  - [ ] Implement error tracking
-  - [ ] Add usage analytics
-
-### Phase 4: Production Readiness (Day 4)
-- [ ] Documentation
-  - [ ] Add inline documentation
-  - [ ] Create usage examples
-  - [ ] Document error handling
-  - [ ] Add deployment guide
-
-- [ ] Performance
-  - [ ] Optimize Redis operations
-  - [ ] Tune Chroma queries
-  - [ ] Add caching where needed
-  - [ ] Optimize memory usage
-
-- [ ] Security
-  - [ ] Add input validation
-  - [ ] Implement rate limiting
-  - [ ] Set up authentication
-  - [ ] Add data encryption
-
-### Phase 5: Integration & Deployment
-- [ ] Chat Integration
-  - [ ] Update chat routes
-  - [ ] Add conversation management
-  - [ ] Implement context handling
-  - [ ] Add error responses
-
-- [ ] Deployment
-  - [ ] Set up Redis cluster
-  - [ ] Configure Chroma deployment
-  - [ ] Add monitoring alerts
-  - [ ] Create backup procedures
-
-## Monitoring
-
-```typescript
-interface Metrics {
-  activeUsers: number
-  averageResponseTime: number
-  errorRate: number
-  memory: {
-    redisUsage: {
-      activeUsers: number,
-      totalKeys: number,
-      memoryUsed: number
-    },
-    chromaUsage: number
+    return NextResponse.json(conversation);
+  } catch (error) {
+    console.error('Failed to create conversation:', error);
+    return NextResponse.json(
+      { error: 'Failed to create conversation' },
+      { status: 500 }
+    );
   }
-  rateLimiting: {
-    totalThrottled: number,
-    perUserThrottled: Record<string, number>
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.username) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const db = await initDB();
+    const conversations = await db.getUserConversations(session.username);
+
+    return NextResponse.json(conversations);
+  } catch (error) {
+    console.error('Failed to fetch conversations:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch conversations' },
+      { status: 500 }
+    );
   }
 }
 ```
 
-## Key Benefits
+## Implementation Steps
 
-1. **Memory Efficiency**
-   - Activity-based TTL
-   - Automatic cleanup
-   - Predictable memory usage
+### Phase 1: Database Setup (Day 1)
+1. **Schema Implementation**
+   ```bash
+   # Step 1: Schema is ready in purge-db.ts
+   [x] Tables added to src/scripts/purge-db.ts
+   [x] Indexes added for performance
+   [x] Added metadata JSONB columns
+   [x] Added metadata indexes
+   [ ] Run database purge and update
+   ```
 
-2. **Scalability**
-   - Rate limiting built-in
-   - Activity-based optimization
-   - Recovery mechanisms
+2. **Type Definitions**
+   ```bash
+   # Step 2: Create types
+   [x] Create src/types/conversation.ts
+   [x] Add interfaces for Conversation and Message
+   [x] Add ConversationOperations interface
+   [x] Add metadata type definitions
+   [x] Add active conversation types
+   ```
 
-3. **Reliability**
-   - Chroma as source of truth
-   - Redis as recoverable cache
-   - Clear error handling
+3. **Database Operations**
+   ```bash
+   # Step 3: Implement ConversationDB
+   [x] Create src/lib/db/conversation.ts
+   [x] Implement all CRUD operations
+   [x] Add user isolation in queries
+   [x] Add metadata operations
+     [x] Add active conversation handling
+     [x] Add metadata update methods
+     [x] Add transaction handling
+   [x] Add error handling
+   ```
+
+### Phase 2: API Implementation (Day 1-2)
+1. **Conversation Management**
+    ```bash
+   # Step 1: Create API routes
+   [x] Create src/app/api/conversations/route.ts
+   [x] Implement POST for new conversations
+   [x] Implement GET for conversation list
+   [x] Add session validation
+   [x] Add metadata handling
+     [x] Handle active status updates
+     [x] Handle metadata updates
+   ```
+
+2. **Message Handling**
+    ```bash
+   # Step 2: Add message endpoints
+   [x] Create src/app/api/conversations/[id]/messages/route.ts
+   [x] Implement message creation
+   [x] Implement message retrieval
+   [x] Add user validation
+   [x] Add metadata handling
+     [x] Update conversation metadata
+     [x] Handle message metadata
+   ```
+
+3. **Security Implementation**
+   ```bash
+   # Step 3: Add security measures
+   [x] Add request validation
+   [x] Implement rate limiting
+   [x] Add input sanitization
+   [x] Add error handling
+   ```
+
+### Phase 3: UI Integration (Day 2-3)
+1. **Conversation List**
+   ```bash
+   # Step 1: Create conversation list
+   [x] Create ConversationList component
+     [x] Add history icon button
+     [x] Add conversation list modal
+     [x] Add conversation switching
+     [x] Add loading states
+   [x] Implement new chat creation
+     [x] Add "New Chat" button
+     [x] Handle active conversation state
+     [x] Add conversation title generation
+     [x] Add loading states
+   [x] Add conversation preview
+   ```
+
+2. **Chat Interface Updates**
+   ```bash
+   # Step 2: Update ChatBox
+   [x] Add conversation context
+   [x] Implement message persistence
+   [x] Add new chat initialization
+   [x] Add conversation switching
+   [x] Add loading states
+   [x] Handle active conversation state
+   ```
+
+### Phase 4: Testing & Optimization (Day 3)
+1. **Security Testing**
+   ```bash
+   # Step 1: Test security measures
+   [ ] Test user isolation
+   [ ] Verify data privacy
+   [ ] Test session handling
+   [ ] Verify input sanitization
+   ```
+
+2. **Performance Testing**
+   ```bash
+   # Step 2: Test performance
+   [ ] Test concurrent users
+   [ ] Verify query performance
+   [ ] Test session handling
+   [ ] Monitor memory usage
+   ```
+
+3. **Integration Testing**
+   ```bash
+   # Step 3: Test integration
+   [ ] Test conversation switching
+   [ ] Test message persistence
+   [ ] Test error scenarios
+   [ ] Test session recovery
+   ```
+
+## Data Privacy Implementation
+
+```typescript
+// Example of user isolation in database operations
+class ConversationDB {
+  // Ensure all queries include user_id
+  async getUserConversations(userId: string): Promise<Conversation[]> {
+    const result = await this.db.query(
+      'SELECT * FROM conversations WHERE user_id = $1 ORDER BY updated_at DESC',
+      [userId]
+    );
+    return result.rows;
+  }
+
+  // Validate user ownership before operations
+  async getConversation(id: number, userId: string): Promise<Conversation> {
+    const result = await this.db.query(
+      'SELECT * FROM conversations WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    );
+    
+    if (result.rows.length === 0) {
+      throw new Error('Conversation not found or unauthorized');
+    }
+
+    return result.rows[0];
+  }
+}
+
+// Example of session validation in API routes
+async function validateUserAccess(
+  conversationId: number, 
+  session: Session
+): Promise<boolean> {
+  if (!session?.username) return false;
+
+  const conversation = await db.query(
+    'SELECT user_id FROM conversations WHERE id = $1',
+    [conversationId]
+  );
+
+  return conversation.rows[0]?.user_id === session.username;
+}
+```
+
+## Benefits
+1. **Simplicity**: Uses existing PostgreSQL setup
+2. **Reliability**: Built on proven database technology
+3. **Maintainability**: Simple schema design
+4. **Security**: Strong user isolation and data privacy
+5. **Extensibility**: Easy to add features later
+
+## Limitations
+1. No real-time collaboration features
+2. Basic conversation management
+3. Limited metadata storage
+4. Session-based only (no permanent storage)
+
+## Future Enhancements (Post-MVP)
+1. Conversation search
+2. Conversation sharing (with privacy controls)
+3. Export functionality
+4. Advanced metadata tracking
+5. End-to-end encryption option
 
 This implementation provides:
-- Efficient dual memory system
-- Support for high concurrent users
-- Built-in rate limiting
-- Activity-based optimization
-- Automatic cleanup
-- Recovery mechanisms 
-
-## Detailed Message Flow Examples
-
-### 1. Initial User Connection
-```typescript
-const initialSetup = {
-  event: "User opens chat",
-  actions: {
-    redis: {
-      // Create rate limit counter
-      command: "SETEX chat:user123:rate 60 0",
-      // Set initial activity status
-      command: "SETEX chat:user123:active 86400 true"
-    },
-    chroma: {
-      // Create user collection if doesn't exist
-      command: "createCollection('user_123')"
-    }
-  }
-};
-```
-
-### 2. First Message Flow
-```typescript
-const firstMessage = {
-  input: {
-    user: "What do you think about the crypto market today?",
-    timestamp: "2024-03-20T10:00:00Z"
-  },
-  
-  flow: {
-    // Step 1: Rate Limit Check
-    rateLimit: {
-      redis: {
-        command: "INCR chat:user123:rate",
-        result: 1,
-        action: "Allow (1 < 30 per minute)"
-      }
-    },
-    
-    // Step 2: Store in Chroma (Primary Storage)
-    chroma: {
-      operation: "addMessage",
-      data: {
-        id: "msg_1",
-        content: "What do you think about the crypto market today?",
-        embedding: [0.1, 0.2, ...], // Vector embedding
-        metadata: {
-          timestamp: "2024-03-20T10:00:00Z",
-          type: "user",
-          topic: "crypto"
-        }
-      }
-    },
-    
-    // Step 3: No Previous Context Yet
-    context: {
-      redis: "No last message",
-      chroma: "No relevant history"
-    },
-    
-    // Step 4: Store in Redis (Fast Access)
-    redis: {
-      command: `SET chat:user123:last {
-        "content": "What do you think about the crypto market today?",
-        "timestamp": "2024-03-20T10:00:00Z",
-        "type": "user"
-      } EX 86400`  // 24 hours TTL
-    },
-    
-    // Step 5: Generate Response
-    llm: {
-      input: {
-        messages: [
-          {
-            role: "system",
-            content: "You are roleplaying as the user's Twitter personality."
-          },
-          {
-            role: "user",
-            content: "What do you think about the crypto market today?"
-          }
-        ]
-      },
-      output: "The crypto market is showing interesting patterns today! BTC's volatility..."
-    }
-  }
-};
-```
-
-### 3. Follow-up Message Flow
-```typescript
-const followUpMessage = {
-  input: {
-    user: "What about Ethereum specifically?",
-    timestamp: "2024-03-20T10:05:00Z"
-  },
-  
-  flow: {
-    // Step 1: Rate Limit Check
-    rateLimit: {
-      redis: {
-        command: "INCR chat:user123:rate",
-        result: 2,
-        action: "Allow (2 < 30 per minute)"
-      }
-    },
-    
-    // Step 2: Get Context
-    context: {
-      // Get immediate context from Redis
-      redis: {
-        command: "GET chat:user123:last",
-        result: {
-          content: "The crypto market is showing interesting patterns today!...",
-          timestamp: "2024-03-20T10:00:00Z",
-          type: "assistant"
-        }
-      },
-      
-      // Get relevant history from Chroma
-      chroma: {
-        query: "Ethereum cryptocurrency market",
-        results: [
-          {
-            content: "What do you think about the crypto market today?",
-            similarity: 0.89
-          },
-          {
-            content: "The crypto market is showing interesting patterns today!...",
-            similarity: 0.85
-          }
-        ]
-      }
-    },
-    
-    // Step 3: Store New Message
-    storage: {
-      // Store in Chroma first (source of truth)
-      chroma: {
-        operation: "addMessage",
-        data: {
-          id: "msg_2",
-          content: "What about Ethereum specifically?",
-          embedding: [0.2, 0.3, ...],
-          metadata: {
-            timestamp: "2024-03-20T10:05:00Z",
-            type: "user",
-            topic: "crypto",
-            subtopic: "ethereum"
-          }
-        }
-      },
-      
-      // Update Redis
-      redis: {
-        command: `SET chat:user123:last {
-          "content": "What about Ethereum specifically?",
-          "timestamp": "2024-03-20T10:05:00Z",
-          "type": "user"
-        } EX 86400`
-      }
-    },
-    
-    // Step 4: Generate Contextual Response
-    llm: {
-      input: {
-        messages: [
-          {
-            role: "system",
-            content: "You are roleplaying as the user's Twitter personality."
-          },
-          {
-            role: "system",
-            content: "Previous context: Discussion about general crypto market trends."
-          },
-          {
-            role: "assistant",
-            content: "The crypto market is showing interesting patterns today!..."
-          },
-          {
-            role: "user",
-            content: "What about Ethereum specifically?"
-          }
-        ]
-      },
-      output: "Ethereum's looking particularly interesting because..."
-    }
-  }
-};
-```
-
-### 4. Inactivity Handling
-```typescript
-const inactivityFlow = {
-  event: "User returns after 2 hours",
-  
-  flow: {
-    // Check activity status
-    activityCheck: {
-      redis: {
-        command: "GET chat:user123:last_active",
-        result: "2024-03-20T10:05:00Z",
-        action: "Mark as inactive"
-      }
-    },
-    
-    // Adjust TTL for inactive user
-    ttlUpdate: {
-      redis: {
-        command: "EXPIRE chat:user123:last 3600", // 1 hour TTL
-        reason: "User inactive"
-      }
-    },
-    
-    // Recovery available if needed
-    recovery: {
-      available: true,
-      source: "Chroma historical data",
-      method: "recoverRedisContext"
-    }
-  }
-};
-```
-
-### Key Flow Characteristics
-
-1. **Data Consistency**
-   - Chroma writes happen before Redis
-   - Redis failures are recoverable
-   - TTL adjusts based on activity
-
-2. **Context Management**
-   - Immediate context from Redis
-   - Historical context from Chroma
-   - Context merging in LLM prompt
-
-3. **Error Handling**
-   - Rate limit failures
-   - Storage failures
-   - Recovery procedures
-
-4. **Performance Optimization**
-   - Activity-based TTL
-   - Minimal Redis storage
-   - Efficient context retrieval
-
-This implementation provides:
-- Efficient dual memory system
-- Support for high concurrent users
-- Built-in rate limiting
-- Activity-based optimization
-- Automatic cleanup
-- Recovery mechanisms 
+- Multiple chat support
+- Session persistence
+- Simple and efficient storage
+- Strong data privacy
+- User isolation
+- Easy integration with existing codebase

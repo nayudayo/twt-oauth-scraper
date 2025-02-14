@@ -1,7 +1,7 @@
 import { parentPort, workerData } from 'worker_threads'
 import { ApifyClient } from 'apify-client'
 import * as dotenv from 'dotenv'
-import type { Tweet, TwitterProfile } from '@/types/scraper'
+import type { Tweet, TwitterProfile } from '../types/scraper'
 import { initDB } from './db/index'
 import type { DBUser } from './db/adapters/types'
 

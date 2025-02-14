@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Conversation } from '../types/conversation';
+import type { Conversation } from '@/types/conversation';
 
 interface ConversationListProps {
   conversations: Conversation[];
@@ -145,4 +145,4 @@ export function ConversationList({
       )}
     </>
   );
-}
+} 

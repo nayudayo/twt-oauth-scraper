@@ -56,7 +56,7 @@ const calculateTemperature = (tuning: RequestBody['tuning']): number => {
 export async function POST(req: Request) {
   try {
     // Get user session for rate limiting
-    const session = await getServerSession()
+    const session = await getServerSession(authOptions)
     if (!session?.username) {
       return NextResponse.json(
         { error: 'Unauthorized' },

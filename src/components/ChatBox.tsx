@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Dispatch, SetStateAction, useCallback } from 'react'
-import { Tweet, TwitterProfile } from '../types/scraper'
-import { PersonalityAnalysis } from '../lib/openai'
-import type { Conversation, Message } from '../types/conversation'
+import { Tweet, TwitterProfile } from '@/types/scraper'
+import { PersonalityAnalysis } from '@/lib/openai'
+import type { Conversation, Message } from '@/types/conversation'
 import ReactMarkdown from 'react-markdown'
 import { Spinner } from '../components/ui/spinner'
 import '../styles/glow.css'
@@ -64,6 +64,9 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   const [scrapingElapsedTime, setScrapingElapsedTime] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<number>();
+  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
 
   // Add escape key handler for modals
   useEffect(() => {
@@ -829,6 +832,93 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     }
   }, [showComplete, loading, scanProgress])
 
+  // Load conversations on mount
+  useEffect(() => {
+    const loadConversations = async () => {
+      if (!profile.name) return;
+      
+      try {
+        setIsLoadingConversations(true);
+        const response = await fetch('/api/conversations');
+        if (!response.ok) {
+          throw new Error('Failed to fetch conversations');
+        }
+        
+        const data = await response.json();
+        if (data.success && Array.isArray(data.data)) {
+          setConversations(data.data);
+          // Set active conversation if exists
+          const activeConv = data.data.find((c: Conversation) => c.metadata.isActive);
+          if (activeConv) {
+            setActiveConversationId(activeConv.id);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading conversations:', error);
+        setError(error instanceof Error ? error.message : 'Failed to load conversations');
+      } finally {
+        setIsLoadingConversations(false);
+      }
+    };
+
+    loadConversations();
+  }, [profile.name]);
+
+  // Handle conversation selection
+  const handleSelectConversation = async (conversation: Conversation) => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/conversations/' + conversation.id + '/messages');
+      if (!response.ok) {
+        throw new Error('Failed to fetch messages');
+      }
+      
+      const data = await response.json();
+      if (data.success && Array.isArray(data.data)) {
+        setMessages(data.data.map((msg: Message) => ({
+          text: msg.content,
+          isUser: msg.role === 'user'
+        })));
+        setActiveConversationId(conversation.id);
+      }
+    } catch (error) {
+      console.error('Error loading messages:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load messages');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle new chat creation
+  const handleNewChat = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/conversations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({})
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create new chat');
+      }
+
+      const data = await response.json();
+      if (data.success && data.data) {
+        setConversations(prev => [data.data, ...prev]);
+        setActiveConversationId(data.data.id);
+        setMessages([]);
+      }
+    } catch (error) {
+      console.error('Error creating new chat:', error);
+      setError(error instanceof Error ? error.message : 'Failed to create new chat');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <>
       {/* Main Container - Mobile First Layout */}
@@ -842,13 +932,13 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
                 <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">NEURAL INTERFACE</h3>
               </div>
-              <button
-                onClick={onClose}
-                className="text-red-500/70 hover:text-red-500/90 ancient-text"
-              >
-                <span className="sr-only">Close</span>
-                ×
-              </button>
+              <ConversationList
+                conversations={conversations}
+                activeConversationId={activeConversationId}
+                onSelectConversation={handleSelectConversation}
+                onNewChat={handleNewChat}
+                isLoading={isLoadingConversations}
+              />
             </div>
 
             {/* Chat Messages Container */}
@@ -1517,7 +1607,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       {/* Desktop Layout - Preserve Existing */}
       <div className="hidden lg:block">
         {/* Left Side Panels Container */}
-        <div className="fixed top-20 left-0 lg:left-6 flex flex-col gap-4 h-[calc(100vh-104px)] w-[26vw] min-w-[280px] max-w-[400px] px-4 lg:px-0 overflow-y-auto lg:overflow-visible transition-all duration-300">
+        <div className="fixed top-20 left-0 md:left-6 lg:left-8 flex flex-col gap-4 h-[calc(100vh-104px)] w-[26vw] lg:w-[22vw] xl:w-[20vw] min-w-[280px] max-w-[400px] px-4 md:px-0 overflow-y-auto md:overflow-visible transition-all duration-300">
         {/* System Controls Panel */}
           <div className="w-full bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
             <div className="flex-none border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
@@ -1809,7 +1899,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       </div>
 
         {/* Right Side Panels Container */}
-        <div className="fixed top-20 right-0 lg:right-6 h-[calc(100vh-104px)] w-[26vw] min-w-[280px] max-w-[400px] flex flex-col gap-4 px-4 lg:px-0 overflow-y-auto lg:overflow-visible transition-all duration-300">
+        <div className="fixed top-20 right-0 md:right-6 lg:right-8 h-[calc(100vh-104px)] w-[26vw] lg:w-[22vw] xl:w-[20vw] min-w-[280px] max-w-[400px] flex flex-col gap-4 px-4 md:px-0 overflow-y-auto md:overflow-visible transition-all duration-300">
           {/* Archives Panel - Top Half */}
           <div className="h-[calc(50%-2px)] min-h-[300px] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
             <div className="flex-none flex items-center px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 cryptic-shadow">
@@ -2090,21 +2180,21 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
 
       {/* Main Center Chat Interface Container */}
       <div className="fixed inset-0 flex items-center justify-center pointer-events-none pt-20 pb-6">
-        <div className="w-[42vw] min-w-[380px] max-w-[800px] h-[calc(100vh-104px)] mx-auto backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow pointer-events-auto z-10 ancient-border rune-pattern overflow-hidden transition-all duration-300 md:mx-8 lg:mx-auto">
-          <div className="flex flex-col h-full min-h-0">
+          <div className="w-[40vw] lg:w-[48vw] xl:w-[54vw] min-w-[380px] max-w-[1200px] h-[calc(100vh-104px)] mx-auto backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow pointer-events-auto z-1 ancient-border rune-pattern overflow-hidden transition-all duration-300 md:mx-6 lg:mx-8">
+            <div className="flex flex-col h-full min-h-0">
             {/* Chat Header */}
             <div className="flex-none flex items-center justify-between px-4 md:px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 rounded-t-lg cryptic-shadow">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
                 <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">NEURAL INTERFACE</h3>
               </div>
-              <button
-                onClick={onClose}
-                className="text-red-500/70 hover:text-red-500/90 ancient-text"
-              >
-                <span className="sr-only">Close</span>
-                ×
-              </button>
+              <ConversationList
+                conversations={conversations}
+                activeConversationId={activeConversationId}
+                onSelectConversation={handleSelectConversation}
+                onNewChat={handleNewChat}
+                isLoading={isLoadingConversations}
+              />
             </div>
 
             {/* Chat Messages Container */}

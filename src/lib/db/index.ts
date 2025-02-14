@@ -1,52 +1,61 @@
-import { PostgresAdapter } from './adapters/postgres';
 import { DatabaseFactory } from './factory';
 import { DatabaseError } from './adapters/errors';
+import { Pool } from 'pg';
+import { ConversationDB } from './conversation';
+import type { PostgresAdapter } from './adapters/postgres';
+import type { DBConfig } from './factory';
 
 // Re-export types
-export type { DatabaseAdapter } from './adapters/types';
-export type { DBUser, DBTweet, DBPersonalityAnalysis, DBFunnelProgress, DBFunnelCompletion, DBReferralTracking, DBReferralCode, DBReferralUsage } from './adapters/types';
 export { DatabaseError } from './adapters/errors';
 export type { PostgresAdapter } from './adapters/postgres';
 
-// Default database configuration
-const DEFAULT_CONFIG = {
-  type: 'postgres' as const,
-  host: process.env.PG_HOST || 'localhost',
-  port: parseInt(process.env.PG_PORT || '5432'),
-  database: process.env.PG_DATABASE || 'twitter_analysis_db',
-  user: process.env.PG_USER || 'postgres',
-  maxConnections: parseInt(process.env.PG_MAX_CONNECTIONS || '20'),
-  minConnections: parseInt(process.env.PG_MIN_CONNECTIONS || '2'),
-  connectionTimeoutMs: parseInt(process.env.PG_CONNECTION_TIMEOUT || '10000'),
-  idleTimeoutMs: parseInt(process.env.PG_IDLE_TIMEOUT || '30000')
-};
-
 let dbInstance: PostgresAdapter | null = null;
+let pool: Pool | null = null;
+let conversationDB: ConversationDB | null = null;
 
-export async function initDB(): Promise<PostgresAdapter> {
-  if (dbInstance) {
-    return dbInstance;
-  }
+export interface ExtendedDB extends PostgresAdapter {
+  conversation: ConversationDB;
+}
 
+export async function initDB(): Promise<ExtendedDB> {
   try {
-    // Validate required environment variables
-    if (!process.env.PG_PASSWORD) {
-      throw new DatabaseError('Database password not provided in environment variables');
+    if (dbInstance && pool && conversationDB) {
+      return Object.assign(dbInstance, { conversation: conversationDB });
     }
 
-    // Initialize database with configuration
-    const db = await DatabaseFactory.initialize({
-      ...DEFAULT_CONFIG,
-      password: process.env.PG_PASSWORD,
-      // Allow overriding connection string from environment
-      connectionString: process.env.DATABASE_URL
-    });
+    // Initialize pool if not exists
+    if (!pool) {
+      pool = new Pool({
+        user: process.env.PG_USER,
+        password: process.env.PG_PASSWORD,
+        host: process.env.PG_HOST,
+        database: process.env.PG_DATABASE,
+        port: parseInt(process.env.PG_PORT || '5432')
+      });
+    }
+
+    // Initialize base database instance
+    const config: DBConfig = {
+      type: 'postgres',
+      host: process.env.PG_HOST || 'localhost',
+      port: parseInt(process.env.PG_PORT || '5432'),
+      database: process.env.PG_DATABASE || 'postgres',
+      user: process.env.PG_USER || 'postgres',
+      password: process.env.PG_PASSWORD || ''
+    };
+
+    const db = await DatabaseFactory.initialize(config);
+
+    // Initialize conversation DB if not exists
+    if (!conversationDB) {
+      conversationDB = new ConversationDB(pool);
+    }
 
     dbInstance = db;
-    return db;
+    return Object.assign(db, { conversation: conversationDB });
   } catch (error) {
     console.error('Failed to initialize database:', error);
-    throw error;
+    throw new DatabaseError('Failed to initialize database');
   }
 }
 
@@ -62,4 +71,6 @@ export async function closeDB(): Promise<void> {
     await DatabaseFactory.shutdown();
     dbInstance = null;
   }
-} 
+}
+
+export type { ConversationDB }; 

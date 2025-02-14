@@ -47,6 +47,8 @@ async function purgeDatabase() {
       DROP TABLE IF EXISTS personality_analysis CASCADE;
       DROP TABLE IF EXISTS tweets CASCADE;
       DROP TABLE IF EXISTS users CASCADE;
+      DROP TABLE IF EXISTS conversations CASCADE;
+      DROP TABLE IF EXISTS messages CASCADE;
     `;
 
     console.log('Dropping all tables...');
@@ -149,7 +151,29 @@ async function purgeDatabase() {
         CONSTRAINT valid_chunk_status CHECK (status IN ('pending', 'processing', 'completed', 'failed'))
       );
 
+      CREATE TABLE conversations (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL REFERENCES users(id),
+        title VARCHAR(255),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        metadata JSONB DEFAULT '{}'     -- For active status and other metadata
+      );
+
+      CREATE TABLE messages (
+        id SERIAL PRIMARY KEY,
+        conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE,
+        content TEXT NOT NULL,
+        role VARCHAR(50) NOT NULL,      -- 'user' or 'assistant'
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        metadata JSONB DEFAULT '{}'     -- For future extensibility
+      );
+
       -- Create indexes
+      CREATE INDEX idx_conversations_user_id ON conversations(user_id);
+      CREATE INDEX idx_conversations_updated ON conversations(updated_at DESC);
+      CREATE INDEX idx_messages_conversation_id ON messages(conversation_id);
+      CREATE INDEX idx_messages_created ON messages(created_at ASC);
       CREATE INDEX idx_tweets_user_created ON tweets(user_id, created_at);
       CREATE INDEX idx_tweets_created ON tweets(created_at);
       CREATE INDEX idx_tweets_text ON tweets USING gin (to_tsvector('english', text));

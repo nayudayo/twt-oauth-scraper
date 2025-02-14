@@ -148,8 +148,8 @@ export type {
   APIResponse,
   ConversationResponse,
   MessageResponse,
-  MessageListResponse,
   ConversationListResponse,
+  MessageListResponse,
 };
 
 export { ConversationError }; 
