@@ -608,7 +608,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
         )}
         
         {/* Main Terminal Container */}
-        <div className="w-full h-full md:h-[85vh] md:max-w-4xl mx-auto p-4 md:p-0 flex items-center">
+        <div className="w-full h-full md:h-[90vh] lg:h-[85vh] md:max-w-3xl lg:max-w-4xl mx-auto p-4 md:p-6 flex items-center">
           <div className={`relative w-full h-full transition-opacity duration-500 ${isLoading ? 'opacity-30' : 'opacity-100'}`}>
             {/* CRT Effects Layer */}
             <div className="absolute inset-0 pointer-events-none crt">
@@ -619,10 +619,10 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
             {/* Terminal Window */}
             <div className="relative w-full h-full bg-black/40 backdrop-blur-md border border-red-500/20 rounded-lg shadow-2xl flex flex-col font-['Share_Tech_Mono'] overflow-hidden">
               {/* Terminal Header */}
-              <div className="flex-none px-4 py-3 border-b border-red-500/20 bg-black/20">
+              <div className="flex-none px-4 py-2 md:py-3 border-b border-red-500/20 bg-black/20">
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20"></div>
-                  <span className="text-red-500/70 text-sm tracking-[0.2em] uppercase terminal-text">Neural Terminal v1.0.3</span>
+                  <span className="text-red-500/70 text-xs md:text-sm tracking-[0.2em] uppercase terminal-text">Neural Terminal v1.0.3</span>
                 </div>
               </div>
 
@@ -631,30 +631,39 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
                 {/* Terminal Output */}
                 <div 
                   ref={terminalRef}
-                  className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-1"
+                  className="flex-1 overflow-y-auto custom-scrollbar p-3 md:p-4 space-y-1"
                 >
-                  {lines.map((line, i) => (
-                    <pre 
-                      key={i}
-                      className={`font-['Share_Tech_Mono'] whitespace-pre-wrap tracking-wider terminal-text ${
-                        line.isError 
-                          ? 'text-red-500/90 font-bold' 
-                          : line.isSuccess
-                            ? 'text-green-500/70'
-                            : line.isSystem
-                              ? 'text-yellow-500/70'
-                              : line.isCommand 
-                                ? 'text-red-500/70' 
-                                : 'text-red-400/60'
-                      }`}
-                    >
-                      {line.content}
-                    </pre>
-                  ))}
+                  {lines.map((line, i) => {
+                    // Check if this line contains the ASCII logo - update the detection condition
+                    const isAsciiLogo = line.content.includes('PTB') || 
+                                        line.content.includes('███████████') || 
+                                        line.content.includes('░░███░░░░░███');
+                    
+                    return (
+                      <pre 
+                        key={i}
+                        className={`font-['Share_Tech_Mono'] whitespace-pre-wrap tracking-wider ${
+                          isAsciiLogo 
+                            ? 'ascii-logo' 
+                            : line.isError 
+                              ? 'text-red-500/90 font-bold terminal-text' 
+                              : line.isSuccess
+                                ? 'text-green-500/70 terminal-text'
+                                : line.isSystem
+                                  ? 'text-yellow-500/70 terminal-text'
+                                  : line.isCommand 
+                                    ? 'text-red-500/70 terminal-text' 
+                                    : 'text-red-400/60 terminal-text'
+                        }`}
+                      >
+                        {line.content}
+                      </pre>
+                    )
+                  })}
                 </div>
 
                 {/* Input Form */}
-                <form onSubmit={handleSubmit} className="flex-none px-4 py-3 border-t border-red-500/20 bg-black/20">
+                <form onSubmit={handleSubmit} className="flex-none px-3 md:px-4 py-2 md:py-3 border-t border-red-500/20 bg-black/20">
                   <div className="flex items-center gap-2">
                     <span className="text-red-500/70 tracking-wider terminal-text">{'>'}</span>
                     <input
@@ -662,7 +671,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
                       type="text"
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      className="flex-1 bg-transparent text-red-400/90 outline-none font-['Share_Tech_Mono'] tracking-wider terminal-text"
+                      className="flex-1 bg-transparent text-red-400/90 outline-none font-['Share_Tech_Mono'] tracking-wider terminal-input"
                       autoFocus
                       spellCheck={false}
                     />
@@ -683,12 +692,12 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
       {/* Share Dialog */}
       {showShareDialog && (
         <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 md:p-6"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 md:p-6 lg:p-8"
           onClick={() => hasShared && setShowShareDialog(false)}
         >
           <div 
             ref={shareModalRef}
-            className="bg-gradient-to-br from-black to-black/95 backdrop-blur-md p-4 md:p-8 rounded-lg shadow-2xl w-full max-w-[500px] border border-red-500/20 hover-glow float"
+            className="bg-gradient-to-br from-black to-black/95 backdrop-blur-md p-4 md:p-6 lg:p-8 rounded-lg shadow-2xl w-full max-w-[500px] border border-red-500/20 hover-glow float"
             style={{
               backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(239,68,68,0.05), rgba(0,0,0,0.98) 100%)',
               boxShadow: '0 0 40px rgba(239,68,68,0.1)'
