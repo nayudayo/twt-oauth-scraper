@@ -265,8 +265,9 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
         setMessages(prev => [...prev, { text: response, isUser: false }])
       }
 
-      // If this is a new conversation, fetch messages to ensure consistency
-      if (!activeConversationId) {
+      // If we have an active conversation ID and the messages might be out of sync,
+      // fetch the latest messages from the server
+      if (activeConversationId) {
         try {
           const response = await fetch('/api/conversations/' + activeConversationId + '/messages')
           if (response.ok) {

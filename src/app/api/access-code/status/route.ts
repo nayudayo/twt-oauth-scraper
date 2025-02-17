@@ -24,6 +24,8 @@ interface StatusResponse {
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
+    
+    // If no session, return unauthorized
     if (!session?.username) {
       return NextResponse.json(
         {
@@ -38,18 +40,28 @@ export async function GET() {
 
     const db = await initDB();
     
-    // Get user
-    const user = await db.getUserByUsername(session.username);
+    // Get or create user
+    let user = await db.getUserByUsername(session.username);
     if (!user) {
-      return NextResponse.json(
-        {
-          success: false,
-          isVerified: false,
-          error: 'User not found',
-          metadata: generateResponseMetadata()
-        } as StatusResponse,
-        { status: 404 }
-      );
+      // Create user if they don't exist
+      try {
+        user = await db.createUser({
+          username: session.username,
+          twitter_username: session.username,
+          created_at: new Date()
+        });
+      } catch (error) {
+        console.error('Error creating user:', error);
+        return NextResponse.json(
+          {
+            success: false,
+            isVerified: false,
+            error: 'Failed to create user',
+            metadata: generateResponseMetadata()
+          } as StatusResponse,
+          { status: 500 }
+        );
+      }
     }
 
     // Check if user has a valid access code

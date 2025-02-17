@@ -110,24 +110,38 @@ export async function POST(req: Request) {
     console.log(`User found/created with ID: ${user.id}`)
 
     // Get or create conversation with proper error handling
-    let activeConversationId: number = conversationId || 0
-    if (!activeConversationId) {
-      console.log('Creating new conversation')
+    let activeConversationId: number
+    if (conversationId) {
+      // Verify the conversation exists and belongs to the user
+      const conversation = await db.conversation.getConversation(conversationId, user.id)
+      if (!conversation) {
+        return NextResponse.json(
+          { error: 'Conversation not found or unauthorized' },
+          { status: 404 }
+        )
+      }
+      activeConversationId = conversationId
+    } else {
+      // Create a new conversation
       try {
         const conversation = await db.conversation.startNewChat({
           userId: user.id,
           initialMessage: message,
-          title: `Chat with ${profile.name}`,
+          title: `Chat with ${profile.name || 'AI'}`,
           metadata: {
             profileName: profile.name,
-            lastMessageAt: new Date()
+            lastMessageAt: new Date(),
+            messageCount: 0
           }
         })
         activeConversationId = conversation.id
         console.log(`Created new conversation with ID: ${activeConversationId}`)
       } catch (error) {
         console.error('Failed to create conversation:', error)
-        throw new Error('Failed to create conversation')
+        return NextResponse.json(
+          { error: 'Failed to create conversation' },
+          { status: 500 }
+        )
       }
     }
 
@@ -142,7 +156,10 @@ export async function POST(req: Request) {
       console.log('User message saved successfully')
     } catch (error) {
       console.error('Failed to save user message:', error)
-      throw new Error('Failed to save user message')
+      return NextResponse.json(
+        { error: 'Failed to save message' },
+        { status: 500 }
+      )
     }
 
     // Adjust traits based on modifiers

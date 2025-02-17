@@ -90,6 +90,7 @@ export async function middleware(request: NextRequest) {
     // Verify access status
     const verifyResponse = await fetch(`${request.nextUrl.origin}/api/access-code/status`, {
       headers: {
+        'Cookie': request.headers.get('cookie') || '',
         'Authorization': `Bearer ${token}`
       }
     })
