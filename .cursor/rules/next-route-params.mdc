@@ -1,0 +1,64 @@
+---
+description: next route param handling
+globs: */api
+---
+ # Next.js App Router Route Parameters
+
+## Problem
+Next.js App Router's route parameter typing system can cause type errors with dynamic routes (e.g., [id], [username]) due to parameter types being treated as Promises.
+
+## Solution
+Instead of using Next.js's route parameters, manually parse the URL in the route handler:
+
+1. Remove route parameter from function signature:
+```typescript
+// DON'T do this:
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {}
+
+// DO this instead:
+export async function GET(request: NextRequest) {}
+```
+
+2. Parse URL manually using URL API:
+```typescript
+// Extract parameter from URL
+const url = new URL(request.url);
+const pathParts = url.pathname.split('/');
+const paramValue = pathParts[pathParts.indexOf('parameterName') + 1];
+```
+
+## Example
+```typescript
+// For route: /api/users/[id]/posts
+export async function GET(request: NextRequest) {
+  try {
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split('/');
+    const userId = pathParts[pathParts.indexOf('users') + 1];
+    
+    // Use userId...
+  } catch (error) {
+    // Handle error...
+  }
+}
+```
+
+## When to Use
+- Any dynamic route in Next.js App Router (files/folders with [] in the name)
+- When you need to access route parameters in API routes
+- When you get type errors about route parameters being Promises
+
+## Benefits
+1. Avoids Next.js App Router typing issues
+2. More reliable parameter extraction
+3. Better type safety
+4. No dependency on Next.js's parameter system
+
+## Remember
+- Always validate the extracted parameter
+- Consider URL encoding/decoding if needed
+- Add proper error handling for invalid URLs
+- Keep the URL parsing logic consistent across routes

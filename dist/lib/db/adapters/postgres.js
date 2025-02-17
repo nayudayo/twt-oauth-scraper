@@ -12,8 +12,8 @@ const monitoring_1 = require("../monitoring");
 // PostgreSQL Transaction Implementation
 class PostgresTransaction {
     constructor(client, monitor) {
-        this.client = client;
         this.monitor = monitor;
+        this.client = client;
         this.transactionId = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
     }
     async begin() {

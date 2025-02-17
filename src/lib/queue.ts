@@ -108,7 +108,7 @@ class DatabaseQueue {
           user_id: user.id,
           text: tweet.text,
           created_at: new Date(tweet.timestamp),
-          url: tweet.url,
+          url: tweet.url || `https://twitter.com/${item.username}/status/${tweet.id}`,
           is_reply: tweet.isReply || false,
           metadata: tweet.metadata || {},
           created_in_db: new Date()

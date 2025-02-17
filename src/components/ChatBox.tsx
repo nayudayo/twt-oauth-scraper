@@ -30,6 +30,7 @@ interface PersonalityTuning {
 interface ScanProgress {
   phase: 'posts' | 'replies' | 'complete'
   count: number
+  message?: string
 }
 
 export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: ChatBoxProps) {
@@ -515,7 +516,11 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
               console.log('Successfully updated tweets in UI');
               
               // Then set completion states
-              setScanProgress({ phase: 'complete', count: finalTweets.length });
+              setScanProgress({
+                phase: 'complete',
+                count: finalTweets.length,
+                message: `Collection complete! ${finalTweets.length} tweets collected.`
+              });
               setLoading(false);
               setShowComplete(true);
               setShowAnalysisPrompt(true);
@@ -576,109 +581,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     isLastBatch: data.isLastBatch
                   });
 
-                  // Check if this batch is empty or marked as last
-                  if (data.tweets.length === 0 || data.isLastBatch) {
-                    console.log('Last batch or empty tweets detected, finalizing scraping')
-                    try {
-                      // Save all tweets in a single batch at the end
-                      const saveTweetsResponse = await fetch('/api/tweets/save', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                          username: profile.name,
-                          sessionId,
-                          tweets: data.tweets 
-                        })
-                      });
-
-                      if (!saveTweetsResponse.ok) {
-                        throw new Error('Failed to save tweets to database');
-                      }
-
-                      console.log('Saved tweets to database, fetching all tweets...');
-                      
-                      // Add retry mechanism for fetching tweets
-                      let retryCount = 0;
-                      const maxRetries = 3;
-                      let finalTweets = [];
-                      
-                      while (retryCount < maxRetries) {
-                        try {
-                          console.log(`Making API call to /api/tweets/${profile.name}/all`);
-                          const fetchTweetsResponse = await fetch(`/api/tweets/${profile.name}/all`);
-                          
-                          if (!fetchTweetsResponse.ok) {
-                            console.error(`API call failed with status: ${fetchTweetsResponse.status}`);
-                            throw new Error(`Failed to fetch tweets: ${fetchTweetsResponse.status}`);
-                          }
-
-                          finalTweets = await fetchTweetsResponse.json();
-                          console.log(`Successfully fetched ${finalTweets.length} tweets`);
-                          
-                          if (Array.isArray(finalTweets) && finalTweets.length > 0) {
-                            // Update tweets in UI first
-                            handleTweetUpdate(finalTweets);
-                            console.log('Successfully updated tweets in UI');
-                            
-                            // Then set completion states
-                            setScanProgress({ phase: 'complete', count: finalTweets.length });
-                            setLoading(false);
-                            setShowComplete(true);
-                            console.log('Set completion states:', { 
-                              loading: false, 
-                              showComplete: true, 
-                              scanProgress: 'complete', 
-                              tweetCount: finalTweets.length 
-                            });
-                            break;
-                          } else {
-                            throw new Error('Received empty or invalid tweet array');
-                          }
-                        } catch (error) {
-                          console.error(`Fetch attempt ${retryCount + 1} failed:`, error);
-                          retryCount++;
-                          if (retryCount === maxRetries) {
-                            throw new Error('Failed to fetch tweets after multiple attempts');
-                          }
-                          // Wait before retrying
-                          await new Promise(resolve => setTimeout(resolve, 1000));
-                        }
-                      }
-
-                      // Update UI state
-                      setShowAnalysisPrompt(true);
-                      setScrapingStartTime(null);
-                      
-                      // Cleanup
-                      const currentController = abortController;
-                      setAbortController(null);
-                      reader.cancel();
-                      if (currentController) {
-                        currentController.abort();
-                      }
-                      
-                      // Complete the session
-                      await fetch(`/api/scrape/complete`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ sessionId, username: profile.name })
-                      });
-
-                    } catch (error) {
-                      console.error('Error in batch completion flow:', error);
-                      setError(error instanceof Error ? error.message : 'Failed to complete batch processing');
-                      setLoading(false);
-                      const currentController = abortController;
-                      setAbortController(null);
-                      if (currentController) {
-                        currentController.abort();
-                      }
-                      setScrapingStartTime(null);
-                      reader.cancel();
-                    }
-                  }
-                  
-                  // Update scan progress
+                  // Update scan progress with total tweets
                   if (data.scanProgress) {
                     setScanProgress({
                       phase: data.scanProgress.phase,
@@ -701,14 +604,6 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
 
                     if (!saveBatchResponse.ok) {
                       console.warn('Failed to save batch to database');
-                    }
-
-                    // Update progress
-                    if (data.scanProgress) {
-                      setScanProgress({
-                        phase: data.scanProgress.phase,
-                        count: data.totalTweets || data.scanProgress.count
-                      });
                     }
 
                     // Immediately fetch and update UI after each batch save
@@ -745,6 +640,14 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 setShowAnalysisPrompt(true);
                 setScrapingStartTime(null);
                 setAbortController(null);
+                
+                // Ensure we have the final tweet count
+                setScanProgress({
+                  phase: 'complete',
+                  count: data.totalTweets || scanProgress?.count || 0,
+                  message: `Collection complete! ${data.totalTweets || scanProgress?.count || 0} tweets collected.`
+                });
+                
                 reader.cancel();
                 break;
               }
@@ -774,7 +677,6 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       if (!profile.name) return;
       
       try {
-        setLoading(true);
         const response = await fetch(`/api/tweets/${profile.name}/all`);
         if (!response.ok) {
           throw new Error('Failed to fetch existing tweets');
@@ -788,15 +690,14 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
           if (validTweets.length > 0) {
             setScanProgress({
               phase: 'complete',
-              count: validTweets.length
+              count: validTweets.length,
+              message: `${validTweets.length} tweets loaded from database`
             });
           }
         }
       } catch (error) {
         console.error('Error loading existing tweets:', error);
         setError(error instanceof Error ? error.message : 'Failed to load existing tweets');
-      } finally {
-        setLoading(false);
       }
     };
 
@@ -1556,45 +1457,43 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
 
         {/* Archives Panel */}
         <div className="w-full bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
-         <div className="flex-none flex items-center px-4 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 cryptic-shadow">
-            <div className="flex flex-wrap items-center gap-4">
+          <div className="flex-none flex items-center px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 cryptic-shadow">
+            <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
+                <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">ARCHIVES</h3>
+              </div>
+
+              {profile.name && (
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
-                  <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">ARCHIVES</h3>
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box" />
+                  <span className="text-xs text-red-500/80 hover-text-glow truncate">@{profile.name}</span>
                 </div>
+              )}
 
-                {profile.name && (
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box" />
-                    <span className="text-xs text-red-500/80 hover-text-glow truncate">@{profile.name}</span>
-                  </div>
-                )}
-
-                {/* Progress Status */}
-                <div className="h-6 flex items-center gap-2 text-red-500/60 overflow-hidden">
-                  {loading && (
-                    <>
-                      <div className="flex items-center gap-1 flex-none">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20 glow-box" />
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-100 shadow-lg shadow-red-500/20 glow-box" />
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-200 shadow-lg shadow-red-500/20 glow-box" />
-                      </div>
-                      {scanProgress && (
-                        <div className="flex items-center gap-2">
-                          <span className="uppercase tracking-wider text-xs glow-text truncate">
-                            {scanProgress.phase === 'posts' ? 'SCANNING POSTS' : 'SCANNING REPLIES'}: {scanProgress.count}
+              {/* Progress Status */}
+              <div className="h-6 flex items-center gap-2 text-red-500/60 overflow-hidden">
+                {loading && (
+                  <>
+                    <div className="flex items-center gap-1 flex-none">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20 glow-box" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-100 shadow-lg shadow-red-500/20 glow-box" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-200 shadow-lg shadow-red-500/20 glow-box" />
+                    </div>
+                    {scanProgress && (
+                      <div className="flex items-center gap-2">
+                        <span className="uppercase tracking-wider text-xs glow-text truncate">
+                          {scanProgress.message || `${scanProgress.phase === 'posts' ? 'SCANNING POSTS' : 'SCANNING REPLIES'}: ${scanProgress.count} TWEETS COLLECTED`}
+                        </span>
+                        {scrapingElapsedTime && (
+                          <span className="text-xs text-red-500/40 glow-text truncate">
+                            [{scrapingElapsedTime}]
                           </span>
-                          {scrapingElapsedTime && (
-                            <span className="text-xs text-red-500/40 glow-text truncate">
-                              [{scrapingElapsedTime}]
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -1963,7 +1862,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     {scanProgress && (
                         <div className="flex items-center gap-2">
                           <span className="uppercase tracking-wider text-xs glow-text truncate">
-                        {scanProgress.phase === 'posts' ? 'SCANNING POSTS' : 'SCANNING REPLIES'}: {scanProgress.count}
+                        {scanProgress.message || `${scanProgress.phase === 'posts' ? 'SCANNING POSTS' : 'SCANNING REPLIES'}: ${scanProgress.count} TWEETS COLLECTED`}
                           </span>
                           {scrapingElapsedTime && (
                             <span className="text-xs text-red-500/40 glow-text truncate">

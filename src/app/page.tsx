@@ -4,6 +4,7 @@ import { useState, useEffect, Dispatch, SetStateAction } from 'react'
 import { signIn, signOut, useSession } from 'next-auth/react'
 import ChatBox from '@/components/ChatBox'
 import { TerminalModal } from '@/components/TerminalModal'
+import { AccessCodeModal } from '@/components/AccessCodeModal'
 import { Tweet } from '@/types/scraper'
 
 export default function Home() {
@@ -11,6 +12,33 @@ export default function Home() {
   const [tweets, setTweets] = useState<Tweet[]>([])
   const [terminalComplete, setTerminalComplete] = useState(false)
   const [showContent, setShowContent] = useState(false)
+  const [accessVerified, setAccessVerified] = useState(false)
+  const [isCheckingAccess, setIsCheckingAccess] = useState(true)
+
+  // Check access code status when session is available
+  useEffect(() => {
+    const checkAccessStatus = async () => {
+      if (session?.username) {
+        try {
+          setIsCheckingAccess(true)
+          const response = await fetch('/api/access-code/status')
+          const data = await response.json()
+          
+          if (data.success && data.isVerified) {
+            setAccessVerified(true)
+          }
+        } catch (error) {
+          console.error('Error checking access status:', error)
+        } finally {
+          setIsCheckingAccess(false)
+        }
+      } else {
+        setIsCheckingAccess(false)
+      }
+    }
+
+    checkAccessStatus()
+  }, [session?.username])
 
   // Fetch tweets when session is available
   useEffect(() => {
@@ -37,11 +65,16 @@ export default function Home() {
     fetchTweets()
   }, [session?.username])
 
-  // Reset terminal state when session changes
+  // Reset states when session changes
   useEffect(() => {
     if (!session) {
       setTerminalComplete(false)
       setShowContent(false)
+      setAccessVerified(false)
+      setTweets([])
+      // Clear any cached data
+      localStorage.removeItem('twitter-oauth-state')
+      sessionStorage.clear()
     }
   }, [session])
 
@@ -52,33 +85,12 @@ export default function Home() {
     setTimeout(() => setShowContent(true), 100)
   }
 
-  // Handle session termination
-  const handleTerminateSession = async () => {
-    try {
-      // First revoke the Twitter OAuth token
-      await fetch('/api/auth/revoke', {
-        method: 'POST',
-        credentials: 'include'
-      })
-    } catch (error) {
-      console.error('Failed to revoke token:', error)
-      // Continue with logout even if revocation fails
-    }
-
-    // Sign out from NextAuth
-    await signOut({ redirect: false })
-    
-    // Clear local state
-    setTerminalComplete(false)
-    setShowContent(false)
-    setTweets([])
-
-    // Clear any cached data
-    localStorage.removeItem('twitter-oauth-state')
-    sessionStorage.clear()
+  // Handle access code verification
+  const handleAccessVerified = () => {
+    setAccessVerified(true)
   }
 
-  // Handle tweet updates
+  // Handle tweet updates with detailed logging
   const handleTweetsUpdate: Dispatch<SetStateAction<Tweet[]>> = (updater) => {
     // Always treat as a function update since we're streaming
     const newTweets = typeof updater === 'function' ? updater(tweets) : updater
@@ -97,8 +109,35 @@ export default function Home() {
     setTweets(newTweets)
   }
 
-  // Show loading state while checking session
-  if (status === 'loading') {
+  // Handle session termination with cleanup
+  const handleTerminateSession = async () => {
+    try {
+      // First revoke the Twitter OAuth token
+      await fetch('/api/auth/revoke', {
+        method: 'POST',
+        credentials: 'include'
+      })
+    } catch (error) {
+      console.error('Failed to revoke token:', error)
+      // Continue with logout even if revocation fails
+    }
+
+    // Sign out from NextAuth
+    await signOut({ redirect: false })
+    
+    // Clear local state
+    setTerminalComplete(false)
+    setShowContent(false)
+    setAccessVerified(false)
+    setTweets([])
+
+    // Clear any cached data
+    localStorage.removeItem('twitter-oauth-state')
+    sessionStorage.clear()
+  }
+
+  // Show loading state while checking session or access status
+  if (status === 'loading' || isCheckingAccess) {
     return (
       <main className="min-h-screen bg-gradient-to-br from-black via-red-950/20 to-black text-red-500 font-mono flex">
         <div className="flex-1 flex items-center justify-center">
@@ -124,7 +163,12 @@ export default function Home() {
     )
   }
 
-  // Show terminal if authenticated but not completed
+  // Show access code modal if authenticated but not verified
+  if (!accessVerified) {
+    return <AccessCodeModal onValidated={handleAccessVerified} />
+  }
+
+  // Show terminal if verified but not completed
   if (!terminalComplete) {
     return <TerminalModal onComplete={handleTerminalComplete} />
   }

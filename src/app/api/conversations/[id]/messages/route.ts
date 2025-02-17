@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/config';
-import { initDB } from '@/lib/db';
-import { ConversationError } from '@/lib/db/conversation';
-import type { MessageResponse, MessageListResponse } from '@/types/conversation';
+import { authOptions } from '../../../../../lib/auth/config';
+import { initDB } from '../../../../../lib/db';
+import { ConversationError } from '../../../../../lib/db/conversation';
+import type { MessageResponse, MessageListResponse } from '../../../../../types/conversation';
 
 // Helper to generate API response metadata
 function generateResponseMetadata(conversationId: number) {
@@ -13,6 +13,10 @@ function generateResponseMetadata(conversationId: number) {
     conversationId
   };
 }
+
+// HTTP method configuration
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
   try {
@@ -106,7 +110,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Extract ID from URL
-    const id = request.url.split('/').pop();
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split('/');
+    const id = pathParts[pathParts.indexOf('conversations') + 1];
+    
     if (!id) {
       return NextResponse.json(
         {
@@ -200,7 +207,10 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     // Extract ID from URL
-    const id = request.url.split('/').pop();
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split('/');
+    const id = pathParts[pathParts.indexOf('conversations') + 1];
+    
     if (!id) {
       return NextResponse.json(
         {

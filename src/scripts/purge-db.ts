@@ -46,6 +46,7 @@ async function purgeDatabase() {
       DROP TABLE IF EXISTS analysis_queue CASCADE;
       DROP TABLE IF EXISTS personality_analysis CASCADE;
       DROP TABLE IF EXISTS tweets CASCADE;
+      DROP TABLE IF EXISTS access_codes CASCADE;
       DROP TABLE IF EXISTS users CASCADE;
       DROP TABLE IF EXISTS conversations CASCADE;
       DROP TABLE IF EXISTS messages CASCADE;
@@ -65,6 +66,16 @@ async function purgeDatabase() {
         profile_picture_url TEXT,
         last_scraped TIMESTAMP WITH TIME ZONE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE access_codes (
+        id SERIAL PRIMARY KEY,
+        code VARCHAR(50) NOT NULL UNIQUE,
+        user_id VARCHAR(255) REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        used_at TIMESTAMP WITH TIME ZONE,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        metadata JSONB DEFAULT '{}'::jsonb
       );
 
       CREATE TABLE tweets (
@@ -185,6 +196,9 @@ async function purgeDatabase() {
       CREATE INDEX idx_analysis_queue_user ON analysis_queue(user_id);
       CREATE INDEX idx_analysis_chunks_job_status ON analysis_chunks(job_id, status);
       CREATE INDEX idx_analysis_queue_priority ON analysis_queue(priority DESC, created_at ASC);
+      CREATE INDEX idx_access_codes_code ON access_codes(code);
+      CREATE INDEX idx_access_codes_user_id ON access_codes(user_id);
+      CREATE INDEX idx_access_codes_is_active ON access_codes(is_active);
     `;
 
     console.log('Recreating tables...');

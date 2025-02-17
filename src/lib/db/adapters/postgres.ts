@@ -22,11 +22,13 @@ import {
 // PostgreSQL Transaction Implementation
 class PostgresTransaction implements DBTransaction {
   private transactionId: string;
+  public client: PoolClient;  // Changed to public to match interface
 
   constructor(
-    private client: PoolClient,
+    client: PoolClient,
     private monitor?: DatabaseMonitor
   ) {
+    this.client = client;
     this.transactionId = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
   }
 

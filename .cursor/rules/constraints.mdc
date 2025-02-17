@@ -1,9 +1,15 @@
 ---
-description:
-globs:
+description: the constraints prompt engineering
+globs: *
+---
+---
+description: 
+globs: 
 ---
 
-# Your rule content
-
-- You can @ files here
-- You can use markdown but dont have to
+# CONSTRAINTS
+- only alter the files that are relevant to the problem, task, and context scope
+- build upon the current implementation (meaning to utilize existing implementations and build upon that)
+- modify the parts and functions one part at a time so that there will be a reduced risk for errors
+- if linter errors arise, fix them first before marking the task as finished
+- update the .md plan of the task

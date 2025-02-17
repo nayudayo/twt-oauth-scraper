@@ -6,7 +6,7 @@ import type { EventData } from '@/types/scraper'
 export interface ScrapingJob {
   id: string
   username: string
-  accessToken: string
+  sessionId: string  // Changed from accessToken to sessionId
   onProgress?: (data: EventData) => void
 }
 
@@ -44,13 +44,15 @@ export class WorkerPool {
 
   private async startWorker(job: ScrapingJob): Promise<void> {
     // Use absolute path to worker file
-    const workerPath = path.join(process.cwd(), 'dist', 'lib', 'apify-worker.js') // Changed to use apify-worker
+    const workerPath = path.join(process.cwd(), 'dist', 'lib', 'twitter', 'worker.js')
     console.log('Starting worker with path:', workerPath)
     
     const worker = new Worker(workerPath, {
       workerData: {
         username: job.username,
-        accessToken: job.accessToken
+        sessionId: job.sessionId,
+        batchSize: 100,  // Default batch size
+        maxTweets: 1000  // Default max tweets to fetch
       }
     })
 

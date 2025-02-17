@@ -14,13 +14,13 @@
     "postinstall": "bash scripts/setup-db.sh",
     "check-db": "bash scripts/check-db-permissions.sh",
     "inspect-db": "tsx scripts/check-db.ts",
-    "purge-db": "tsx src/scripts/purge-db.ts"
+    "purge-db": "tsx src/scripts/purge-db.ts",
+    "generate-neural-codes": "tsx src/scripts/generate-neural-codes.ts"
   },
   "dependencies": {
     "@auth/core": "^0.37.4",
     "@radix-ui/react-slot": "^1.1.1",
     "@types/html2canvas": "^0.5.35",
-    "apify-client": "^2.11.1",
     "cfonts": "^3.3.0",
     "chromadb": "^1.10.4",
     "class-variance-authority": "^0.7.1",

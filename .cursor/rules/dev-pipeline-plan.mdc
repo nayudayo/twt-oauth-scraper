@@ -1,0 +1,19 @@
+---
+description: this is the format for the .md plans
+globs: 
+---
+---
+description: 
+globs: *.md
+---
+CONTENT: 
+- summary of what we are going to implement
+- explicit steps for the implementation
+- the objects to implement in a format specified below
+
+FORMAT:
+- checklist style implementation steps
+- for each module/part/objects to be implemented, instead of code snippets, we shall be describing the algorithm and logic in a clear mannerr that can be studied and altered like a prompt engineering
+
+REMEMBER:
+- focus on the core functionalities first before we go to the advanced optimizations and improvements

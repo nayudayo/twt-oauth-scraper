@@ -8,43 +8,47 @@ const factory_1 = require("./factory");
 const errors_1 = require("./adapters/errors");
 const pg_1 = require("pg");
 const conversation_1 = require("./conversation");
+const access_1 = require("./access");
 // Re-export types
 var errors_2 = require("./adapters/errors");
 Object.defineProperty(exports, "DatabaseError", { enumerable: true, get: function () { return errors_2.DatabaseError; } });
 let dbInstance = null;
-let pool = null;
 let conversationDB = null;
-async function initDB() {
+let accessDB = null;
+async function initDB(config) {
     try {
-        if (dbInstance && pool && conversationDB) {
-            return Object.assign(dbInstance, { conversation: conversationDB });
-        }
-        // Initialize pool if not exists
-        if (!pool) {
-            pool = new pg_1.Pool({
-                user: process.env.PG_USER,
-                password: process.env.PG_PASSWORD,
-                host: process.env.PG_HOST,
-                database: process.env.PG_DATABASE,
-                port: parseInt(process.env.PG_PORT || '5432')
+        // Return existing instance if available
+        if (dbInstance && conversationDB && accessDB) {
+            return Object.assign(dbInstance, {
+                conversation: conversationDB,
+                access: accessDB
             });
         }
-        // Initialize base database instance
-        const config = {
+        // Initialize database instance
+        dbInstance = await factory_1.DatabaseFactory.initialize(config || {
             type: 'postgres',
             host: process.env.PG_HOST || 'localhost',
             port: parseInt(process.env.PG_PORT || '5432'),
             database: process.env.PG_DATABASE || 'postgres',
             user: process.env.PG_USER || 'postgres',
             password: process.env.PG_PASSWORD || ''
-        };
-        const db = await factory_1.DatabaseFactory.initialize(config);
-        // Initialize conversation DB if not exists
-        if (!conversationDB) {
-            conversationDB = new conversation_1.ConversationDB(pool);
-        }
-        dbInstance = db;
-        return Object.assign(db, { conversation: conversationDB });
+        });
+        // Create a new pool for our operations
+        const pool = new pg_1.Pool({
+            user: process.env.PG_USER,
+            password: process.env.PG_PASSWORD,
+            host: process.env.PG_HOST,
+            database: process.env.PG_DATABASE,
+            port: parseInt(process.env.PG_PORT || '5432')
+        });
+        // Initialize sub-systems
+        conversationDB = new conversation_1.ConversationDB(pool);
+        accessDB = new access_1.AccessCodeDB(pool);
+        // Extend the adapter with our operations
+        return Object.assign(dbInstance, {
+            conversation: conversationDB,
+            access: accessDB
+        });
     }
     catch (error) {
         console.error('Failed to initialize database:', error);

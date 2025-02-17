@@ -1,18 +1,24 @@
 import { DatabaseOperations } from './operations';
+import { PoolClient } from 'pg';
 
 // User Types
 export interface DBUser {
   id: string;
   username: string;
-  twitter_username?: string;
-  profile_data?: {
+  twitter_username: string | null;
+  profile_data: {
     bio?: string;
     followersCount?: number;
     followingCount?: number;
+    description?: string;
+    name?: string;
+    id?: string;
+    createdAt?: string;
+    viewCount?: number;
   };
-  profile_picture_url?: string;
-  last_scraped?: Date;
+  profile_picture_url: string | null;
   created_at: Date;
+  last_scraped: Date | null;
 }
 
 // Tweet Types
@@ -21,15 +27,30 @@ export interface DBTweet {
   user_id: string;
   text: string;
   created_at: Date;
-  url?: string;
+  url: string;
   is_reply: boolean;
-  metadata?: {
-    metrics?: {
-      likes?: number;
-      retweets?: number;
-      replies?: number;
+  metadata: {
+    viewCount?: number;
+    conversationId?: string;
+    inReplyToId?: string;
+    inReplyToUserId?: string;
+    inReplyToUsername?: string;
+    lang?: string;
+    entities?: {
+      hashtags?: Array<{ text: string; indices: number[] }>;
+      urls?: Array<{
+        display_url: string;
+        expanded_url: string;
+        url: string;
+        indices: number[];
+      }>;
+      user_mentions?: Array<{
+        id_str: string;
+        name: string;
+        screen_name: string;
+        indices: number[];
+      }>;
     };
-    images?: string[];
   };
   created_in_db: Date;
 }
@@ -97,9 +118,7 @@ export interface DBReferralUsage {
 
 // Transaction Types
 export interface DBTransaction {
-  begin(): Promise<void>;
-  commit(): Promise<void>;
-  rollback(): Promise<void>;
+  client: PoolClient;
 }
 
 // Connection Types
@@ -151,4 +170,24 @@ export interface DatabaseAdapter extends DatabaseOperations {
   beginTransaction(): Promise<DBTransaction>;
 
   // Will add operation methods in the next step...
+
+  transaction<T>(callback: (transaction: DBTransaction) => Promise<T>): Promise<T>;
+  
+  saveTweets(userId: string, tweets: DBTweet[]): Promise<void>;
+  
+  saveUserProfile(username: string, profile: Partial<DBUser>): Promise<void>;
+  
+  getTweetsByUserId(
+    userId: string,
+    options?: {
+      limit?: number;
+      includeReplies?: boolean;
+    }
+  ): Promise<DBTweet[]>;
+  
+  getUserByUsername(username: string): Promise<DBUser | null>;
+  
+  getUserByTwitterUsername(username: string): Promise<DBUser | null>;
+  
+  createUser(user: Partial<DBUser>): Promise<DBUser>;
 } 
