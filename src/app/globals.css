@@ -159,6 +159,8 @@ body {
 
 .terminal-text {
   animation: textShadow 1.6s infinite;
+  font-size: 12px; /* Base size for mobile */
+  letter-spacing: 0.5px;
 }
 
 /* Custom Scrollbar */
@@ -380,3 +382,41 @@ body {
   80% { transform: none; opacity: 1; }
   100% { transform: none; opacity: 1; }
 }
+
+/* ASCII Logo styles */
+pre.ascii-logo {
+  font-family: 'Share Tech Mono', monospace;
+  white-space: pre !important; /* Force pre formatting */
+  line-height: 1 !important; /* Tighter line height for ASCII art */
+  display: block;
+  font-weight: normal;
+  transform-origin: left;
+  margin: 0;
+  padding: 0;
+}
+
+@media (max-width: 767px) {
+  pre.ascii-logo {
+    font-size: 14px;
+    letter-spacing: 0;
+    transform: scale(0.9); /* Slightly scale down on mobile */
+    transform-origin: left top;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  pre.ascii-logo {
+    font-size: 16px;
+    letter-spacing: 0;
+    transform: scale(1);
+  }
+}
+
+@media (min-width: 1024px) {
+  pre.ascii-logo {
+    font-size: 18px;
+    letter-spacing: 0;
+    transform: scale(1);
+  }
+}
+
