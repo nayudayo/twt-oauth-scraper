@@ -19,7 +19,9 @@ body {
   font-family: 'Share Tech Mono', monospace;
   min-height: 100vh;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Terminal Effects */
@@ -386,37 +388,39 @@ body {
 /* ASCII Logo styles */
 pre.ascii-logo {
   font-family: 'Share Tech Mono', monospace;
-  white-space: pre !important; /* Force pre formatting */
-  line-height: 1 !important; /* Tighter line height for ASCII art */
-  display: block;
+  white-space: pre !important;
+  line-height: 1 !important;
+  display: inline-block;
   font-weight: normal;
-  transform-origin: left;
+  transform-origin: left top;
   margin: 0;
   padding: 0;
+  font-size: 12px;
+  max-width: 100%;
 }
 
 @media (max-width: 767px) {
   pre.ascii-logo {
-    font-size: 14px;
+    font-size: 14px !important;
     letter-spacing: 0;
-    transform: scale(0.9); /* Slightly scale down on mobile */
-    transform-origin: left top;
+    transform: scale(0.95);
+    width: auto;
+    min-width: min-content;
   }
 }
 
 @media (min-width: 768px) and (max-width: 1023px) {
   pre.ascii-logo {
-    font-size: 16px;
+    font-size: 16px !important;
     letter-spacing: 0;
-    transform: scale(1);
+    transform: scale(0.95);
   }
 }
 
 @media (min-width: 1024px) {
   pre.ascii-logo {
-    font-size: 18px;
+    font-size: 16px !important;
     letter-spacing: 0;
-    transform: scale(1);
   }
 }
 

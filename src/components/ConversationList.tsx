@@ -45,13 +45,15 @@ export function ConversationList({
       {/* Modal Overlay */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center z-[999] pt-20"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center z-[999999] pt-20 md:pt-20"
           onClick={() => setIsOpen(false)}
+          style={{ transform: 'translate3d(0,0,0)', isolation: 'isolate' }}
         >
           {/* Modal Content */}
           <div 
-            className="w-full max-w-md bg-black/40 backdrop-blur-md border border-red-500/20 rounded-lg shadow-2xl hover-glow ancient-border relative z-[1000]"
+            className="w-full max-w-md bg-black/40 backdrop-blur-md border border-red-500/20 rounded-lg shadow-2xl hover-glow ancient-border relative z-[1000000] overflow-hidden"
             onClick={e => e.stopPropagation()}
+            style={{ transform: 'translate3d(0,0,0)', willChange: 'transform', isolation: 'isolate' }}
           >
             {/* Modal Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-red-500/20 bg-black/40">

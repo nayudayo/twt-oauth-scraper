@@ -608,8 +608,8 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
         )}
         
         {/* Main Terminal Container */}
-        <div className="w-full h-full md:h-[90vh] lg:h-[85vh] md:max-w-3xl lg:max-w-4xl mx-auto p-4 md:p-6 flex items-center">
-          <div className={`relative w-full h-full transition-opacity duration-500 ${isLoading ? 'opacity-30' : 'opacity-100'}`}>
+        <div className="w-full h-full md:h-[90vh] lg:h-[85vh] md:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 md:py-8 flex items-center">
+          <div className={`relative w-full h-[96vh] sm:h-[94vh] md:h-full transition-opacity duration-500 ${isLoading ? 'opacity-30' : 'opacity-100'}`}>
             {/* CRT Effects Layer */}
             <div className="absolute inset-0 pointer-events-none crt">
               <div className="absolute inset-0 bg-gradient-to-b from-red-500/5 to-transparent opacity-50" />
@@ -619,7 +619,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
             {/* Terminal Window */}
             <div className="relative w-full h-full bg-black/40 backdrop-blur-md border border-red-500/20 rounded-lg shadow-2xl flex flex-col font-['Share_Tech_Mono'] overflow-hidden">
               {/* Terminal Header */}
-              <div className="flex-none px-4 py-2 md:py-3 border-b border-red-500/20 bg-black/20">
+              <div className="flex-none px-3 py-2 md:px-4 md:py-3 border-b border-red-500/20 bg-black/20">
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20"></div>
                   <span className="text-red-500/70 text-xs md:text-sm tracking-[0.2em] uppercase terminal-text">Neural Terminal v1.0.3</span>
@@ -631,39 +631,39 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
                 {/* Terminal Output */}
                 <div 
                   ref={terminalRef}
-                  className="flex-1 overflow-y-auto custom-scrollbar p-3 md:p-4 space-y-1"
+                  className="flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4 md:p-4 space-y-1 w-full"
                 >
                   {lines.map((line, i) => {
-                    // Check if this line contains the ASCII logo - update the detection condition
                     const isAsciiLogo = line.content.includes('PTB') || 
-                                        line.content.includes('███████████') || 
-                                        line.content.includes('░░███░░░░░███');
+                                       line.content.includes('███████████') || 
+                                       line.content.includes('░░███░░░░░███');
                     
                     return (
-                      <pre 
-                        key={i}
-                        className={`font-['Share_Tech_Mono'] whitespace-pre-wrap tracking-wider ${
-                          isAsciiLogo 
-                            ? 'ascii-logo' 
-                            : line.isError 
-                              ? 'text-red-500/90 font-bold terminal-text' 
-                              : line.isSuccess
-                                ? 'text-green-500/70 terminal-text'
-                                : line.isSystem
-                                  ? 'text-yellow-500/70 terminal-text'
-                                  : line.isCommand 
-                                    ? 'text-red-500/70 terminal-text' 
-                                    : 'text-red-400/60 terminal-text'
-                        }`}
-                      >
-                        {line.content}
-                      </pre>
+                      <div key={i} className={`${isAsciiLogo ? 'pl-0 sm:pl-1 md:pl-2' : ''}`}>
+                        <pre 
+                          className={`font-['Share_Tech_Mono'] whitespace-pre-wrap tracking-wider ${
+                            isAsciiLogo 
+                              ? 'ascii-logo' 
+                              : line.isError 
+                                ? 'text-red-500/90 font-bold terminal-text' 
+                                : line.isSuccess
+                                  ? 'text-green-500/70 terminal-text'
+                                  : line.isSystem
+                                    ? 'text-yellow-500/70 terminal-text'
+                                    : line.isCommand 
+                                      ? 'text-red-500/70 terminal-text' 
+                                      : 'text-red-400/60 terminal-text'
+                          }`}
+                        >
+                          {line.content}
+                        </pre>
+                      </div>
                     )
                   })}
                 </div>
 
                 {/* Input Form */}
-                <form onSubmit={handleSubmit} className="flex-none px-3 md:px-4 py-2 md:py-3 border-t border-red-500/20 bg-black/20">
+                <form onSubmit={handleSubmit} className="flex-none px-3 sm:px-3 md:px-4 py-2 md:py-3 border-t border-red-500/20 bg-black/20">
                   <div className="flex items-center gap-2">
                     <span className="text-red-500/70 tracking-wider terminal-text">{'>'}</span>
                     <input
