@@ -1,0 +1,33 @@
+---
+description: format for the changelogs
+globs: 
+---
+# Changelog Format Guidelines
+
+1. Structure each entry with:
+   - A clear, concise headline
+   - Indented sub-points for important details
+   - Technical error messages in quotes when relevant
+
+2. Entry Categories:
+   ### Added
+   - New features or capabilities
+   
+   ### Changed
+   - Improvements to existing functionality
+   - Non-bug-related updates
+   
+   ### Fixed
+   - Bug fixes with specific error messages in quotes
+   - Clear explanation of the solution
+   - Impact of the fix
+   
+   ### Removed
+   - Intentionally removed features
+   - Reason for removal if significant
+
+3. Writing Style:
+   - Use active voice
+   - Start with verbs (Added, Fixed, Updated, etc.)
+   - Include error messages in quotes for searchability
+   - Explain impact, not just changes

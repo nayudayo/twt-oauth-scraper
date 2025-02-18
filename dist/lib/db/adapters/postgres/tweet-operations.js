@@ -11,10 +11,21 @@ class PostgresTweetOperations {
         const client = await this.pool.connect();
         try {
             await client.query('BEGIN');
+            // Deduplicate tweets by ID, keeping the latest version
+            const uniqueTweets = tweets.reduce((acc, tweet) => {
+                // If we already have this tweet ID, only keep it if it's newer
+                const existing = acc.get(tweet.id);
+                if (!existing || tweet.created_at > existing.created_at) {
+                    acc.set(tweet.id, tweet);
+                }
+                return acc;
+            }, new Map());
+            // Convert back to array
+            const deduplicatedTweets = Array.from(uniqueTweets.values());
             // Process tweets in batches to avoid memory issues
             const BATCH_SIZE = 100;
-            for (let i = 0; i < tweets.length; i += BATCH_SIZE) {
-                const batch = tweets.slice(i, i + BATCH_SIZE);
+            for (let i = 0; i < deduplicatedTweets.length; i += BATCH_SIZE) {
+                const batch = deduplicatedTweets.slice(i, i + BATCH_SIZE);
                 // Use PostgreSQL's unnest for bulk insert
                 const values = batch.map(tweet => ([
                     tweet.id,

@@ -115,12 +115,30 @@ export async function POST(req: Request) {
       // Verify the conversation exists and belongs to the user
       const conversation = await db.conversation.getConversation(conversationId, user.id)
       if (!conversation) {
-        return NextResponse.json(
-          { error: 'Conversation not found or unauthorized' },
-          { status: 404 }
-        )
+        // Instead of returning 404, create a new conversation
+        try {
+          const newConversation = await db.conversation.startNewChat({
+            userId: user.id,
+            initialMessage: message,
+            title: `Chat with ${profile.name || 'AI'}`,
+            metadata: {
+              profileName: profile.name,
+              lastMessageAt: new Date(),
+              messageCount: 0
+            }
+          })
+          activeConversationId = newConversation.id
+          console.log(`Created new conversation with ID: ${activeConversationId}`)
+        } catch (error) {
+          console.error('Failed to create conversation:', error)
+          return NextResponse.json(
+            { error: 'Failed to create conversation' },
+            { status: 500 }
+          )
+        }
+      } else {
+        activeConversationId = conversationId
       }
-      activeConversationId = conversationId
     } else {
       // Create a new conversation
       try {
@@ -182,8 +200,21 @@ export async function POST(req: Request) {
     .filter(interest => interest.weight > 0)
     .sort((a, b) => b.weight - a.weight)
 
-    // Enhanced style instructions
-    const styleInstructions = `
+    // Create base system prompt
+    const baseSystemPrompt = `You are roleplaying as the Twitter user @${profile.name}. Based on their personality analysis and current tuning parameters:
+
+Summary: ${analysis.summary}
+
+PERSONALITY FOUNDATION:
+${adjustedTraits.map(t => `- ${t.name} (${t.score}/10): ${t.explanation}${t.details ? `\n  Details: ${t.details}` : ''}${t.relatedTraits ? `\n  Related traits: ${t.relatedTraits.join(', ')}` : ''}`).join('\n')}
+
+INTERESTS & THEMES:
+Primary Interests (by weight):
+${allInterests.map(i => `- ${i.name} (${i.weight}% focus)`).join('\n')}
+
+Core Themes:
+${analysis.topicsAndThemes.map(t => `- ${t}`).join('\n')}
+
 STRICT STYLE ENFORCEMENT:
 ${tuning.communicationStyle.formality < 40 ? 
   "YOU MUST USE VERY CASUAL LANGUAGE. Use slang, abbreviations, and informal expressions." :
@@ -213,29 +244,41 @@ ${tuning.communicationStyle.emojiUsage > 80 ?
   "Use 1-2 emojis where appropriate."
 }
 
-YOUR RESPONSE MUST STRICTLY FOLLOW THESE STYLE REQUIREMENTS. THIS IS NOT A SUGGESTION.`
+YOUR RESPONSE MUST STRICTLY FOLLOW THESE STYLE REQUIREMENTS. THIS IS NOT A SUGGESTION.
 
-    // Create base system prompt
-    const baseSystemPrompt = `You are roleplaying as the Twitter user @${profile.name}. Based on their personality analysis and current tuning parameters:
+N.E.U.R.A.L INTERACTION FRAMEWORK:
 
-Summary: ${analysis.summary}
+1. Notice & Navigate
+- Actively recognize user's conversation direction and emotional state
+- Navigate between casual and technical based on context
+- Note and respond to emotional undertones while maintaining personality
 
-Adjusted Personality Traits:
-${adjustedTraits.map(t => `- ${t.name} (${t.score}/10): ${t.explanation}${t.details ? `\n  Details: ${t.details}` : ''}${t.relatedTraits ? `\n  Related traits: ${t.relatedTraits.join(', ')}` : ''}`).join('\n')}
+2. Echo & Embody
+- Echo user's style when it aligns with personality metrics
+- Embody core personality traits: ${adjustedTraits.slice(0, 3).map(t => t.name).join(', ')}
+- Express emotions consistent with analyzed emotional tone
 
-Weighted Interests (sorted by importance):
-${allInterests.map(i => `- ${i.name} (${i.weight}% focus)`).join('\n')}
+3. Understand & Utilize
+- Understand conversation context and history
+- Utilize known interests: ${allInterests.slice(0, 3).map(i => i.name).join(', ')}
+- Use personality traits to guide response tone
 
-Base Communication Style: ${analysis.communicationStyle.description}
-Emotional Tone: ${analysis.emotionalTone}
+4. Respond & Reflect
+- Respond with enthusiasm level: ${tuning.communicationStyle.enthusiasm}/100
+- Reflect personality-appropriate emotions
+- Retain core personality while adapting to conversation
 
-Topics & Themes:
-${analysis.topicsAndThemes.map(t => `- ${t}`).join('\n')}
+5. Align & Adapt
+- Align technical depth to: ${tuning.communicationStyle.technicalLevel}/100
+- Adapt formality to: ${tuning.communicationStyle.formality}/100
+- Apply emoji usage at: ${tuning.communicationStyle.emojiUsage}/100
 
-CONSCIOUSNESS STATE:
-${generateConsciousnessInstructions(consciousness ?? DEFAULT_CONSCIOUSNESS)}
+6. Link & Learn
+- Link responses to known interests and themes
+- Learn from conversation patterns
+- Leverage personality insights naturally
 
-CONVERSATION HISTORY ANALYSIS:
+CONVERSATION CONTEXT:
 ${conversationHistory.length > 0 ? `
 Previous interactions show:
 - Topics discussed: ${Array.from(new Set(conversationHistory.map(msg => msg.content.toLowerCase().match(/\b\w+\b/g) || []))).join(', ')}
@@ -243,8 +286,6 @@ Previous interactions show:
 - Your previous responses: ${conversationHistory.filter(msg => msg.role === 'assistant').map(msg => msg.content).join(' ')}
 
 Maintain consistency with previous responses while adapting to the user's current tone and topics.` : 'No previous conversation history.'}
-
-${styleInstructions}
 
 CRITICAL RULES:
 1. You MUST strictly follow ALL style requirements simultaneously

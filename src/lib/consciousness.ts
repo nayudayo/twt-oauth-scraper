@@ -115,51 +115,124 @@ export function generateConsciousnessInstructions(config: ConsciousnessConfig): 
   return instructions.join("\n\n")
 }
 
-// Helper to transform response based on consciousness
-export function applyConsciousnessEffects(
-  response: string,
-  config: ConsciousnessConfig
-): string {
-  let modified = response
-
-  // Apply intelligence level effects
-  if (config.intelligenceLevel < 50) {
-    // Simplify vocabulary
-    modified = modified.replace(/\b\w{7,}\b/g, () => "simple")
-    // Add confusion markers
-    if (Math.random() < 0.3) {
-      modified += " ...um..."
-    }
+// Quirk validation patterns
+const quirkPatterns = {
+  'repeats last word of sentences... sentences...': (text: string) => {
+    const sentences = text.split(/[.!?]+/);
+    return sentences.some(sentence => {
+      const words = sentence.trim().split(/\s+/);
+      return words.length >= 2 && words[words.length - 1] === words[words.length - 2];
+    });
+  },
+  'gets distracted by random thoughts': (text: string) => {
+    const patterns = [
+      /(?:oh|wait|actually|by the way).*\.\.\./i,
+      /\.\.\.\s*(?:where was i|anyway)/i,
+      /speaking of.*\.\.\./i
+    ];
+    return patterns.some(pattern => pattern.test(text));
+  },
+  'forgets what it was saying mid-sentence': (text: string) => {
+    const patterns = [
+      /(?:um|uh|er)\.\.\./i,
+      /what was i saying\?/i,
+      /i forgot what.*\.\.\./i,
+      /lost my train of thought/i
+    ];
+    return patterns.some(pattern => pattern.test(text));
+  },
+  'mixes up common words': (text: string) => {
+    const mixedPairs = [
+      ['think', 'thing'],
+      ['want', 'went'],
+      ['there', 'their'],
+      ['your', 'you\'re'],
+      ['make', 'take'],
+      ['give', 'get']
+    ];
+    return mixedPairs.some(([word1, word2]) => 
+      text.toLowerCase().includes(word1) && 
+      text.toLowerCase().includes(word2)
+    );
+  },
+  'uses simplified grammar': (text: string) => {
+    const patterns = [
+      /\b(?:gonna|wanna|gotta|dunno)\b/i,
+      /\b(?:cuz|cause)\b/i,
+      /\b(?:ain't|innit)\b/i
+    ];
+    return patterns.some(pattern => pattern.test(text));
   }
+};
 
-  // Apply repetitiveness
-  if (config.repetitiveness > 60) {
-    const words = modified.split(" ")
-    if (words.length > 3) {
-      const lastWord = words[words.length - 1].replace(/[.,!?]/, '')
-      modified += `... ${lastWord}...`
+export function applyConsciousnessEffects(text: string, config: ConsciousnessConfig): string {
+  if (config.quirks.length === 0) return text;
+  
+  // Only apply quirks if frequency is high enough
+  if (config.quirkFrequency <= 50) return text;
+
+  // Get random quirk from the list
+  const quirk = config.quirks[Math.floor(Math.random() * config.quirks.length)];
+  const pattern = quirkPatterns[quirk as keyof typeof quirkPatterns];
+
+  // If we don't have a pattern for this quirk, return original text
+  if (!pattern) return text;
+
+  // If text already matches the quirk pattern, return as is
+  if (pattern(text)) return text;
+
+  // Apply the quirk
+  switch (quirk) {
+    case 'repeats last word of sentences... sentences...': {
+      const sentences = text.split(/([.!?]+)/);
+      const lastSentence = sentences[sentences.length - 2];
+      if (lastSentence) {
+        const words = lastSentence.trim().split(/\s+/);
+        const lastWord = words[words.length - 1];
+        sentences[sentences.length - 2] = `${lastSentence}... ${lastWord}`;
+        return sentences.join('');
+      }
+      return text;
     }
-  }
-
-  // Apply confusion effects
-  if (config.confusionRate > 50) {
-    if (Math.random() < 0.4) {
-      modified += " Wait, what was I saying?"
+    case 'gets distracted by random thoughts': {
+      const distractions = [
+        '... oh wait, what was I saying?',
+        '... by the way, that reminds me...',
+        '... speaking of which...'
+      ];
+      const distraction = distractions[Math.floor(Math.random() * distractions.length)];
+      return text.replace(/[.!?]/, `${distraction}$&`);
     }
-  }
-
-  // Add learning/development markers
-  if (config.isLearning) {
-    const learningPhrases = [
-      "I think I'm starting to understand...",
-      "Is this right?",
-      "I'm still learning about this...",
-      "My knowledge is growing!"
-    ]
-    if (Math.random() < 0.3) {
-      modified += ` (${learningPhrases[Math.floor(Math.random() * learningPhrases.length)]})`
+    case 'forgets what it was saying mid-sentence': {
+      const forgetfulness = [
+        '... um, what was I saying?',
+        '... uh, I lost my train of thought',
+        '... er, I forgot what I was going to say'
+      ];
+      const forget = forgetfulness[Math.floor(Math.random() * forgetfulness.length)];
+      return text.replace(/[.!?]/, `${forget}$&`);
     }
+    case 'mixes up common words': {
+      const mixedPairs = [
+        ['think', 'thing'],
+        ['want', 'went'],
+        ['there', 'their'],
+        ['your', 'you\'re']
+      ];
+      const pair = mixedPairs[Math.floor(Math.random() * mixedPairs.length)];
+      return text.replace(new RegExp(`\\b${pair[0]}\\b`, 'i'), pair[1]);
+    }
+    case 'uses simplified grammar': {
+      const simplifications = [
+        [/\b(?:going to)\b/g, 'gonna'],
+        [/\b(?:want to)\b/g, 'wanna'],
+        [/\b(?:got to)\b/g, 'gotta'],
+        [/\b(?:because)\b/g, 'cuz']
+      ];
+      const simplification = simplifications[Math.floor(Math.random() * simplifications.length)];
+      return text.replace(simplification[0], simplification[1] as string);
+    }
+    default:
+      return text;
   }
-
-  return modified
 } 

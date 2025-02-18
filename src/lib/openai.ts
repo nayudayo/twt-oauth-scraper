@@ -345,15 +345,16 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
           if (!line.trim()) continue
           
           // More flexible trait parsing patterns
-          const patterns = [
-            /\*\*([^*]+)\*\*[:\s-]*(\d+)\/10[:\s-]*(.+)/, // **Trait** 8/10 - Explanation
+          const traitPatterns = [
+            /\d+\.\s+\*\*([^*]+)\*\*\s*\[(\d+)\/10\]\s*-\s*(.+)/, // 1. **Trait** [8/10] - Explanation
+            /\*\*([^*]+)\*\*\s*\[(\d+)\/10\]\s*-\s*(.+)/, // **Trait** [8/10] - Explanation
             /([^:]+):\s*(\d+)\/10\s*[-:]\s*(.+)/, // Trait: 8/10 - Explanation
             /([^(]+)\((\d+)\/10\)[:\s-]*(.+)/, // Trait (8/10): Explanation
             /([^-]+)-\s*(\d+)\/10\s*[-:]\s*(.+)/ // Trait - 8/10 - Explanation
-          ]
+          ];
 
           let matched = false
-          for (const pattern of patterns) {
+          for (const pattern of traitPatterns) {
             const match = line.match(pattern)
             if (match) {
               const [, name, score, explanation] = match
