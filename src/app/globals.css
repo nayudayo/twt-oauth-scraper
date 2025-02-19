@@ -166,23 +166,46 @@ body {
 }
 
 /* Custom Scrollbar */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  -ms-overflow-style: none;
+  scrollbar-color: rgba(239, 68, 68, 0.2) rgba(239, 68, 68, 0.05);
+}
+
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  width: 4px;
+  height: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
   background: rgba(239, 68, 68, 0.05);
-  border-radius: 3px;
+  border-radius: 2px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(239, 68, 68, 0.2);
-  border-radius: 3px;
-  border: 1px solid rgba(239, 68, 68, 0.1);
+  border-radius: 2px;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(239, 68, 68, 0.3);
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Prevent content from being movable on touch devices */
+@media (hover: none) {
+  .mobile-layout {
+    touch-action: pan-y pinch-zoom;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .custom-scrollbar {
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 /* Glowing effects */

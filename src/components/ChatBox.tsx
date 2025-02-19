@@ -859,9 +859,9 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   return (
     <>
       {/* Main Container - Mobile First Layout */}
-      <div className="flex flex-col w-full min-h-screen pt-5 sm:pt-9 md:pt-9 lg:pt-16 px-2 sm:px-5 pb-6 gap-4 mobile-layout relative z-0">
+      <div className="flex flex-col w-full min-h-screen pt-5 sm:pt-9 md:pt-9 lg:pt-16 px-2 sm:px-5 pb-6 gap-4 sm:gap-6 md:gap-8 mobile-layout relative z-0 overflow-x-hidden">
         {/* Chat Interface */}
-        <div className="w-full backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow ancient-border rune-pattern overflow-hidden relative z-10">
+        <div className="w-full backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow ancient-border rune-pattern overflow-hidden relative z-10 mb-4 sm:mb-6 md:mb-8">
           <div className="flex flex-col h-[85vh] sm:h-[80vh] md:h-[75vh]">
             {/* Chat Header */}
             <div className="flex-none flex items-center justify-between px-3 sm:px-4 py-5 sm:py-5 bg-black/40 backdrop-blur-sm border-b border-red-500/10 rounded-t-lg cryptic-shadow relative z-20">
@@ -985,7 +985,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
         </div>
 
         {/* System Controls Panel */}
-        <div className="w-full bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
+        <div className="w-full bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern mb-4 sm:mb-6 md:mb-8">
           <div className="flex-none border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
             <div className="flex items-center gap-2 mb-4">
               <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
@@ -1025,7 +1025,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
         </div>
 
         {/* Personality Fine-Tuning Panel */}
-        <div className="w-full bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
+        <div className="w-full bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern mb-4 sm:mb-6 md:mb-8">
           <div className="flex-none border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
@@ -1033,7 +1033,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[60vh]">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[60vh] sm:max-h-[50vh] md:max-h-[40vh] relative">
             {analysis ? (
               <div className="space-y-6">
                 {/* Personality Traits */}
@@ -1274,7 +1274,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
         </div>
 
         {/* Personality Analysis Panel */}
-        <div className="w-full bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
+        <div className="w-full bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern mb-4 sm:mb-6 md:mb-8">
           <div className="flex-none border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
@@ -1282,7 +1282,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[60vh]">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-4 space-y-6 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[60vh] sm:max-h-[50vh] md:max-h-[40vh] relative touch-action-pan-y">
             {!analysis ? (
               <div className="text-center">
                 {isAnalyzing && (
@@ -1305,7 +1305,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   {isAnalyzing ? (
                     <div className="flex items-center gap-2">
                       <Spinner size="sm" />
-                      <span>ANALYZING</span>
+                        <span>ANALYZING</span>
                     </div>
                   ) : (
                     'START ANALYSIS'
@@ -1313,8 +1313,8 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 </button>
               </div>
             ) : (
-              <div className="space-y-4">
-                {/* Summary Section */}
+                <div className="space-y-4">
+                  {/* Summary Section */}
                 <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
@@ -1325,7 +1325,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   </div>
                 </div>
 
-                {/* Key Traits Section */}
+                  {/* Key Traits Section */}
                 <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
@@ -1352,7 +1352,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   </div>
                 </div>
                 
-                {/* Communication Style Section */}
+                  {/* Communication Style Section */}
                 <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
@@ -1401,7 +1401,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   </div>
                 </div>
                 
-                {/* Interests Section */}
+                  {/* Interests Section */}
                 <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
@@ -1419,7 +1419,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   </div>
                 </div>
                 
-                {/* Topics & Themes Section */}
+                  {/* Topics & Themes Section */}
                 <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
@@ -1435,7 +1435,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   </ul>
                 </div>
                 
-                {/* Emotional Tone Section */}
+                  {/* Emotional Tone Section */}
                 <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
@@ -1457,9 +1457,9 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
         </div>
 
         {/* Archives Panel */}
-        <div className="w-full bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
-          <div className="flex-none flex items-center px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 cryptic-shadow">
-            <div className="flex items-center gap-4">
+        <div className="w-full bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern overflow-hidden touch-action-none">
+          <div className="flex-none flex items-center px-4 sm:px-6 py-3 sm:py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 cryptic-shadow">
+            <div className="flex items-center gap-2 sm:gap-4 w-full overflow-x-auto custom-scrollbar no-scrollbar">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
                 <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">ARCHIVES</h3>
@@ -1499,8 +1499,8 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[60vh]">
-            <div className="space-y-2">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-4 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[50vh] sm:max-h-[45vh] md:max-h-[40vh] relative touch-action-pan-y">
+            <div className="space-y-2 w-full">
               {tweets.length === 0 && (
                 <div className="text-red-500/50 italic glow-text">
                   {'>'} Awaiting data collection initialization...
@@ -1878,8 +1878,8 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-6 backdrop-blur-sm bg-black/20 dynamic-bg">
-            <div className="space-y-2">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-6 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[50vh] sm:max-h-[45vh] md:max-h-[40vh] relative touch-action-pan-y">
+            <div className="space-y-2 w-full">
                 {tweets.length === 0 ? (
                 <div className="text-red-500/50 italic glow-text">
                     {'>'} {loading ? 'Fetching data...' : 'Awaiting data collection initialization...'}
@@ -1938,7 +1938,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-6 backdrop-blur-sm bg-black/20 dynamic-bg">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-6 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[50vh] sm:max-h-[45vh] md:max-h-[40vh] relative touch-action-pan-y">
             {!analysis ? (
               <div className="text-center">
                   {isAnalyzing && (
