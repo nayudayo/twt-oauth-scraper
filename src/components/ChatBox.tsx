@@ -901,13 +901,40 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     }
   }, [showComplete, loading, scanProgress])
 
-  // Load conversations on mount
+  // Load conversations and personality cache on mount
   useEffect(() => {
-    const loadConversations = async () => {
+    const loadInitialData = async () => {
       if (!profile.name) return;
       
       try {
-        setIsLoadingConversations(true);
+        setLoading(true);
+        
+        // Load personality cache first
+        const cachedAnalysis = await personalityCache.fetchCache();
+        if (cachedAnalysis) {
+          setAnalysis(cachedAnalysis);
+          // Initialize tuning from cache
+          const communicationStyle = cachedAnalysis.communicationStyle || {
+            formality: 50,
+            enthusiasm: 50,
+            technicalLevel: 50,
+            emojiUsage: 50
+          };
+          
+          // Extract interests and their weights
+          const interestWeights: Record<string, number> = {};
+          cachedAnalysis.interests.forEach((interest: string) => {
+            interestWeights[interest] = 50; // Default weight if not specified
+          });
+
+          setTuning(prev => ({
+            ...prev,
+            communicationStyle,
+            interestWeights
+          }));
+        }
+
+        // Load conversations
         const response = await fetch('/api/conversations');
         if (!response.ok) {
           throw new Error('Failed to fetch conversations');
@@ -920,18 +947,33 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
           const activeConv = data.data.find((c: Conversation) => c.metadata.isActive);
           if (activeConv) {
             setActiveConversationId(activeConv.id);
+            // Load messages for active conversation
+            const messagesResponse = await fetch('/api/conversations/' + activeConv.id + '/messages');
+            if (messagesResponse.ok) {
+              const messagesData = await messagesResponse.json();
+              if (messagesData.success && Array.isArray(messagesData.data)) {
+                setMessages(messagesData.data.map((msg: Message) => ({
+                  text: msg.content,
+                  isUser: msg.role === 'user'
+                })));
+              }
+            }
           }
         }
       } catch (error) {
-        console.error('Error loading conversations:', error);
-        setError(error instanceof Error ? error.message : 'Failed to load conversations');
+        console.error('Error loading initial data:', error);
+        setError(error instanceof Error ? error.message : 'Failed to load initial data');
       } finally {
+        setLoading(false);
         setIsLoadingConversations(false);
       }
     };
 
-    loadConversations();
-  }, [profile.name]);
+    loadInitialData();
+  }, [profile.name]); // Remove personalityCache from dependencies
+
+  // Remove the old separate loading effects
+  // ... existing code ...
 
   // Handle conversation selection
   const handleSelectConversation = async (conversation: Conversation) => {
