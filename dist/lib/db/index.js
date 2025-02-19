@@ -9,19 +9,22 @@ const errors_1 = require("./adapters/errors");
 const pg_1 = require("pg");
 const conversation_1 = require("./conversation");
 const access_1 = require("./access");
+const cache_1 = require("./cache");
 // Re-export types
 var errors_2 = require("./adapters/errors");
 Object.defineProperty(exports, "DatabaseError", { enumerable: true, get: function () { return errors_2.DatabaseError; } });
 let dbInstance = null;
 let conversationDB = null;
 let accessDB = null;
+let personalityCache = null;
 async function initDB(config) {
     try {
         // Return existing instance if available
-        if (dbInstance && conversationDB && accessDB) {
+        if (dbInstance && conversationDB && accessDB && personalityCache) {
             return Object.assign(dbInstance, {
                 conversation: conversationDB,
-                access: accessDB
+                access: accessDB,
+                personality: personalityCache
             });
         }
         // Initialize database instance
@@ -44,10 +47,12 @@ async function initDB(config) {
         // Initialize sub-systems
         conversationDB = new conversation_1.ConversationDB(pool);
         accessDB = new access_1.AccessCodeDB(pool);
+        personalityCache = new cache_1.PersonalityCacheDB(pool);
         // Extend the adapter with our operations
         return Object.assign(dbInstance, {
             conversation: conversationDB,
-            access: accessDB
+            access: accessDB,
+            personality: personalityCache
         });
     }
     catch (error) {
@@ -65,5 +70,8 @@ async function closeDB() {
     if (dbInstance) {
         await factory_1.DatabaseFactory.shutdown();
         dbInstance = null;
+        conversationDB = null;
+        accessDB = null;
+        personalityCache = null;
     }
 }

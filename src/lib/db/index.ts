@@ -3,6 +3,7 @@ import { DatabaseError } from './adapters/errors';
 import { Pool } from 'pg';
 import { ConversationDB } from './conversation';
 import { AccessCodeDB } from './access';
+import { PersonalityCacheDB } from './cache';
 import type { PostgresAdapter } from './adapters/postgres';
 import type { DBConfig } from './factory';
 
@@ -13,19 +14,22 @@ export type { PostgresAdapter } from './adapters/postgres';
 let dbInstance: PostgresAdapter | null = null;
 let conversationDB: ConversationDB | null = null;
 let accessDB: AccessCodeDB | null = null;
+let personalityCache: PersonalityCacheDB | null = null;
 
 export interface ExtendedDB extends PostgresAdapter {
   conversation: ConversationDB;
   access: AccessCodeDB;
+  personality: PersonalityCacheDB;
 }
 
 export async function initDB(config?: DBConfig): Promise<ExtendedDB> {
   try {
     // Return existing instance if available
-    if (dbInstance && conversationDB && accessDB) {
+    if (dbInstance && conversationDB && accessDB && personalityCache) {
       return Object.assign(dbInstance, {
         conversation: conversationDB,
-        access: accessDB
+        access: accessDB,
+        personality: personalityCache
       });
     }
 
@@ -51,11 +55,13 @@ export async function initDB(config?: DBConfig): Promise<ExtendedDB> {
     // Initialize sub-systems
     conversationDB = new ConversationDB(pool);
     accessDB = new AccessCodeDB(pool);
+    personalityCache = new PersonalityCacheDB(pool);
 
     // Extend the adapter with our operations
     return Object.assign(dbInstance, {
       conversation: conversationDB,
-      access: accessDB
+      access: accessDB,
+      personality: personalityCache
     });
   } catch (error) {
     console.error('Failed to initialize database:', error);
@@ -74,7 +80,10 @@ export async function closeDB(): Promise<void> {
   if (dbInstance) {
     await DatabaseFactory.shutdown();
     dbInstance = null;
+    conversationDB = null;
+    accessDB = null;
+    personalityCache = null;
   }
 }
 
-export type { ConversationDB }; 
+export type { ConversationDB, AccessCodeDB, PersonalityCacheDB }; 

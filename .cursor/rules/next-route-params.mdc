@@ -1,4 +1,8 @@
 ---
+description: 
+globs: 
+---
+---
 description: next route param handling
 globs: */api
 ---

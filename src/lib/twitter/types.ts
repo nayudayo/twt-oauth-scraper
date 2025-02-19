@@ -39,4 +39,11 @@ export interface TwitterAPIProfile {
   profilePicture: string;
   coverPicture?: string;
   createdAt: string;
+}
+
+export interface WorkerData {
+  username: string;
+  sessionId: string;
+  batchSize?: number;
+  maxTweets?: number;
 } 

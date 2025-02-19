@@ -21,7 +21,7 @@ async function runTwitterScraper() {
     var _a;
     let db = null;
     try {
-        const { username: targetUsername, sessionId, batchSize = 100, maxTweets = 1000 } = worker_threads_1.workerData;
+        const { username: targetUsername, sessionId, batchSize = 100, maxTweets = 500 } = worker_threads_1.workerData;
         // Send initialization progress
         worker_threads_1.parentPort.postMessage({
             progress: 5,
@@ -61,15 +61,37 @@ async function runTwitterScraper() {
                 cursor: nextCursor,
                 includeReplies: true
             });
-            // Transform tweets
-            const transformedTweets = response.tweets.map(tweet => transformer_1.TwitterDataTransformer.toTweet(tweet));
+            // Transform tweets and ensure proper date handling
+            const transformedTweets = response.tweets
+                .filter(tweet => tweet.createdAt) // Only include tweets with valid timestamps
+                .map(tweet => {
+                // Ensure proper date handling
+                let createdAt;
+                try {
+                    const date = new Date(tweet.createdAt);
+                    if (isNaN(date.getTime())) {
+                        console.warn('Invalid date format received:', tweet.createdAt);
+                        createdAt = new Date().toISOString();
+                    }
+                    else {
+                        createdAt = date.toISOString();
+                    }
+                }
+                catch (error) {
+                    console.error('Error parsing tweet date:', error);
+                    createdAt = new Date().toISOString();
+                }
+                return Object.assign(Object.assign({}, tweet), { createdAt });
+            });
             // Add to collection
-            allTweets.push(...response.tweets);
+            allTweets.push(...transformedTweets);
             totalProcessed += transformedTweets.length;
+            // Calculate remaining tweets to collect
+            const remainingTweets = maxTweets - totalProcessed;
             // Send progress update
             worker_threads_1.parentPort.postMessage({
                 progress: Math.min(80, 20 + Math.floor((totalProcessed / maxTweets) * 60)),
-                status: 'Collecting tweets...',
+                status: `Collecting tweets (${totalProcessed}/${Math.min(maxTweets, totalProcessed + remainingTweets)})...`,
                 phase: 'posts',
                 scanProgress: { phase: 'posts', count: totalProcessed },
                 tweets: transformedTweets,
@@ -87,8 +109,12 @@ async function runTwitterScraper() {
                 });
             }
             // Update pagination state
-            hasNextPage = response.hasNextPage && transformedTweets.length === batchSize;
+            hasNextPage = response.hasNextPage &&
+                transformedTweets.length > 0 &&
+                totalProcessed < maxTweets;
             nextCursor = response.nextCursor;
+            // Add a small delay between requests
+            await new Promise(resolve => setTimeout(resolve, 1000));
         }
         // Check for termination before database operations
         if (isTerminating) {
@@ -127,7 +153,7 @@ async function runTwitterScraper() {
         // Send completion message
         worker_threads_1.parentPort.postMessage({
             progress: 100,
-            status: 'Tweet collection complete',
+            status: `Tweet collection complete (${totalProcessed} tweets)`,
             phase: 'complete',
             scanProgress: { phase: 'complete', count: totalProcessed },
             tweets: allTweets.map(tweet => transformer_1.TwitterDataTransformer.toTweet(tweet))

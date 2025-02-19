@@ -44,6 +44,7 @@ async function purgeDatabase() {
       DROP TABLE IF EXISTS funnel_progress CASCADE;
       DROP TABLE IF EXISTS analysis_chunks CASCADE;
       DROP TABLE IF EXISTS analysis_queue CASCADE;
+      DROP TABLE IF EXISTS personality_cache CASCADE;
       DROP TABLE IF EXISTS personality_analysis CASCADE;
       DROP TABLE IF EXISTS tweets CASCADE;
       DROP TABLE IF EXISTS access_codes CASCADE;
@@ -87,6 +88,17 @@ async function purgeDatabase() {
         is_reply BOOLEAN,
         metadata JSONB,
         created_in_db TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE personality_cache (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL REFERENCES users(id),
+        analysis_data JSONB NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        version INTEGER DEFAULT 1,
+        is_stale BOOLEAN DEFAULT false,
+        UNIQUE(user_id)
       );
 
       CREATE TABLE personality_analysis (
@@ -199,6 +211,12 @@ async function purgeDatabase() {
       CREATE INDEX idx_access_codes_code ON access_codes(code);
       CREATE INDEX idx_access_codes_user_id ON access_codes(user_id);
       CREATE INDEX idx_access_codes_is_active ON access_codes(is_active);
+      
+      -- Personality cache indexes
+      CREATE INDEX idx_personality_cache_user ON personality_cache(user_id);
+      CREATE INDEX idx_personality_cache_updated ON personality_cache(updated_at DESC);
+      CREATE INDEX idx_personality_cache_version ON personality_cache(version);
+      CREATE INDEX idx_personality_cache_stale ON personality_cache(is_stale);
     `;
 
     console.log('Recreating tables...');

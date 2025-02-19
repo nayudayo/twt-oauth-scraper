@@ -7,6 +7,8 @@ import { Spinner } from '../components/ui/spinner'
 import '../styles/glow.css'
 import Image from 'next/image'
 import { ConversationList } from './ConversationList'
+import { usePersonalityCache } from '@/hooks/usePersonalityCache';
+import { CacheStatusIndicator } from './CacheStatusIndicator';
 
 interface ChatBoxProps {
   tweets: Tweet[]
@@ -68,6 +70,11 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<number>();
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
+
+  // Add cache hook
+  const personalityCache = usePersonalityCache({
+    username: profile.name || ''
+  });
 
   // Add escape key handler for modals
   useEffect(() => {
@@ -133,24 +140,56 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     };
   }, [isAnalyzing, loading, analysisStartTime, scrapingStartTime]);
 
-  const handleTraitAdjustment = (traitName: string, score: number) => {
+  const handleTraitAdjustment = async (traitName: string, score: number) => {
+    // Convert UI score (0-100) to analysis score (0-10)
+    const analysisScore = Math.round((score / 100) * 10);
+    
     setTuning(prev => ({
       ...prev,
       traitModifiers: {
         ...prev.traitModifiers,
         [traitName]: score
       }
-    }))
+    }));
+
+    // Save updated tuning to cache if we have analysis
+    if (analysis) {
+      // Find existing trait to preserve explanation
+      const existingTrait = analysis.traits.find(t => t.name === traitName);
+      if (!existingTrait) return;
+
+      await personalityCache.saveToCache({
+        ...analysis,
+        traits: analysis.traits.map(trait => 
+          trait.name === traitName 
+            ? { ...trait, score: analysisScore }
+            : trait
+        )
+      });
+    }
   }
 
-  const handleInterestWeight = (interest: string, weight: number) => {
+  const handleInterestWeight = async (interest: string, weight: number) => {
     setTuning(prev => ({
       ...prev,
       interestWeights: {
         ...prev.interestWeights,
         [interest]: weight
       }
-    }))
+    }));
+
+    // Save updated interests to cache if we have analysis
+    if (analysis) {
+      await personalityCache.saveToCache({
+        ...analysis,
+        interests: Object.entries({
+          ...tuning.interestWeights,
+          [interest]: weight
+        })
+          .filter(([, weight]) => weight > 0)
+          .map(([interest]) => interest)
+      });
+    }
   }
 
   const handleAddCustomInterest = (e: React.FormEvent) => {
@@ -180,14 +219,25 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     })
   }
 
-  const handleStyleAdjustment = (aspect: keyof PersonalityTuning['communicationStyle'], value: number) => {
+  const handleStyleAdjustment = async (aspect: keyof PersonalityTuning['communicationStyle'], value: number) => {
     setTuning(prev => ({
       ...prev,
       communicationStyle: {
         ...prev.communicationStyle,
         [aspect]: value
       }
-    }))
+    }));
+
+    // Save updated communication style to cache if we have analysis
+    if (analysis) {
+      await personalityCache.saveToCache({
+        ...analysis,
+        communicationStyle: {
+          ...analysis.communicationStyle,
+          [aspect]: value
+        }
+      });
+    }
   }
 
   const generatePersonalityResponse = async (userMessage: string) => {
@@ -286,68 +336,147 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     }
   }
 
+  // Update handleAnalyze to use cache
   const handleAnalyze = async () => {
     if (!tweets || tweets.length === 0) {
-      setError('No tweets available for analysis')
-      return
+      setError('No tweets available for analysis');
+      return;
     }
 
-    setIsAnalyzing(true)
-    setError(null)
-    setAnalysisStartTime(Date.now())
+    setIsAnalyzing(true);
+    setError(null);
+    setAnalysisStartTime(Date.now());
+
     try {
+      // Check cache first
+      const cachedData = await personalityCache.fetchCache();
+      
+      if (cachedData) {
+        // Load tuning parameters from cache
+        if (cachedData.communicationStyle) {
+          setTuning(prev => ({
+            ...prev,
+            communicationStyle: {
+              formality: cachedData.communicationStyle.formality ?? prev.communicationStyle.formality,
+              enthusiasm: cachedData.communicationStyle.enthusiasm ?? prev.communicationStyle.enthusiasm,
+              technicalLevel: cachedData.communicationStyle.technicalLevel ?? prev.communicationStyle.technicalLevel,
+              emojiUsage: cachedData.communicationStyle.emojiUsage ?? prev.communicationStyle.emojiUsage
+            }
+          }));
+        }
+        
+        if (cachedData.traits) {
+          const traitModifiers = cachedData.traits.reduce((acc: Record<string, number>, trait: { name: string; score: number }) => ({
+            ...acc,
+            // Convert analysis score (0-10) to UI score (0-100)
+            [trait.name]: Math.round(trait.score * 10)
+          }), {});
+          
+          setTuning(prev => ({
+            ...prev,
+            traitModifiers: {
+              ...prev.traitModifiers,
+              ...traitModifiers
+            }
+          }));
+        }
+        
+        if (cachedData.interests) {
+          const interestWeights = cachedData.interests.reduce((acc: Record<string, number>, interest: string) => ({
+            ...acc,
+            [interest]: tuning.interestWeights[interest] ?? 50 // Keep existing weight or use default
+          }), {});
+          
+          setTuning(prev => ({
+            ...prev,
+            interestWeights: {
+              ...prev.interestWeights,
+              ...interestWeights
+            }
+          }));
+        }
+
+        setAnalysis(cachedData);
+        setIsAnalyzing(false);
+        setAnalysisStartTime(null);
+        return;
+      }
+
+      // No cache, perform new analysis
       const response = await fetch('/api/analyze', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ tweets, profile }),
-      })
-      
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tweets,
+          profile
+        })
+      });
+
       if (!response.ok) {
-        throw new Error('Failed to analyze personality')
+        throw new Error('Failed to analyze personality');
       }
+
+      const newAnalysis = await response.json();
       
-      const data = await response.json()
-      
-      // Initialize tuning with the analysis values
-      const initialTuning: PersonalityTuning = {
-        traitModifiers: Object.fromEntries(data.traits.map((trait: { name: string; score: number }) => 
-          // Convert trait score (0-10) to slider range (0-100)
-          [trait.name, trait.score * 10]
-        )),
-        interestWeights: {},
-        customInterests: [],
+      // Update tuning with new analysis values
+      const newTraitModifiers = newAnalysis.traits.reduce((acc: Record<string, number>, trait: { name: string; score: number }) => ({
+        ...acc,
+        // Convert analysis score (0-10) to UI score (0-100)
+        [trait.name]: Math.round(trait.score * 10)
+      }), {});
+
+      const newInterestWeights = newAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => ({
+        ...acc,
+        [interest]: tuning.interestWeights[interest] ?? 50 // Keep existing weight or use default
+      }), {});
+
+      setTuning(prev => ({
+        ...prev,
+        traitModifiers: {
+          ...prev.traitModifiers,
+          ...newTraitModifiers
+        },
+        interestWeights: {
+          ...prev.interestWeights,
+          ...newInterestWeights
+        },
         communicationStyle: {
-          formality: data.communicationStyle.formality,
-          enthusiasm: data.communicationStyle.enthusiasm,
-          technicalLevel: data.communicationStyle.technicalLevel,
-          emojiUsage: data.communicationStyle.emojiUsage
+          formality: newAnalysis.communicationStyle.formality ?? prev.communicationStyle.formality,
+          enthusiasm: newAnalysis.communicationStyle.enthusiasm ?? prev.communicationStyle.enthusiasm,
+          technicalLevel: newAnalysis.communicationStyle.technicalLevel ?? prev.communicationStyle.technicalLevel,
+          emojiUsage: newAnalysis.communicationStyle.emojiUsage ?? prev.communicationStyle.emojiUsage
         }
-      }
+      }));
 
-      // Initialize interest weights with values based on presence in topics and themes
-      const initialWeights: { [key: string]: number } = {}
-      const allTopics = [...data.interests, ...data.topicsAndThemes]
-      const uniqueTopics = Array.from(new Set(allTopics))
-      
-      uniqueTopics.forEach((topic: string) => {
-        // If a topic appears in both interests and themes, give it a higher weight
-        const weight = data.interests.includes(topic) && data.topicsAndThemes.includes(topic) ? 75 : 50
-        initialWeights[topic] = weight
-      })
+      setAnalysis(newAnalysis);
 
-      initialTuning.interestWeights = initialWeights
+      // Save new analysis and tuning to cache
+      await personalityCache.saveToCache({
+        ...newAnalysis,
+        traits: (Object.entries(newTraitModifiers) as [string, number][]).map(([name, score]) => ({
+          name,
+          // Convert UI score (0-100) back to analysis score (0-10) for storage
+          score: Math.round(score / 10),
+          explanation: newAnalysis.traits.find((t: { name: string }) => t.name === name)?.explanation
+        })),
+        interests: Object.keys(newInterestWeights),
+        communicationStyle: {
+          ...newAnalysis.communicationStyle,
+          formality: newAnalysis.communicationStyle.formality,
+          enthusiasm: newAnalysis.communicationStyle.enthusiasm,
+          technicalLevel: newAnalysis.communicationStyle.technicalLevel,
+          emojiUsage: newAnalysis.communicationStyle.emojiUsage
+        }
+      });
 
-      setTuning(initialTuning)
-      setAnalysis(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+    } catch (error) {
+      console.error('Analysis error:', error);
+      setError(error instanceof Error ? error.message : 'Failed to analyze personality');
     } finally {
-      setIsAnalyzing(false)
-      setAnalysisStartTime(null)
+      setIsAnalyzing(false);
+      setAnalysisStartTime(null);
     }
-  }
+  };
 
   // Helper functions for trait labels
   const getTraitLabel = (score: number) => {
@@ -757,10 +886,13 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   }, [input])
 
   const handleUpdateAnalysis = async () => {
+    // Invalidate the cache first
+    await personalityCache.invalidateCache();
+    
     // Reset the analysis state and start a new analysis
-    setAnalysis(null)
-    await handleAnalyze()
-  }
+    setAnalysis(null);
+    await handleAnalyze();
+  };
 
   // Replace with a more focused effect for handling completion
   useEffect(() => {
@@ -1027,9 +1159,20 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
         {/* Personality Fine-Tuning Panel */}
         <div className="w-full bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
           <div className="flex-none border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
-              <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">PERSONALITY FINE-TUNING</h3>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
+                <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">PERSONALITY FINE-TUNING</h3>
+              </div>
+              {analysis && (
+                <CacheStatusIndicator
+                  isFresh={personalityCache.isFresh}
+                  lastUpdated={personalityCache.lastUpdated}
+                  isLoading={personalityCache.isLoading}
+                  onRefresh={handleAnalyze}
+                  className="ml-4"
+                />
+              )}
             </div>
           </div>
 
@@ -1276,9 +1419,20 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
         {/* Personality Analysis Panel */}
         <div className="w-full bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
           <div className="flex-none border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
-              <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">PERSONALITY ANALYSIS</h3>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
+                <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">PERSONALITY ANALYSIS</h3>
+              </div>
+              {analysis && (
+                <CacheStatusIndicator
+                  isFresh={personalityCache.isFresh}
+                  lastUpdated={personalityCache.lastUpdated}
+                  isLoading={personalityCache.isLoading}
+                  onRefresh={handleAnalyze}
+                  className="ml-4"
+                />
+              )}
             </div>
           </div>
 
@@ -1305,7 +1459,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   {isAnalyzing ? (
                     <div className="flex items-center gap-2">
                       <Spinner size="sm" />
-                      <span>ANALYZING</span>
+                        <span>ANALYZING</span>
                     </div>
                   ) : (
                     'START ANALYSIS'
@@ -1325,7 +1479,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   </div>
                 </div>
 
-                {/* Key Traits Section */}
+                  {/* Key Traits Section */}
                 <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
@@ -1352,7 +1506,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   </div>
                 </div>
                 
-                {/* Communication Style Section */}
+                  {/* Communication Style Section */}
                 <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
@@ -1401,7 +1555,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   </div>
                 </div>
                 
-                {/* Interests Section */}
+                  {/* Interests Section */}
                 <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
@@ -1419,7 +1573,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   </div>
                 </div>
                 
-                {/* Topics & Themes Section */}
+                  {/* Topics & Themes Section */}
                 <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
@@ -1435,7 +1589,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   </ul>
                 </div>
                 
-                {/* Emotional Tone Section */}
+                  {/* Emotional Tone Section */}
                 <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>

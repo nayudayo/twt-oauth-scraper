@@ -1,19 +1,276 @@
 ---
 description: this is the format for the .md plans
-globs: 
----
----
-description: 
 globs: *.md
 ---
-CONTENT: 
-- summary of what we are going to implement
-- explicit steps for the implementation
-- the objects to implement in a format specified below
+# Development Pipeline Plan Format
 
-FORMAT:
-- checklist style implementation steps
-- for each module/part/objects to be implemented, instead of code snippets, we shall be describing the algorithm and logic in a clear mannerr that can be studied and altered like a prompt engineering
+## Purpose
+This format standardizes how we document implementation plans across the project, ensuring consistency and clarity in technical documentation.
 
-REMEMBER:
-- focus on the core functionalities first before we go to the advanced optimizations and improvements
+## Required Sections
+
+### 1. Summary Section
+- One paragraph overview of what will be implemented
+- Core objectives (2-3 bullet points)
+- Expected impact on system
+
+### 2. Implementation Steps
+Each implementation step must include:
+
+```markdown
+### Step Name
+Status: [ ] Not Started
+
+Description:
+One-line summary of what this step accomplishes
+
+Specifications:
+1. Core Operations:
+   - Operation 1 description
+   - Operation 2 description
+
+2. Input Requirements:
+   - Required input 1
+   - Required input 2
+
+3. Output Expectations:
+   - Expected output 1
+   - Expected output 2
+
+4. Validation Points:
+   - Validation check 1
+   - Validation check 2
+
+Dependencies:
+- Dependency 1
+- Dependency 2
+
+Completion Criteria:
+- [ ] Criterion 1
+- [ ] Criterion 2
+```
+
+Each step should be:
+- Atomic and independently verifiable
+- Ordered by dependency
+- Clearly measurable for completion
+- Include explicit validation points
+
+### 3. Module Specifications
+For each module/component:
+
+```markdown
+### Module Name
+Purpose: One-line description
+
+Algorithm:
+1. Core Logic:
+   - Key operation 1
+   - Key operation 2
+   
+2. Dependencies:
+   - Required system 1
+   - Required system 2
+   
+3. Constraints:
+   - Constraint 1
+   - Constraint 2
+
+4. Integration Points:
+   - Integration point 1
+   - Integration point 2
+```
+
+### 4. Success Criteria
+Simple format:
+```markdown
+## Success Criteria
+- Metric 1: Target
+- Metric 2: Target
+[...]
+```
+
+Must include:
+- Quantifiable metrics
+- Performance targets
+- Quality thresholds
+- User impact measures
+
+### 5. Implementation Order
+Simple format:
+```markdown
+## Implementation Order
+1. Critical Path Item 1
+2. Critical Path Item 2
+[...]
+```
+
+Must specify:
+1. Critical path items
+2. Dependencies between modules
+3. Parallel development opportunities
+4. Integration points
+5. Rollback points
+
+### 6. Notes
+Simple format:
+```markdown
+## Notes
+- Important consideration 1
+- Important consideration 2
+[...]
+```
+
+## Formatting Rules
+
+1. Descriptions:
+   - Use algorithmic language
+   - Focus on logic and flow
+   - Avoid implementation details
+   - No code snippets (unless absolutely necessary)
+   - Be explicit about operations
+
+2. Structure:
+   - Use hierarchical numbering
+   - Maintain consistent indentation
+   - Use bullet points for lists
+   - Use checkboxes for tasks
+   - Group related items
+
+3. Content Guidelines:
+   - Be concise but complete
+   - Focus on "what" and "why" over "how"
+   - Include dependencies and constraints
+   - Note potential risks
+   - Specify validation points
+
+4. Step Specifications:
+   - Clear input/output requirements
+   - Explicit validation points
+   - Measurable completion criteria
+   - Dependencies and constraints
+   - Rollback procedures
+
+## Complete Template
+
+```markdown
+# [Feature Name] Implementation Plan
+
+## Summary
+[Overview paragraph]
+
+Core Objectives:
+- Objective 1
+- Objective 2
+- Objective 3
+
+Expected Impact:
+- Impact 1
+- Impact 2
+
+## Implementation Steps
+
+### Step 1: [Step Name]
+Status: [ ] Not Started
+
+Description:
+[One-line description]
+
+Specifications:
+1. Core Operations:
+   - Operation 1
+   - Operation 2
+
+2. Input Requirements:
+   - Input 1
+   - Input 2
+
+3. Output Expectations:
+   - Output 1
+   - Output 2
+
+4. Validation Points:
+   - Validation 1
+   - Validation 2
+
+Dependencies:
+- Dependency 1
+- Dependency 2
+
+Completion Criteria:
+- [ ] Criterion 1
+- [ ] Criterion 2
+
+[Repeat for each step]
+
+## Module Specifications
+
+### [Module Name]
+Purpose: [One-line description]
+
+Algorithm:
+1. Core Logic:
+   - Key operation 1
+   - Key operation 2
+
+2. Dependencies:
+   - Required system 1
+   - Required system 2
+
+3. Constraints:
+   - Constraint 1
+   - Constraint 2
+
+4. Integration Points:
+   - Integration point 1
+   - Integration point 2
+
+## Success Criteria
+- Metric 1: Target
+- Metric 2: Target
+[...]
+
+## Implementation Order
+1. Critical Path Item 1
+2. Critical Path Item 2
+[...]
+
+## Notes
+- Important consideration 1
+- Important consideration 2
+[...]
+```
+
+## Best Practices
+
+1. Core Focus:
+   - Start with essential functionality
+   - Defer optimizations
+   - Document assumptions
+   - Note future improvements
+
+2. Documentation:
+   - Use clear headings
+   - Maintain consistent terminology
+   - Include relevant diagrams
+   - Reference related documents
+
+3. Review Points:
+   - Mark critical decision points
+   - Note areas needing review
+   - Identify potential bottlenecks
+   - List open questions
+
+4. Validation:
+   - Include explicit validation points
+   - Define measurable criteria
+   - Specify testing requirements
+   - Document edge cases
+
+## Remember
+- Focus on core functionality first
+- Keep documentation clear and concise
+- Update plan as implementation progresses
+- Mark completion status clearly
+- Include explicit validation points
+- Specify measurable criteria
