@@ -69,12 +69,21 @@ export function usePersonalityCache({ username }: UsePersonalityCacheProps) {
 
     setState(prev => ({ ...prev, isLoading: true, error: null }));
     try {
-      // Preserve existing tuning parameters if they exist
+      // Get existing tuning parameters
+      const traitModifiers = state.data?.traitModifiers !== undefined ? state.data.traitModifiers : {};
+      
+      // Prepare final data with applied modifiers
       const finalData: PersonalityAnalysis = {
         ...analysisData,
-        traitModifiers: state.data?.traitModifiers || {},
-        interestWeights: state.data?.interestWeights || {},
-        customInterests: state.data?.customInterests || [],
+        // Apply trait modifiers to trait scores
+        traits: analysisData.traits.map(trait => ({
+          ...trait,
+          score: Math.max(0, Math.min(10, trait.score + (traitModifiers[trait.name] || 0)))
+        })),
+        // Preserve tuning parameters
+        traitModifiers,
+        interestWeights: state.data?.interestWeights !== undefined ? state.data.interestWeights : {},
+        customInterests: state.data?.customInterests !== undefined ? state.data.customInterests : [],
         communicationStyle: {
           ...analysisData.communicationStyle,
           // Preserve existing numeric values if they exist, otherwise use new values

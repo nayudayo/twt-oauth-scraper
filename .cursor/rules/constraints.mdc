@@ -1,4 +1,8 @@
 ---
+description: 
+globs: 
+---
+---
 description: the constraints prompt engineering
 globs: *
 ---
@@ -7,9 +11,76 @@ description:
 globs: 
 ---
 
-# CONSTRAINTS
-- only alter the files that are relevant to the problem, task, and context scope
-- build upon the current implementation (meaning to utilize existing implementations and build upon that)
-- modify the parts and functions one part at a time so that there will be a reduced risk for errors
-- if linter errors arise, fix them first before marking the task as finished
-- update the .md plan of the task
+# Development Constraints
+
+## Core Principles
+1. **Scope Control**
+   - Only modify files directly relevant to the task
+   - Maintain clear boundaries between components
+   - Document any indirect impacts on other modules
+
+2. **Incremental Development**
+   - Build upon existing implementations
+   - Preserve working functionality
+   - Document reasons for any divergence from existing patterns
+
+3. **Atomic Changes**
+   - Modify one component/function at a time
+   - Complete validation before moving to next change
+   - Keep changes focused and independent
+
+4. **Code Quality**
+   - Fix linter errors before marking tasks complete
+   - Maintain type safety throughout changes
+   - Follow established code style patterns
+
+5. **Documentation**
+   - Update relevant .md plan files
+   - Document key decisions and trade-offs
+   - Add inline comments for complex logic
+   - Update API documentation if endpoints change
+
+## Validation Checklist
+Before completing any task:
+- [ ] Changes limited to relevant files
+- [ ] Built upon existing patterns where possible
+- [ ] Changes are atomic and focused
+- [ ] All linter errors resolved
+- [ ] Documentation updated
+- [ ] No breaking changes to public APIs
+
+## Error Prevention
+1. **Before Changes**
+   - Review existing implementation
+   - Identify dependencies
+   - Plan atomic change steps
+   - Document expected outcomes
+
+2. **During Changes**
+   - One component at a time
+   - Continuous linting
+   - Document decisions
+
+3. **After Changes**
+   - Full validation
+   - Documentation review
+   - Impact assessment
+
+## Best Practices
+1. **Code Changes**
+   - Prefer small, focused changes
+   - Maintain backward compatibility
+   - Add migration paths if needed
+   - Use type-safe approaches
+
+2. **Documentation**
+   - Keep .md files up to date
+   - Document breaking changes
+   - Update API documentation
+   - Add inline comments for complexity
+
+## Rollback Plan
+For each change:
+1. Document current state
+2. Plan rollback steps
+3. Keep backup of critical data

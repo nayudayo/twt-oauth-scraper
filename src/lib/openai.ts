@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import { Tweet, OpenAITwitterProfile } from '@/types/scraper'
+import { Tweet, OpenAITwitterProfile } from '../types/scraper'
 
 export interface PersonalityAnalysis {
   summary: string

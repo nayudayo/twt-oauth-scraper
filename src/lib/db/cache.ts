@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import { DatabaseError } from './adapters/errors';
 import type { PersonalityCache } from '../../types/cache';
-import type { PersonalityAnalysis } from '@/lib/openai';
+import type { PersonalityAnalysis } from '../../lib/openai';
 
 export class PersonalityCacheDB {
   constructor(private pool: Pool) {}
@@ -61,36 +61,45 @@ export class PersonalityCacheDB {
 
       // Get existing cache to preserve tuning parameters if they exist
       const existingCache = await this.getPersonalityCache(userId);
-      let finalData: PersonalityAnalysis = analysisData;
+      let finalData: PersonalityAnalysis = { ...analysisData };
 
       if (existingCache?.analysisData) {
         // Cast the existing data to PersonalityAnalysis after validating its shape
         const existingData = existingCache.analysisData as unknown as PersonalityAnalysis;
-        if (existingData.communicationStyle) {
-          finalData = {
-            ...analysisData,
-            traitModifiers: existingData.traitModifiers || {},
-            interestWeights: existingData.interestWeights || {},
-            customInterests: existingData.customInterests || [],
-            communicationStyle: {
-              ...analysisData.communicationStyle,
-              // Only preserve the numeric values from existing cache
-              formality: typeof existingData.communicationStyle.formality === 'number' 
-                ? existingData.communicationStyle.formality 
-                : analysisData.communicationStyle.formality,
-              enthusiasm: typeof existingData.communicationStyle.enthusiasm === 'number'
-                ? existingData.communicationStyle.enthusiasm
-                : analysisData.communicationStyle.enthusiasm,
-              technicalLevel: typeof existingData.communicationStyle.technicalLevel === 'number'
-                ? existingData.communicationStyle.technicalLevel
-                : analysisData.communicationStyle.technicalLevel,
-              emojiUsage: typeof existingData.communicationStyle.emojiUsage === 'number'
-                ? existingData.communicationStyle.emojiUsage
-                : analysisData.communicationStyle.emojiUsage,
-              description: analysisData.communicationStyle.description
-            }
-          };
-        }
+        
+        // Preserve tuning parameters if they exist
+        const traitModifiers = existingData.traitModifiers !== undefined ? existingData.traitModifiers : {};
+        
+        // Apply trait modifiers to the scores
+        finalData = {
+          ...analysisData,
+          // Apply trait modifiers to trait scores
+          traits: analysisData.traits.map(trait => ({
+            ...trait,
+            score: Math.max(0, Math.min(10, trait.score + (traitModifiers[trait.name] || 0)))
+          })),
+          // Preserve tuning parameters
+          traitModifiers,
+          interestWeights: existingData.interestWeights !== undefined ? existingData.interestWeights : {},
+          customInterests: existingData.customInterests !== undefined ? existingData.customInterests : [],
+          communicationStyle: {
+            ...analysisData.communicationStyle,
+            // Preserve communication style values if they exist
+            formality: typeof existingData.communicationStyle?.formality === 'number' 
+              ? existingData.communicationStyle.formality 
+              : analysisData.communicationStyle.formality,
+            enthusiasm: typeof existingData.communicationStyle?.enthusiasm === 'number'
+              ? existingData.communicationStyle.enthusiasm
+              : analysisData.communicationStyle.enthusiasm,
+            technicalLevel: typeof existingData.communicationStyle?.technicalLevel === 'number'
+              ? existingData.communicationStyle.technicalLevel
+              : analysisData.communicationStyle.technicalLevel,
+            emojiUsage: typeof existingData.communicationStyle?.emojiUsage === 'number'
+              ? existingData.communicationStyle.emojiUsage
+              : analysisData.communicationStyle.emojiUsage,
+            description: analysisData.communicationStyle.description
+          }
+        };
       }
 
       // Use upsert to handle both insert and update cases

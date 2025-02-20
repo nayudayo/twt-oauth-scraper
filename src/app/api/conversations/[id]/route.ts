@@ -57,8 +57,21 @@ export async function DELETE(request: NextRequest) {
 
     const db = await initDB();
     
-    // Delete conversation
-    await db.conversation.deleteConversation(conversationId, session.username);
+    // Get user first
+    const user = await db.getUserByUsername(session.username);
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'User not found',
+          metadata: generateResponseMetadata(conversationId)
+        },
+        { status: 404 }
+      );
+    }
+    
+    // Delete conversation using user ID
+    await db.conversation.deleteConversation(conversationId, user.id);
 
     return NextResponse.json({
       success: true,

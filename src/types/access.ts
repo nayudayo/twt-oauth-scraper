@@ -64,6 +64,30 @@ export interface AccessCodeOperations {
    * @returns The access code or null if none found
    */
   getUserAccessCode(userId: string): Promise<AccessCode | null>;
+
+  /**
+   * Gets the top referrers by number of referrals
+   * @param limit - Optional limit on number of results
+   * @returns Array of user IDs and their referral counts
+   */
+  getTopReferrers(limit?: number): Promise<Array<{
+    userId: string;
+    totalReferrals: number;
+  }>>;
+
+  /**
+   * Gets referral statistics for a user
+   * @param userId - The user ID to get stats for
+   * @returns Object containing referral stats
+   */
+  getReferralStats(userId: string): Promise<{
+    codes: AccessCode[];
+    usages: Array<{
+      code: string;
+      used_at: Date;
+    }>;
+    totalUses: number;
+  }>;
 }
 
 /**

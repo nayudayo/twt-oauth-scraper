@@ -126,5 +126,61 @@ class AccessCodeDB {
             throw new access_1.AccessCodeError('Error fetching code statistics', 'INVALID_CODE', 500);
         }
     }
+    async getTopReferrers(limit = 50) {
+        try {
+            const result = await this.db.query(`
+        SELECT 
+          owner_user_id as "userId",
+          SUM(usage_count) as "totalReferrals"
+        FROM referral_codes
+        GROUP BY owner_user_id
+        ORDER BY "totalReferrals" DESC
+        LIMIT $1
+      `, [limit]);
+            return result.rows;
+        }
+        catch (error) {
+            console.error('Error fetching top referrers:', error);
+            throw new access_1.AccessCodeError('Failed to fetch top referrers', 'INVALID_CODE', 500);
+        }
+    }
+    async getReferralStats(userId) {
+        var _a;
+        try {
+            // Get user's referral codes
+            const codesResult = await this.db.query(`
+        SELECT 
+          id, code, user_id as "userId", 
+          created_at as "createdAt", 
+          used_at as "usedAt",
+          is_active as "isActive",
+          metadata
+        FROM access_codes 
+        WHERE user_id = $1
+      `, [userId]);
+            // Get usage history
+            const usagesResult = await this.db.query(`
+        SELECT referral_code as code, used_at
+        FROM referral_usage_log
+        WHERE used_by_user_id = $1
+        ORDER BY used_at DESC
+      `, [userId]);
+            // Get total uses from referral_codes table
+            const totalResult = await this.db.query(`
+        SELECT SUM(usage_count) as total
+        FROM referral_codes
+        WHERE owner_user_id = $1
+      `, [userId]);
+            return {
+                codes: codesResult.rows,
+                usages: usagesResult.rows,
+                totalUses: parseInt((_a = totalResult.rows[0]) === null || _a === void 0 ? void 0 : _a.total) || 0
+            };
+        }
+        catch (error) {
+            console.error('Error fetching referral stats:', error);
+            throw new access_1.AccessCodeError('Failed to fetch referral statistics', 'INVALID_CODE', 500);
+        }
+    }
 }
 exports.AccessCodeDB = AccessCodeDB;
