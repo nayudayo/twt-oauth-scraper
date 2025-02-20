@@ -239,8 +239,15 @@ export class ConversationDB implements ConversationOperations {
   }
 
   async deleteConversation(id: number, userId: string): Promise<void> {
-    try {
-      const result = await this.db.query(
+    return this.withTransaction(async (client) => {
+      // First delete all messages associated with the conversation
+      await client.query(
+        'DELETE FROM messages WHERE conversation_id = $1',
+        [id]
+      );
+
+      // Then delete the conversation itself
+      const result = await client.query(
         'DELETE FROM conversations WHERE id = $1 AND user_id = $2',
         [id, userId]
       );
@@ -252,18 +259,7 @@ export class ConversationDB implements ConversationOperations {
           404
         );
       }
-    } catch (error) {
-      if (error instanceof ConversationError) throw error;
-      if (isDBError(error)) {
-        throw new ConversationError(
-          'Failed to delete conversation',
-          error.code,
-          error.code.startsWith('23') ? 400 : 500,
-          error
-        );
-      }
-      throw error;
-    }
+    });
   }
 
   // Message operations

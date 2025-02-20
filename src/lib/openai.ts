@@ -20,6 +20,10 @@ export interface PersonalityAnalysis {
   }
   topicsAndThemes: string[]  // Additional context about recurring themes
   emotionalTone: string      // Description of emotional expression
+  // Tuning parameters
+  traitModifiers?: { [key: string]: number }  // trait name -> adjustment (-2 to +2)
+  interestWeights?: { [key: string]: number } // interest -> weight (0 to 100)
+  customInterests?: string[]
 }
 
 const openai = new OpenAI({

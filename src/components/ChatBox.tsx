@@ -1030,6 +1030,31 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     }
   };
 
+  // Handle conversation deletion
+  const handleDeleteConversation = async (conversationId: number) => {
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete conversation');
+      }
+
+      // Remove conversation from state
+      setConversations(prev => prev.filter(c => c.id !== conversationId));
+      
+      // If this was the active conversation, clear messages and active ID
+      if (conversationId === activeConversationId) {
+        setMessages([]);
+        setActiveConversationId(undefined);
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      setError(error instanceof Error ? error.message : 'Failed to delete conversation');
+    }
+  };
+
   return (
     <>
       {/* Main Container - Mobile First Layout */}
@@ -1048,6 +1073,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 activeConversationId={activeConversationId}
                 onSelectConversation={handleSelectConversation}
                 onNewChat={handleNewChat}
+                onDeleteConversation={handleDeleteConversation}
                 isLoading={isLoadingConversations}
               />
             </div>
@@ -2324,6 +2350,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 activeConversationId={activeConversationId}
                 onSelectConversation={handleSelectConversation}
                 onNewChat={handleNewChat}
+                onDeleteConversation={handleDeleteConversation}
                 isLoading={isLoadingConversations}
               />
             </div>

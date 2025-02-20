@@ -69,10 +69,27 @@ export function usePersonalityCache({ username }: UsePersonalityCacheProps) {
 
     setState(prev => ({ ...prev, isLoading: true, error: null }));
     try {
+      // Preserve existing tuning parameters if they exist
+      const finalData: PersonalityAnalysis = {
+        ...analysisData,
+        traitModifiers: state.data?.traitModifiers || {},
+        interestWeights: state.data?.interestWeights || {},
+        customInterests: state.data?.customInterests || [],
+        communicationStyle: {
+          ...analysisData.communicationStyle,
+          // Preserve existing numeric values if they exist, otherwise use new values
+          formality: state.data?.communicationStyle?.formality ?? analysisData.communicationStyle.formality,
+          enthusiasm: state.data?.communicationStyle?.enthusiasm ?? analysisData.communicationStyle.enthusiasm,
+          technicalLevel: state.data?.communicationStyle?.technicalLevel ?? analysisData.communicationStyle.technicalLevel,
+          emojiUsage: state.data?.communicationStyle?.emojiUsage ?? analysisData.communicationStyle.emojiUsage,
+          description: analysisData.communicationStyle.description
+        }
+      };
+
       const response = await fetch(`/api/personality/${username}/cache`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ analysisData })
+        body: JSON.stringify({ analysisData: finalData })
       });
 
       const data = await response.json();
@@ -83,7 +100,7 @@ export function usePersonalityCache({ username }: UsePersonalityCacheProps) {
       setState(prev => ({
         ...prev,
         isLoading: false,
-        data: analysisData,
+        data: finalData,
         isFresh: true,
         lastUpdated: new Date()
       }));
@@ -97,7 +114,7 @@ export function usePersonalityCache({ username }: UsePersonalityCacheProps) {
       }));
       return false;
     }
-  }, [username]);
+  }, [username, state.data]);
 
   // Invalidate cache
   const invalidateCache = useCallback(async () => {

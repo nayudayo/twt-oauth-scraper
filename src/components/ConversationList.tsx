@@ -6,6 +6,7 @@ interface ConversationListProps {
   activeConversationId?: number;
   onSelectConversation: (conversation: Conversation) => void;
   onNewChat: () => void;
+  onDeleteConversation: (conversationId: number) => void;
   isLoading?: boolean;
 }
 
@@ -14,9 +15,24 @@ export function ConversationList({
   activeConversationId,
   onSelectConversation,
   onNewChat,
+  onDeleteConversation,
   isLoading = false
 }: ConversationListProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const handleDelete = async (conversationId: number, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent conversation selection
+    setDeletingId(conversationId);
+    
+    try {
+      await onDeleteConversation(conversationId);
+    } catch (error) {
+      console.error('Failed to delete conversation:', error);
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <>
@@ -108,34 +124,65 @@ export function ConversationList({
               ) : (
                 <div className="p-2 space-y-1">
                   {conversations.map((conversation) => (
-                    <button
+                    <div
                       key={conversation.id}
-                      onClick={() => {
-                        onSelectConversation(conversation);
-                        setIsOpen(false);
-                      }}
-                      className={`w-full px-3 py-2 text-left rounded transition-all duration-300 group hover:bg-red-500/5 ${
+                      className={`w-full px-3 py-2 rounded transition-all duration-300 group hover:bg-red-500/5 ${
                         conversation.id === activeConversationId
                           ? 'bg-red-500/5 border border-red-500/20'
                           : 'border border-transparent hover:border-red-500/10'
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-red-400/90 text-sm truncate group-hover:text-red-400">
-                            {conversation.title}
-                          </h4>
-                          {conversation.metadata.lastMessagePreview && (
-                            <p className="text-red-500/50 text-xs truncate mt-0.5">
-                              {conversation.metadata.lastMessagePreview}
-                            </p>
-                          )}
-                        </div>
-                        <div className="text-red-500/30 text-xs">
-                          {conversation.metadata.messageCount || 0}
+                        <button
+                          onClick={() => {
+                            onSelectConversation(conversation);
+                            setIsOpen(false);
+                          }}
+                          className="flex-1 text-left"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-red-400/90 text-sm truncate group-hover:text-red-400">
+                              {conversation.title}
+                            </h4>
+                            {conversation.metadata.lastMessagePreview && (
+                              <p className="text-red-500/50 text-xs truncate mt-0.5">
+                                {conversation.metadata.lastMessagePreview}
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                        <div className="flex items-center gap-2">
+                          <div className="text-red-500/30 text-xs">
+                            {conversation.metadata.messageCount || 0}
+                          </div>
+                          <button
+                            onClick={(e) => handleDelete(conversation.id, e)}
+                            disabled={deletingId === conversation.id}
+                            className="text-red-500/50 hover:text-red-500/70 p-1 rounded transition-colors"
+                            title="Delete conversation"
+                          >
+                            {deletingId === conversation.id ? (
+                              <div className="w-4 h-4 border-2 border-red-500/20 border-t-red-500/70 rounded-full animate-spin"></div>
+                            ) : (
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                className="w-4 h-4"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                />
+                              </svg>
+                            )}
+                          </button>
                         </div>
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
               )}

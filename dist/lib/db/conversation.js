@@ -141,20 +141,15 @@ class ConversationDB {
         }
     }
     async deleteConversation(id, userId) {
-        try {
-            const result = await this.db.query('DELETE FROM conversations WHERE id = $1 AND user_id = $2', [id, userId]);
+        return this.withTransaction(async (client) => {
+            // First delete all messages associated with the conversation
+            await client.query('DELETE FROM messages WHERE conversation_id = $1', [id]);
+            // Then delete the conversation itself
+            const result = await client.query('DELETE FROM conversations WHERE id = $1 AND user_id = $2', [id, userId]);
             if (result.rowCount === 0) {
                 throw new ConversationError('Conversation not found or unauthorized', 'NOT_FOUND', 404);
             }
-        }
-        catch (error) {
-            if (error instanceof ConversationError)
-                throw error;
-            if ((0, db_1.isDBError)(error)) {
-                throw new ConversationError('Failed to delete conversation', error.code, error.code.startsWith('23') ? 400 : 500, error);
-            }
-            throw error;
-        }
+        });
     }
     // Message operations
     async addMessage(options) {
