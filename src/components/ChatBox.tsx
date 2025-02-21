@@ -1693,36 +1693,36 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   <span className="text-xs text-red-500/80 hover-text-glow truncate">@{profile.name}</span>
                 </div>
               )}
+            </div>
+          </div>
 
-              {/* Progress Status */}
-              <div className="h-6 flex items-center gap-2 text-red-500/60 overflow-hidden">
-                {loading && (
-                  <>
+          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-4 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[50vh] sm:max-h-[45vh] md:max-h-[40vh] relative touch-action-pan-y">
+            <div className="space-y-2 w-full">
+              {/* Progress Status - Moved here */}
+              {loading && (
+                <div className="mb-4 p-3 bg-black/20 border border-red-500/10 rounded-lg backdrop-blur-sm">
+                  <div className="flex items-center gap-2 text-red-500/60">
                     <div className="flex items-center gap-1 flex-none">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20 glow-box" />
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-100 shadow-lg shadow-red-500/20 glow-box" />
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-200 shadow-lg shadow-red-500/20 glow-box" />
                     </div>
                     {scanProgress && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
                         <span className="uppercase tracking-wider text-xs glow-text truncate">
                           {scanProgress.message || `${scanProgress.phase === 'posts' ? 'SCANNING POSTS' : 'SCANNING REPLIES'}: ${scanProgress.count} TWEETS COLLECTED`}
                         </span>
                         {scrapingElapsedTime && (
-                          <span className="text-xs text-red-500/40 glow-text truncate">
+                          <span className="text-xs text-red-500/40 glow-text truncate flex-none">
                             [{scrapingElapsedTime}]
                           </span>
                         )}
                       </div>
                     )}
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
+                  </div>
+                </div>
+              )}
 
-          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-4 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[50vh] sm:max-h-[45vh] md:max-h-[40vh] relative touch-action-pan-y">
-            <div className="space-y-2 w-full">
               {tweets.length === 0 && (
                 <div className="text-red-500/50 italic glow-text">
                   {'>'} Awaiting data collection initialization...
@@ -2060,109 +2060,103 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
           {/* Archives Panel - Top Half */}
           <div className="h-[calc(50%-2px)] min-h-[300px] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
             <div className="flex-none flex items-center px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 cryptic-shadow">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
-                <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">ARCHIVES</h3>
-              </div>
-
-              {profile.name && (
+              <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box" />
-                    <span className="text-xs text-red-500/80 hover-text-glow truncate">@{profile.name}</span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
+                  <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">ARCHIVES</h3>
                 </div>
-              )}
 
-              {/* Progress Status */}
-                <div className="h-6 flex items-center gap-2 text-red-500/60 overflow-hidden">
-                {loading && (
-                  <>
-                      <div className="flex items-center gap-1 flex-none">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20 glow-box" />
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-100 shadow-lg shadow-red-500/20 glow-box" />
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-200 shadow-lg shadow-red-500/20 glow-box" />
-                    </div>
-                    {scanProgress && (
-                        <div className="flex items-center gap-2">
-                          <span className="uppercase tracking-wider text-xs glow-text truncate">
-                        {scanProgress.message || `${scanProgress.phase === 'posts' ? 'SCANNING POSTS' : 'SCANNING REPLIES'}: ${scanProgress.count} TWEETS COLLECTED`}
-                          </span>
-                          {scrapingElapsedTime && (
-                            <span className="text-xs text-red-500/40 glow-text truncate">
-                              [{scrapingElapsedTime}]
-                      </span>
-                          )}
-                        </div>
-                    )}
-                  </>
+                {profile.name && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box" />
+                    <span className="text-xs text-red-500/80 hover-text-glow truncate">@{profile.name}</span>
+                  </div>
                 )}
               </div>
             </div>
-          </div>
 
-          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-6 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[50vh] sm:max-h-[45vh] md:max-h-[40vh] relative touch-action-pan-y">
-            <div className="space-y-2 w-full">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-6 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[50vh] sm:max-h-[45vh] md:max-h-[40vh] relative touch-action-pan-y">
+              <div className="space-y-2 w-full">
+                {/* Progress Status - Moved here */}
+                {loading && (
+                  <div className="mb-4 p-3 bg-black/20 border border-red-500/10 rounded-lg backdrop-blur-sm">
+                    <div className="flex items-center gap-2 text-red-500/60">
+                      <div className="flex items-center gap-1 flex-none">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20 glow-box" />
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-100 shadow-lg shadow-red-500/20 glow-box" />
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-200 shadow-lg shadow-red-500/20 glow-box" />
+                      </div>
+                      {scanProgress && (
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <span className="uppercase tracking-wider text-xs glow-text truncate">
+                            {scanProgress.message || `${scanProgress.phase === 'posts' ? 'SCANNING POSTS' : 'SCANNING REPLIES'}: ${scanProgress.count} TWEETS COLLECTED`}
+                          </span>
+                          {scrapingElapsedTime && (
+                            <span className="text-xs text-red-500/40 glow-text truncate flex-none">
+                              [{scrapingElapsedTime}]
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {tweets.length === 0 ? (
-                <div className="text-red-500/50 italic glow-text">
+                  <div className="text-red-500/50 italic glow-text">
                     {'>'} {loading ? 'Fetching data...' : 'Awaiting data collection initialization...'}
-                </div>
+                  </div>
                 ) : (
                   <>
-              {tweets.map((tweet, index) => (
-                <div 
+                    {tweets.map((tweet, index) => (
+                      <div 
                         key={`${tweet.id}-${index}`}
-                  className="text-red-400/80 flex gap-3 hover:bg-red-500/5 transition-all duration-300 py-2 px-3 rounded backdrop-blur-sm border border-transparent hover:border-red-500/10 hover-glow float"
-                >
+                        className="text-red-400/80 flex gap-3 hover:bg-red-500/5 transition-all duration-300 py-2 px-3 rounded backdrop-blur-sm border border-transparent hover:border-red-500/10 hover-glow float"
+                      >
                         <div className="text-red-500/50 select-none font-bold glow-text">
                           [{String(index + 1).padStart(4, '0')}]
                         </div>
                   
-                  <div className="flex-1">
+                        <div className="flex-1">
                           <div className="text-red-300/90 hover-text-glow break-words">
                             {tweet.text}
                           </div>
-                    <div className="text-red-500/40 text-xs flex items-center gap-2 mt-1.5">
+                          <div className="text-red-500/40 text-xs flex items-center gap-2 mt-1.5">
                             <span>
                               {tweet.timestamp && new Date(tweet.timestamp).toLocaleString()}
                             </span>
-                      {tweet.isReply && (
-                        <>
-                          <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box" />
-                          <span className="glow-text">REPLY</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                            {tweet.isReply && (
+                              <>
+                                <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box" />
+                                <span className="glow-text">REPLY</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
 
-                <div className="mt-6 pt-4 border-t border-red-500/10 text-red-500/60 backdrop-blur-sm glow-border">
-                  {'>'} Collection Stats: {tweets.length} posts
-                </div>
+                    <div className="mt-6 pt-4 border-t border-red-500/10 text-red-500/60 backdrop-blur-sm glow-border">
+                      {'>'} Collection Stats: {tweets.length} posts
+                    </div>
                   </>
                 )}
-
-                {error && (
-                  <div className="mt-4 p-4 bg-red-500/5 border border-red-500/20 rounded backdrop-blur-sm text-red-400/90">
-                    {error}
-                  </div>
-                )}
+              </div>
             </div>
           </div>
-        </div>
 
           {/* Personality Analysis Panel - Bottom Half */}
           <div className="h-[calc(50%-2px)] min-h-[300px] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
             <div className="flex-none border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
-              <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">PERSONALITY ANALYSIS</h3>
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
+                <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">PERSONALITY ANALYSIS</h3>
+              </div>
             </div>
-          </div>
 
-          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-6 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[50vh] sm:max-h-[45vh] md:max-h-[40vh] relative touch-action-pan-y">
-            {!analysis ? (
-              <div className="text-center">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-6 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[50vh] sm:max-h-[45vh] md:max-h-[40vh] relative touch-action-pan-y">
+              {!analysis ? (
+                <div className="text-center">
                   {isAnalyzing && (
                     <div className="mb-4 text-red-500/90 tracking-wider uppercase glow-text flex items-center justify-center gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20" />
@@ -2172,395 +2166,395 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                       )}
                     </div>
                   )}
-                <p className="text-red-500/70 mb-4 glow-text">
-                  Ready to analyze {tweets.length} tweets for personality insights
-                </p>
-                <button
-                  onClick={handleAnalyze}
-                  disabled={isAnalyzing}
-                  className={`px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow ${showAnalysisPrompt && !isAnalyzing ? 'pulse-action' : ''}`}
-                >
-                  {isAnalyzing ? (
-                    <div className="flex items-center gap-2">
-                      <Spinner size="sm" />
-                        <span>ANALYZING</span>
-                    </div>
-                  ) : (
-                    'START ANALYSIS'
-                  )}
-                </button>
-              </div>
-            ) : (
-                <div className="space-y-4">
-                  {/* Summary Section */}
-                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                    <span className="ancient-text">Summary</span>
-                  </h4>
-                  <div className="prose prose-red prose-invert max-w-none hover-text-glow">
-                    <ReactMarkdown>{analysis.summary}</ReactMarkdown>
-                  </div>
-                </div>
-
-                  {/* Key Traits Section */}
-                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                    <span className="ancient-text">Key Traits</span>
-                  </h4>
-                  <div className="space-y-2">
-                    {analysis.traits.map((trait: { name: string; score: number; explanation: string }, index: number) => (
-                      <div key={`trait-${index}-${trait.name}`} className="hover-glow">
-                        <div className="flex justify-between mb-1 text-xs text-red-400/70">
-                          <span className="hover-text-glow font-medium">{trait.name}</span>
-                          <span className="hover-text-glow">{trait.score}/10</span>
-                        </div>
-                        <div className="h-1.5 bg-red-500/10 rounded-full overflow-hidden glow-box mb-2">
-                          <div 
-                            className="h-full bg-red-500/50 rounded-full"
-                            style={{ width: `${trait.score * 10}%` }}
-                          />
-                        </div>
-                        <div className="text-sm text-red-400/70 prose prose-red prose-invert max-w-none hover-text-glow">
-                          <ReactMarkdown>{trait.explanation}</ReactMarkdown>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                
-                  {/* Communication Style Section */}
-                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                    <span className="ancient-text">Communication Style</span>
-                  </h4>
-                  <div className="prose prose-red prose-invert max-w-none hover-text-glow mb-4">
-                    <ReactMarkdown>{analysis.communicationStyle.description}</ReactMarkdown>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box"></div>
-                      <span className="text-red-300/80 hover-text-glow">
-                        {analysis.communicationStyle.formality < 41 ? 'Prefers casual, relaxed communication with natural language patterns' :
-                         analysis.communicationStyle.formality < 61 ? 'Balances casual and professional tones appropriately' :
-                         analysis.communicationStyle.formality < 81 ? 'Maintains professional and structured communication' :
-                         'Employs highly formal and sophisticated language'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box"></div>
-                      <span className="text-red-300/80 hover-text-glow">
-                        {analysis.communicationStyle.enthusiasm < 41 ? 'Expresses thoughts in a reserved and measured manner' :
-                         analysis.communicationStyle.enthusiasm < 61 ? 'Shows balanced enthusiasm in communications' :
-                         analysis.communicationStyle.enthusiasm < 81 ? 'Demonstrates clear passion and energy in expression' :
-                         'Exhibits intense enthusiasm and excitement in communication'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box"></div>
-                      <span className="text-red-300/80 hover-text-glow">
-                        {analysis.communicationStyle.technicalLevel < 41 ? 'Uses accessible language with minimal technical terms' :
-                         analysis.communicationStyle.technicalLevel < 61 ? 'Balances technical and general language effectively' :
-                         analysis.communicationStyle.technicalLevel < 81 ? 'Frequently incorporates technical terminology' :
-                         'Employs sophisticated technical discourse consistently'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box"></div>
-                      <span className="text-red-300/80 hover-text-glow">
-                        {analysis.communicationStyle.emojiUsage < 41 ? 'Rarely uses emojis or emotional indicators' :
-                         analysis.communicationStyle.emojiUsage < 61 ? 'Moderately incorporates emojis for emphasis' :
-                         analysis.communicationStyle.emojiUsage < 81 ? 'Frequently enhances messages with emojis' :
-                         'Extensively uses emojis to convey emotion and tone'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                
-                  {/* Interests Section */}
-                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                    <span className="ancient-text">Interests</span>
-                  </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {analysis.interests.map((interest: string) => (
-                      <span 
-                        key={interest}
-                        className="px-2 py-1 bg-red-500/5 border border-red-500/20 rounded text-red-300/80 text-sm hover-glow"
-                      >
-                        {interest}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                
-                  {/* Topics & Themes Section */}
-                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                    <span className="ancient-text">Topics & Themes</span>
-                  </h4>
-                  <ul className="list-none space-y-2">
-                    {analysis.topicsAndThemes.map((topic: string, i: number) => (
-                      <li key={i} className="flex items-center gap-2 text-red-400/70 hover-text-glow">
-                        <div className="w-1 h-1 rounded-full bg-red-500/50"></div>
-                        {topic}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                
-                  {/* Emotional Tone Section */}
-                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                    <span className="ancient-text">Emotional Tone</span>
-                  </h4>
-                  <div className="prose prose-red prose-invert max-w-none hover-text-glow">
-                    <ReactMarkdown>{analysis.emotionalTone}</ReactMarkdown>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {error && (
-              <div className="mt-4 p-4 bg-red-500/5 border border-red-500/20 rounded backdrop-blur-sm text-red-400/90">
-                {error}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Center Chat Interface Container - Desktop Only */}
-      <div className="hidden lg:fixed lg:inset-0 lg:flex lg:items-center lg:justify-center lg:pointer-events-none lg:pt-20 lg:pb-6">
-        <div className="w-[40vw] lg:w-[48vw] xl:w-[54vw] min-w-[380px] max-w-[1200px] h-[calc(100vh-104px)] mx-auto backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow pointer-events-auto z-1 ancient-border rune-pattern overflow-hidden transition-all duration-300 md:mx-6 lg:mx-8">
-          <div className="flex flex-col h-full min-h-0">
-            {/* Chat Header */}
-            <div className="flex-none flex items-center justify-between px-4 md:px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 rounded-t-lg cryptic-shadow relative z-40">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">NEURAL INTERFACE</h3>
-              </div>
-              <ConversationList
-                conversations={conversations}
-                activeConversationId={activeConversationId}
-                onSelectConversation={handleSelectConversation}
-                onNewChat={handleNewChat}
-                onDeleteConversation={handleDeleteConversation}
-                isLoading={isLoadingConversations}
-              />
-            </div>
-
-            {/* Chat Messages Container */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar backdrop-blur-sm bg-black/20 ancient-scroll min-h-0 relative z-30">
-              {!analysis ? (
-                <div className="text-red-500/70 italic text-center glow-text p-4">
-                  Start personality analysis to begin chat interaction
-                </div>
-              ) : (
-                <>
-                  {/* Sticky Profile Section */}
-                  <div className="sticky top-0 z-35 p-4 bg-black/40 backdrop-blur-md">
-                    <div className="flex flex-col items-center gap-4 border border-red-500/10 rounded-lg hover-glow ancient-border p-4">
-                      <div className="w-20 h-20 rounded-full border-2 border-red-500/20 overflow-hidden hover-glow">
-                        {profile.imageUrl ? (
-                          <Image
-                            src={profile.imageUrl}
-                            alt={profile.name || 'Profile'}
-                            className="w-full h-full object-cover"
-                            width={80}
-                            height={80}
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-red-500/5 flex items-center justify-center">
-                            <span className="text-red-500/50 text-2xl">?</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-center">
-                        <h4 className="text-red-500/90 font-bold tracking-wider ancient-text">
-                          {profile.name ? `@${profile.name}` : 'Anonymous User'}
-                        </h4>
-                        {profile.bio && (
-                          <p className="text-red-400/70 text-sm mt-1 hover-text-glow max-w-md">
-                            {profile.bio}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Messages Section with padding to account for sticky header */}
-                  <div className="p-4 space-y-4 relative z-30">
-                    {messages.map((msg, i) => (
-                      <div 
-                        key={i}
-                        className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <div 
-                          className={`max-w-[80%] rounded backdrop-blur-sm border border-red-500/10 shadow-lg hover-glow float
-                            ${msg.isUser 
-                              ? 'bg-red-500/5 text-red-400/90' 
-                              : 'bg-black/40 text-red-300/90'
-                            } px-4 py-2 text-sm`}
-                        >
-                          <div className="prose prose-red prose-invert max-w-none hover-text-glow whitespace-pre-wrap">
-                            <ReactMarkdown>{msg.text}</ReactMarkdown>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {isTyping && (
-                      <div className="flex justify-start">
-                        <div className="max-w-[80%] rounded-lg p-3 bg-red-500/5 text-red-500/80">
-                          <div className="flex items-center gap-1">
-                            <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce [animation-delay:-0.3s]" />
-                            <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce [animation-delay:-0.15s]" />
-                            <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce" />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    <div ref={messagesEndRef} />
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Chat Input */}
-            {analysis && (
-              <div className="flex-none p-3 md:p-4 border-t border-red-500/10 bg-black/40 backdrop-blur-sm cryptic-shadow relative z-40">
-                <form onSubmit={handleSubmit} className="flex gap-2">
-                  <textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Enter your message... (Shift+Enter for new line)"
-                    disabled={loading}
-                    rows={1}
-                    className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-2 md:px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow disabled:opacity-50 resize-none min-h-[38px] max-h-[200px] overflow-y-auto custom-scrollbar"
-                  />
+                  <p className="text-red-500/70 mb-4 glow-text">
+                    Ready to analyze {tweets.length} tweets for personality insights
+                  </p>
                   <button
-                    type="submit"
-                    disabled={!input.trim() || loading}
-                    className="px-2 md:px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow min-w-[60px] md:min-w-[80px] h-[38px]"
+                    onClick={handleAnalyze}
+                    disabled={isAnalyzing}
+                    className={`px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow ${showAnalysisPrompt && !isAnalyzing ? 'pulse-action' : ''}`}
                   >
-                    {loading ? (
-                      <Spinner size="sm" />
+                    {isAnalyzing ? (
+                      <div className="flex items-center gap-2">
+                        <Spinner size="sm" />
+                        <span>ANALYZING</span>
+                      </div>
                     ) : (
-                      'Send'
+                      'START ANALYSIS'
                     )}
                   </button>
-                </form>
-                <div className="mt-1 text-xs text-red-500/40">
-                  Supports Markdown: **bold**, *italic*, - bullets, etc.
                 </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Summary Section */}
+                  <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                      <span className="ancient-text">Summary</span>
+                    </h4>
+                    <div className="prose prose-red prose-invert max-w-none hover-text-glow">
+                      <ReactMarkdown>{analysis.summary}</ReactMarkdown>
+                    </div>
+                  </div>
+
+                  {/* Key Traits Section */}
+                  <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                      <span className="ancient-text">Key Traits</span>
+                    </h4>
+                    <div className="space-y-2">
+                      {analysis.traits.map((trait: { name: string; score: number; explanation: string }, index: number) => (
+                        <div key={`trait-${index}-${trait.name}`} className="hover-glow">
+                          <div className="flex justify-between mb-1 text-xs text-red-400/70">
+                            <span className="hover-text-glow font-medium">{trait.name}</span>
+                            <span className="hover-text-glow">{trait.score}/10</span>
+                          </div>
+                          <div className="h-1.5 bg-red-500/10 rounded-full overflow-hidden glow-box mb-2">
+                            <div 
+                              className="h-full bg-red-500/50 rounded-full"
+                              style={{ width: `${trait.score * 10}%` }}
+                            />
+                          </div>
+                          <div className="text-sm text-red-400/70 prose prose-red prose-invert max-w-none hover-text-glow">
+                            <ReactMarkdown>{trait.explanation}</ReactMarkdown>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Communication Style Section */}
+                  <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                      <span className="ancient-text">Communication Style</span>
+                    </h4>
+                    <div className="prose prose-red prose-invert max-w-none hover-text-glow mb-4">
+                      <ReactMarkdown>{analysis.communicationStyle.description}</ReactMarkdown>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box"></div>
+                        <span className="text-red-300/80 hover-text-glow">
+                          {analysis.communicationStyle.formality < 41 ? 'Prefers casual, relaxed communication with natural language patterns' :
+                           analysis.communicationStyle.formality < 61 ? 'Balances casual and professional tones appropriately' :
+                           analysis.communicationStyle.formality < 81 ? 'Maintains professional and structured communication' :
+                           'Employs highly formal and sophisticated language'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box"></div>
+                        <span className="text-red-300/80 hover-text-glow">
+                          {analysis.communicationStyle.enthusiasm < 41 ? 'Expresses thoughts in a reserved and measured manner' :
+                           analysis.communicationStyle.enthusiasm < 61 ? 'Shows balanced enthusiasm in communications' :
+                           analysis.communicationStyle.enthusiasm < 81 ? 'Demonstrates clear passion and energy in expression' :
+                           'Exhibits intense enthusiasm and excitement in communication'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box"></div>
+                        <span className="text-red-300/80 hover-text-glow">
+                          {analysis.communicationStyle.technicalLevel < 41 ? 'Uses accessible language with minimal technical terms' :
+                           analysis.communicationStyle.technicalLevel < 61 ? 'Balances technical and general language effectively' :
+                           analysis.communicationStyle.technicalLevel < 81 ? 'Frequently incorporates technical terminology' :
+                           'Employs sophisticated technical discourse consistently'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box"></div>
+                        <span className="text-red-300/80 hover-text-glow">
+                          {analysis.communicationStyle.emojiUsage < 41 ? 'Rarely uses emojis or emotional indicators' :
+                           analysis.communicationStyle.emojiUsage < 61 ? 'Moderately incorporates emojis for emphasis' :
+                           analysis.communicationStyle.emojiUsage < 81 ? 'Frequently enhances messages with emojis' :
+                           'Extensively uses emojis to convey emotion and tone'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Interests Section */}
+                  <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                      <span className="ancient-text">Interests</span>
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {analysis.interests.map((interest: string) => (
+                        <span 
+                          key={interest}
+                          className="px-2 py-1 bg-red-500/5 border border-red-500/20 rounded text-red-300/80 text-sm hover-glow"
+                        >
+                          {interest}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Topics & Themes Section */}
+                  <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                      <span className="ancient-text">Topics & Themes</span>
+                    </h4>
+                    <ul className="list-none space-y-2">
+                      {analysis.topicsAndThemes.map((topic: string, i: number) => (
+                        <li key={i} className="flex items-center gap-2 text-red-400/70 hover-text-glow">
+                          <div className="w-1 h-1 rounded-full bg-red-500/50"></div>
+                          {topic}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Emotional Tone Section */}
+                  <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                      <span className="ancient-text">Emotional Tone</span>
+                    </h4>
+                    <div className="prose prose-red prose-invert max-w-none hover-text-glow">
+                      <ReactMarkdown>{analysis.emotionalTone}</ReactMarkdown>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {error && (
+                <div className="mt-4 p-4 bg-red-500/5 border border-red-500/20 rounded backdrop-blur-sm text-red-400/90">
+                  {error}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Main Center Chat Interface Container - Desktop Only */}
+        <div className="hidden lg:fixed lg:inset-0 lg:flex lg:items-center lg:justify-center lg:pointer-events-none lg:pt-20 lg:pb-6">
+          <div className="w-[40vw] lg:w-[48vw] xl:w-[54vw] min-w-[380px] max-w-[1200px] h-[calc(100vh-104px)] mx-auto backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow pointer-events-auto z-1 ancient-border rune-pattern overflow-hidden transition-all duration-300 md:mx-6 lg:mx-8">
+            <div className="flex flex-col h-full min-h-0">
+              {/* Chat Header */}
+              <div className="flex-none flex items-center justify-between px-4 md:px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 rounded-t-lg cryptic-shadow relative z-40">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                  <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">NEURAL INTERFACE</h3>
+                </div>
+                <ConversationList
+                  conversations={conversations}
+                  activeConversationId={activeConversationId}
+                  onSelectConversation={handleSelectConversation}
+                  onNewChat={handleNewChat}
+                  onDeleteConversation={handleDeleteConversation}
+                  isLoading={isLoadingConversations}
+                />
               </div>
-            )}
+
+              {/* Chat Messages Container */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar backdrop-blur-sm bg-black/20 ancient-scroll min-h-0 relative z-30">
+                {!analysis ? (
+                  <div className="text-red-500/70 italic text-center glow-text p-4">
+                    Start personality analysis to begin chat interaction
+                  </div>
+                ) : (
+                  <>
+                    {/* Sticky Profile Section */}
+                    <div className="sticky top-0 z-35 p-4 bg-black/40 backdrop-blur-md">
+                      <div className="flex flex-col items-center gap-4 border border-red-500/10 rounded-lg hover-glow ancient-border p-4">
+                        <div className="w-20 h-20 rounded-full border-2 border-red-500/20 overflow-hidden hover-glow">
+                          {profile.imageUrl ? (
+                            <Image
+                              src={profile.imageUrl}
+                              alt={profile.name || 'Profile'}
+                              className="w-full h-full object-cover"
+                              width={80}
+                              height={80}
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-red-500/5 flex items-center justify-center">
+                              <span className="text-red-500/50 text-2xl">?</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-center">
+                          <h4 className="text-red-500/90 font-bold tracking-wider ancient-text">
+                            {profile.name ? `@${profile.name}` : 'Anonymous User'}
+                          </h4>
+                          {profile.bio && (
+                            <p className="text-red-400/70 text-sm mt-1 hover-text-glow max-w-md">
+                              {profile.bio}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Messages Section with padding to account for sticky header */}
+                    <div className="p-4 space-y-4 relative z-30">
+                      {messages.map((msg, i) => (
+                        <div 
+                          key={i}
+                          className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}
+                        >
+                          <div 
+                            className={`max-w-[80%] rounded backdrop-blur-sm border border-red-500/10 shadow-lg hover-glow float
+                              ${msg.isUser 
+                                ? 'bg-red-500/5 text-red-400/90' 
+                                : 'bg-black/40 text-red-300/90'
+                              } px-4 py-2 text-sm`}
+                          >
+                            <div className="prose prose-red prose-invert max-w-none hover-text-glow whitespace-pre-wrap">
+                              <ReactMarkdown>{msg.text}</ReactMarkdown>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {isTyping && (
+                        <div className="flex justify-start">
+                          <div className="max-w-[80%] rounded-lg p-3 bg-red-500/5 text-red-500/80">
+                            <div className="flex items-center gap-1">
+                              <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce [animation-delay:-0.3s]" />
+                              <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce [animation-delay:-0.15s]" />
+                              <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce" />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      <div ref={messagesEndRef} />
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Chat Input */}
+              {analysis && (
+                <div className="flex-none p-3 md:p-4 border-t border-red-500/10 bg-black/40 backdrop-blur-sm cryptic-shadow relative z-40">
+                  <form onSubmit={handleSubmit} className="flex gap-2">
+                    <textarea
+                      ref={textareaRef}
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Enter your message... (Shift+Enter for new line)"
+                      disabled={loading}
+                      rows={1}
+                      className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-2 md:px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow disabled:opacity-50 resize-none min-h-[38px] max-h-[200px] overflow-y-auto custom-scrollbar"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!input.trim() || loading}
+                      className="px-2 md:px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow min-w-[60px] md:min-w-[80px] h-[38px]"
+                    >
+                      {loading ? (
+                        <Spinner size="sm" />
+                      ) : (
+                        'Send'
+                      )}
+                    </button>
+                  </form>
+                  <div className="mt-1 text-xs text-red-500/40">
+                    Supports Markdown: **bold**, *italic*, - bullets, etc.
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Consent Modal */}
-      {showConsent && (
-        <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-          onClick={() => {
-            setShowConsent(false)
-            if (loading) handleCancelScraping()
-          }}
-        >
+        {/* Consent Modal */}
+        {showConsent && (
           <div 
-            className="bg-black/40 backdrop-blur-md px-6 py-4 rounded-lg shadow-2xl w-full max-w-md border border-red-500/20 hover-glow float max-h-[90vh] overflow-y-auto"
-            onClick={e => e.stopPropagation()}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            onClick={() => {
+              setShowConsent(false)
+              if (loading) handleCancelScraping()
+            }}
           >
-            <div className="flex items-center gap-2 mb-4 border-b border-red-500/20 pb-4 glow-border">
-              <div className="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-              <h3 className="text-lg font-bold text-red-500/90 tracking-wider glow-text">
-                SYSTEM AUTHORIZATION REQUIRED
-              </h3>
-            </div>
-            <div className="space-y-4 text-red-400/90">
-              <p className="uppercase tracking-wider glow-text">
-                This operation will collect the following data:
-              </p>
-              <ul className="list-disc pl-5 space-y-2 text-red-300/80">
-                <li className="hover-text-glow">Profile metrics and identifiers</li>
-                <li className="hover-text-glow">Recent transmission logs</li>
-                <li className="hover-text-glow">Associated media content</li>
-              </ul>
-              <p className="text-red-300/80 hover-text-glow">
-                Estimated operation time: 1-2 minutes. Maintain connection stability during the process.
-              </p>
-            </div>
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => setShowConsent(false)}
-                className="px-4 py-2 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs hover-glow"
-              >
-                Abort
-              </button>
-              <button
-                onClick={startScraping}
-                className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow"
-              >
-                Authorize
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Completion Modal */}
-      {showComplete && (
-        <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
-          onClick={handleCloseModal}
-        >
-          <div 
-            className="bg-black/40 backdrop-blur-md p-8 rounded-lg shadow-2xl w-[500px] border border-red-500/20 hover-glow float"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4 border-b border-red-500/20 pb-4 glow-border">
-              <div className="flex items-center gap-2">
+            <div 
+              className="bg-black/40 backdrop-blur-md px-6 py-4 rounded-lg shadow-2xl w-full max-w-md border border-red-500/20 hover-glow float max-h-[90vh] overflow-y-auto"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2 mb-4 border-b border-red-500/20 pb-4 glow-border">
                 <div className="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                <h3 className="text-lg font-bold tracking-wider text-red-500/90 glow-text">OPERATION COMPLETE</h3>
+                <h3 className="text-lg font-bold text-red-500/90 tracking-wider glow-text">
+                  SYSTEM AUTHORIZATION REQUIRED
+                </h3>
               </div>
-              <button
-                onClick={handleCloseModal}
-                className="text-red-500/70 hover:text-red-500/90 transition-colors hover-text-glow"
-              >
-                <span className="sr-only">Close</span>
-                ×
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="text-red-400/90">
-                <p className="uppercase tracking-wider mb-2 glow-text">Data Collection Summary:</p>
-                <ul className="list-disc pl-5 space-y-1 text-red-300/80">
-                  <li className="hover-text-glow">{tweets.length} posts collected</li>
+              <div className="space-y-4 text-red-400/90">
+                <p className="uppercase tracking-wider glow-text">
+                  This operation will collect the following data:
+                </p>
+                <ul className="list-disc pl-5 space-y-2 text-red-300/80">
+                  <li className="hover-text-glow">Profile metrics and identifiers</li>
+                  <li className="hover-text-glow">Recent transmission logs</li>
+                  <li className="hover-text-glow">Associated media content</li>
                 </ul>
+                <p className="text-red-300/80 hover-text-glow">
+                  Estimated operation time: 1-2 minutes. Maintain connection stability during the process.
+                </p>
               </div>
-              
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-3 mt-6">
                 <button
-                  onClick={handleCloseModal}
+                  onClick={() => setShowConsent(false)}
+                  className="px-4 py-2 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs hover-glow"
+                >
+                  Abort
+                </button>
+                <button
+                  onClick={startScraping}
                   className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow"
                 >
-                  Close Terminal
+                  Authorize
                 </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Completion Modal */}
+        {showComplete && (
+          <div 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+            onClick={handleCloseModal}
+          >
+            <div 
+              className="bg-black/40 backdrop-blur-md p-8 rounded-lg shadow-2xl w-[500px] border border-red-500/20 hover-glow float"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4 border-b border-red-500/20 pb-4 glow-border">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+                  <h3 className="text-lg font-bold tracking-wider text-red-500/90 glow-text">OPERATION COMPLETE</h3>
+                </div>
+                <button
+                  onClick={handleCloseModal}
+                  className="text-red-500/70 hover:text-red-500/90 transition-colors hover-text-glow"
+                >
+                  <span className="sr-only">Close</span>
+                  ×
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="text-red-400/90">
+                  <p className="uppercase tracking-wider mb-2 glow-text">Data Collection Summary:</p>
+                  <ul className="list-disc pl-5 space-y-1 text-red-300/80">
+                    <li className="hover-text-glow">{tweets.length} posts collected</li>
+                  </ul>
+                </div>
+              
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleCloseModal}
+                    className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow"
+                  >
+                    Close Terminal
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </>
-    )
-} 
+  )
+}
