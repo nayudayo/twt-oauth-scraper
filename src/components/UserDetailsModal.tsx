@@ -58,18 +58,18 @@ export function UserDetailsModal({ username, onClose }: UserDetailsModalProps) {
 
   return (
     <div 
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[999999]"
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[999999] p-4 sm:p-6"
       onClick={onClose}
     >
       {/* Profile Card */}
       <div 
-        className="w-full max-w-md bg-black/40 backdrop-blur-md border border-red-500/20 rounded-lg shadow-2xl hover-glow ancient-border relative p-6"
+        className="w-full max-w-[320px] sm:max-w-md bg-black/40 backdrop-blur-md border border-red-500/20 rounded-lg shadow-2xl hover-glow ancient-border relative p-4 sm:p-6"
         onClick={e => e.stopPropagation()}
       >
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-red-500/70 hover:text-red-500/90 ancient-text"
+          className="absolute top-2 sm:top-4 right-2 sm:right-4 text-red-500/70 hover:text-red-500/90 ancient-text text-lg sm:text-xl"
         >
           <span className="sr-only">Close</span>
           ×
@@ -77,17 +77,17 @@ export function UserDetailsModal({ username, onClose }: UserDetailsModalProps) {
 
         {/* Content */}
         {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="w-8 h-8 border-2 border-red-500/20 border-t-red-500 rounded-full animate-spin"></div>
+          <div className="flex items-center justify-center py-6 sm:py-8">
+            <div className="w-6 h-6 sm:w-8 sm:h-8 border-2 border-red-500/20 border-t-red-500 rounded-full animate-spin"></div>
           </div>
         ) : error ? (
-          <div className="text-red-500/70 text-center py-8">
+          <div className="text-red-500/70 text-center py-6 sm:py-8 text-sm sm:text-base">
             {error}
           </div>
         ) : details ? (
           <div className="text-center">
             {/* Profile Picture */}
-            <div className="mb-4 flex justify-center">
+            <div className="mb-3 sm:mb-4 flex justify-center">
               <button
                 onClick={handleProfileClick}
                 className="group relative rounded-full transition-transform hover:scale-105"
@@ -97,11 +97,11 @@ export function UserDetailsModal({ username, onClose }: UserDetailsModalProps) {
                   <img 
                     src={details.profile.imageUrl} 
                     alt={details.profile.name || 'Profile'} 
-                    className="w-24 h-24 rounded-full border-2 border-red-500/20 shadow-lg shadow-red-500/10 transition-all group-hover:border-red-500/40 group-hover:shadow-red-500/20"
+                    className="w-16 h-16 sm:w-24 sm:h-24 rounded-full border-2 border-red-500/20 shadow-lg shadow-red-500/10 transition-all group-hover:border-red-500/40 group-hover:shadow-red-500/20"
                   />
                 ) : (
-                  <div className="w-24 h-24 rounded-full border-2 border-red-500/20 bg-red-500/5 flex items-center justify-center transition-all group-hover:border-red-500/40 group-hover:bg-red-500/10">
-                    <span className="text-red-500/50 text-2xl">
+                  <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-full border-2 border-red-500/20 bg-red-500/5 flex items-center justify-center transition-all group-hover:border-red-500/40 group-hover:bg-red-500/10">
+                    <span className="text-red-500/50 text-xl sm:text-2xl">
                       {username.charAt(0).toUpperCase()}
                     </span>
                   </div>
@@ -112,7 +112,7 @@ export function UserDetailsModal({ username, onClose }: UserDetailsModalProps) {
                     viewBox="0 0 24 24" 
                     fill="none" 
                     stroke="currentColor" 
-                    className="w-6 h-6 text-red-500/70"
+                    className="w-4 h-4 sm:w-6 sm:h-6 text-red-500/70"
                   >
                     <path 
                       strokeLinecap="round" 
@@ -126,19 +126,19 @@ export function UserDetailsModal({ username, onClose }: UserDetailsModalProps) {
             </div>
 
             {/* Name */}
-            <h3 className="text-xl font-bold text-red-500/90 mb-2">
+            <h3 className="text-lg sm:text-xl font-bold text-red-500/90 mb-2">
               {details.profile.name || username}
             </h3>
 
             {/* Summary */}
             {details.personality?.summary && (
-              <p className="text-red-500/70 text-sm leading-relaxed">
+              <p className="text-red-500/70 text-xs sm:text-sm leading-relaxed">
                 {details.personality.summary}
               </p>
             )}
           </div>
         ) : (
-          <div className="text-red-500/70 text-center py-8">
+          <div className="text-red-500/70 text-center py-6 sm:py-8 text-sm sm:text-base">
             No data available
           </div>
         )}
