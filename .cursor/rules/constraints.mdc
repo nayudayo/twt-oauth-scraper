@@ -11,76 +11,129 @@ description:
 globs: 
 ---
 
-# Development Constraints
+<?xml version="1.0" encoding="UTF-8"?>
+<constraints>
+  <metadata>
+    <description>Development constraints and prompt engineering guidelines</description>
+    <globs>*</globs>
+  </metadata>
 
-## Core Principles
-1. **Scope Control**
-   - Only modify files directly relevant to the task
-   - Maintain clear boundaries between components
-   - Document any indirect impacts on other modules
+  <core_principles>
+    <principle id="scope_control">
+      <name>Scope Control</name>
+      <rules>
+        <rule>Only modify files directly relevant to the task</rule>
+        <rule>Maintain clear boundaries between components</rule>
+        <rule>Document any indirect impacts on other modules</rule>
+      </rules>
+    </principle>
 
-2. **Incremental Development**
-   - Build upon existing implementations
-   - Preserve working functionality
-   - Document reasons for any divergence from existing patterns
+    <principle id="incremental_development">
+      <name>Incremental Development</name>
+      <rules>
+        <rule>Build upon existing implementations</rule>
+        <rule>Preserve working functionality</rule>
+        <rule>Document reasons for any divergence from existing patterns</rule>
+      </rules>
+    </principle>
 
-3. **Atomic Changes**
-   - Modify one component/function at a time
-   - Complete validation before moving to next change
-   - Keep changes focused and independent
+    <principle id="atomic_changes">
+      <name>Atomic Changes</name>
+      <rules>
+        <rule>Modify one component/function at a time</rule>
+        <rule>Complete validation before moving to next change</rule>
+        <rule>Keep changes focused and independent</rule>
+      </rules>
+    </principle>
 
-4. **Code Quality**
-   - Fix linter errors before marking tasks complete
-   - Maintain type safety throughout changes
-   - Follow established code style patterns
+    <principle id="code_quality">
+      <name>Code Quality</name>
+      <rules>
+        <rule>Fix linter errors before marking tasks complete</rule>
+        <rule>Maintain type safety throughout changes</rule>
+        <rule>Follow established code style patterns</rule>
+      </rules>
+    </principle>
 
-5. **Documentation**
-   - Update relevant .md plan files
-   - Document key decisions and trade-offs
-   - Add inline comments for complex logic
-   - Update API documentation if endpoints change
+    <principle id="documentation">
+      <name>Documentation</name>
+      <rules>
+        <rule>Update relevant .md plan files</rule>
+        <rule>Document key decisions and trade-offs</rule>
+        <rule>Add inline comments for complex logic</rule>
+        <rule>Update API documentation if endpoints change</rule>
+      </rules>
+    </principle>
+  </core_principles>
 
-## Validation Checklist
-Before completing any task:
-- [ ] Changes limited to relevant files
-- [ ] Built upon existing patterns where possible
-- [ ] Changes are atomic and focused
-- [ ] All linter errors resolved
-- [ ] Documentation updated
-- [ ] No breaking changes to public APIs
+  <validation>
+    <checklist>
+      <item>Changes limited to relevant files</item>
+      <item>Built upon existing patterns where possible</item>
+      <item>Changes are atomic and focused</item>
+      <item>All linter errors resolved</item>
+      <item>Documentation updated</item>
+      <item>No breaking changes to public APIs</item>
+    </checklist>
+  </validation>
 
-## Error Prevention
-1. **Before Changes**
-   - Review existing implementation
-   - Identify dependencies
-   - Plan atomic change steps
-   - Document expected outcomes
+  <error_prevention>
+    <phase id="before_changes">
+      <name>Before Changes</name>
+      <steps>
+        <step>Review existing implementation</step>
+        <step>Identify dependencies</step>
+        <step>Plan atomic change steps</step>
+        <step>Document expected outcomes</step>
+      </steps>
+    </phase>
 
-2. **During Changes**
-   - One component at a time
-   - Continuous linting
-   - Document decisions
+    <phase id="during_changes">
+      <name>During Changes</name>
+      <steps>
+        <step>One component at a time</step>
+        <step>Continuous linting</step>
+        <step>Document decisions</step>
+      </steps>
+    </phase>
 
-3. **After Changes**
-   - Full validation
-   - Documentation review
-   - Impact assessment
+    <phase id="after_changes">
+      <name>After Changes</name>
+      <steps>
+        <step>Full validation</step>
+        <step>Documentation review</step>
+        <step>Impact assessment</step>
+      </steps>
+    </phase>
+  </error_prevention>
 
-## Best Practices
-1. **Code Changes**
-   - Prefer small, focused changes
-   - Maintain backward compatibility
-   - Add migration paths if needed
-   - Use type-safe approaches
+  <best_practices>
+    <category id="code_changes">
+      <name>Code Changes</name>
+      <practices>
+        <practice>Prefer small, focused changes</practice>
+        <practice>Maintain backward compatibility</practice>
+        <practice>Add migration paths if needed</practice>
+        <practice>Use type-safe approaches</practice>
+      </practices>
+    </category>
 
-2. **Documentation**
-   - Keep .md files up to date
-   - Document breaking changes
-   - Update API documentation
-   - Add inline comments for complexity
+    <category id="documentation">
+      <name>Documentation</name>
+      <practices>
+        <practice>Keep .md files up to date</practice>
+        <practice>Document breaking changes</practice>
+        <practice>Update API documentation</practice>
+        <practice>Add inline comments for complexity</practice>
+      </practices>
+    </category>
+  </best_practices>
 
-## Rollback Plan
-For each change:
-1. Document current state
-2. Plan rollback steps
-3. Keep backup of critical data
+  <rollback>
+    <steps>
+      <step>Document current state</step>
+      <step>Plan rollback steps</step>
+      <step>Keep backup of critical data</step>
+    </steps>
+  </rollback>
+</constraints>
