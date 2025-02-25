@@ -1257,9 +1257,9 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     {analysis.traits.map((trait: { name: string; score: number; explanation: string }, index: number) => {
                       return (
                         <div key={`trait-${index}-${trait.name}`} className="space-y-2 hover-glow">
-                          <div className="flex justify-between text-xs text-red-400/70">
-                            <span className="hover-text-glow capitalize">{trait.name}</span>
-                            <span className="hover-text-glow">
+                          <div className="flex justify-between items-center">
+                            <span className="text-red-400/90 text-[14px] tracking-wide capitalize">{trait.name}</span>
+                            <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
                               {getTraitLabel(tuning.traitModifiers[trait.name])}
                             </span>
                           </div>
@@ -1270,11 +1270,11 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                             step="25"
                             value={tuning.traitModifiers[trait.name]}
                             onChange={(e) => handleTraitAdjustment(trait.name, parseInt(e.target.value))}
-                            className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
+                            className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
                           />
-                          <p className="text-xs text-red-400/50 mt-1 hover-text-glow">
+                          <div className="text-[14px] leading-relaxed text-red-300/80 pl-2 border-l border-red-500/10">
                             {trait.explanation}
-                          </p>
+                          </div>
                         </div>
                       );
                     })}
@@ -1287,24 +1287,24 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box" />
                     <span className="glow-text">Interests & Topics</span>
                   </h4>
-                  <div className="space-y-3">
+                  <div className="space-y-3 bg-black/20 rounded-lg p-4">
                     {analysis.interests.map((interest: string, index: number) => {
                       return (
-                        <div key={`interest-${index}-${interest}`} className="space-y-1">
-                          <div className="flex justify-between items-center text-xs text-red-400/70">
+                        <div key={`interest-${index}-${interest}`} className="space-y-2 hover-glow">
+                          <div className="flex justify-between items-center text-red-400/90">
                             <div className="flex-1">
-                              <span className={tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}>
-                                {interest}
+                              <span className={`text-[14px] tracking-wide ${tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}`}>
+                                {interest.replace(/\*\*/g, '')}
                                 <button
                                   onClick={() => handleInterestWeight(interest, 0)}
-                                  className="ml-2 text-red-500/50 hover:text-red-500/70"
+                                  className="ml-2 text-red-500/50 hover:text-red-500/70 transition-colors duration-200"
                                   title="Disable interest"
                                 >
                                   ×
                                 </button>
                               </span>
                             </div>
-                            <div className="w-20 text-right">
+                            <div className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
                               {getWeightLabel(tuning.interestWeights[interest] || 0)}
                             </div>
                           </div>
@@ -1315,7 +1315,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                             step="25"
                             value={Math.round((tuning.interestWeights[interest] || 0) / 25) * 25}
                             onChange={(e) => handleInterestWeight(interest, parseInt(e.target.value))}
-                            className={`w-full accent-red-500/50 bg-red-500/10 rounded h-1 ${
+                            className={`w-full accent-red-500/50 bg-red-500/10 rounded h-1.5 ${
                               tuning.interestWeights[interest] === 0 ? 'opacity-50' : ''
                             }`}
                           />
@@ -1329,7 +1329,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                         <div className="flex justify-between items-center text-xs text-red-400/70">
                           <div className="flex-1">
                             <span className={tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}>
-                              {interest}
+                              {interest.replace(/\*\*/g, '')}
                               <button
                                 onClick={() => handleRemoveCustomInterest(interest)}
                                 className="ml-2 text-red-500/50 hover:text-red-500/70"
@@ -1380,21 +1380,21 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 </div>
 
                 {/* Communication Style */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                    <span className="glow-text">Communication Style</span>
+                <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                    <span className="ancient-text text-base">Communication Style</span>
                   </h4>
-                  <div className="space-y-3">
-                    <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/70">
-                        <span className="hover-text-glow">Formality</span>
-                        <span className="hover-text-glow">
-                          {tuning.communicationStyle.formality === 0 ? 'None' :
-                           tuning.communicationStyle.formality < 41 ? 'Very Casual' :
-                           tuning.communicationStyle.formality < 61 ? 'Casual' :
-                           tuning.communicationStyle.formality < 81 ? 'Professional' :
-                           'Highly Formal'}
+                  <div className="space-y-4 bg-black/20 rounded-lg p-4">
+                    <div className="space-y-2 hover-glow">
+                      <div className="flex justify-between text-red-400/90">
+                        <span className="text-[14px] tracking-wide">Formality</span>
+                        <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
+                          {tuning.communicationStyle.formality === 0 ? 'Very Casual' :
+                           tuning.communicationStyle.formality <= 25 ? 'Casual' :
+                           tuning.communicationStyle.formality <= 50 ? 'Balanced' :
+                           tuning.communicationStyle.formality <= 75 ? 'Professional' :
+                           'Very Formal'}
                         </span>
                       </div>
                       <input
@@ -1404,38 +1404,16 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                         step="25"
                         value={tuning.communicationStyle.formality}
                         onChange={(e) => handleStyleAdjustment('formality', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
+                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
                       />
                     </div>
 
-                    <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/70">
-                        <span className="hover-text-glow">Technical Level</span>
-                        <span className="hover-text-glow">
-                          {tuning.communicationStyle.technicalLevel === 0 ? 'None' :
-                           tuning.communicationStyle.technicalLevel <= 25 ? 'Basic' :
-                           tuning.communicationStyle.technicalLevel <= 50 ? 'Mixed' :
-                           tuning.communicationStyle.technicalLevel <= 75 ? 'Detailed' :
-                           'Expert'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
-                        value={tuning.communicationStyle.technicalLevel}
-                        onChange={(e) => handleStyleAdjustment('technicalLevel', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
-                      />
-                    </div>
-
-                    <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/70">
-                        <span className="hover-text-glow">Enthusiasm</span>
-                        <span className="hover-text-glow">
-                          {tuning.communicationStyle.enthusiasm === 0 ? 'None' :
-                           tuning.communicationStyle.enthusiasm <= 25 ? 'Reserved' :
+                    <div className="space-y-2 hover-glow">
+                      <div className="flex justify-between text-red-400/90">
+                        <span className="text-[14px] tracking-wide">Enthusiasm</span>
+                        <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
+                          {tuning.communicationStyle.enthusiasm === 0 ? 'Reserved' :
+                           tuning.communicationStyle.enthusiasm <= 25 ? 'Mild' :
                            tuning.communicationStyle.enthusiasm <= 50 ? 'Moderate' :
                            tuning.communicationStyle.enthusiasm <= 75 ? 'High' :
                            'Very High'}
@@ -1448,14 +1426,36 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                         step="25"
                         value={tuning.communicationStyle.enthusiasm}
                         onChange={(e) => handleStyleAdjustment('enthusiasm', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
+                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
                       />
                     </div>
 
-                    <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/70">
-                        <span className="hover-text-glow">Emoji Usage</span>
-                        <span className="hover-text-glow">
+                    <div className="space-y-2 hover-glow">
+                      <div className="flex justify-between text-red-400/90">
+                        <span className="text-[14px] tracking-wide">Technical Level</span>
+                        <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
+                          {tuning.communicationStyle.technicalLevel === 0 ? 'Basic' :
+                           tuning.communicationStyle.technicalLevel <= 25 ? 'Simple' :
+                           tuning.communicationStyle.technicalLevel <= 50 ? 'Moderate' :
+                           tuning.communicationStyle.technicalLevel <= 75 ? 'Advanced' :
+                           'Expert'}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="25"
+                        value={tuning.communicationStyle.technicalLevel}
+                        onChange={(e) => handleStyleAdjustment('technicalLevel', parseInt(e.target.value))}
+                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
+                      />
+                    </div>
+
+                    <div className="space-y-2 hover-glow">
+                      <div className="flex justify-between text-red-400/90">
+                        <span className="text-[14px] tracking-wide">Emoji Usage</span>
+                        <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
                           {tuning.communicationStyle.emojiUsage === 0 ? 'None' :
                            tuning.communicationStyle.emojiUsage <= 25 ? 'Minimal' :
                            tuning.communicationStyle.emojiUsage <= 50 ? 'Moderate' :
@@ -1470,7 +1470,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                         step="25"
                         value={tuning.communicationStyle.emojiUsage}
                         onChange={(e) => handleStyleAdjustment('emojiUsage', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
+                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
                       />
                     </div>
                   </div>
@@ -1527,7 +1527,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   {isAnalyzing ? (
                     <div className="flex items-center gap-2">
                       <Spinner size="sm" />
-                        <span>ANALYZING</span>
+                      <span>ANALYZING</span>
                     </div>
                   ) : (
                     'START ANALYSIS'
@@ -1536,84 +1536,84 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
               </div>
             ) : (
                 <div className="space-y-4">
-                  {/* Summary Section */}
-                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
+                {/* Summary Section */}
+                <div className="bg-black/20 text-justify rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                    <span className="ancient-text">Summary</span>
+                    <span className="ancient-text text-base">Summary</span>
                   </h4>
-                  <div className="prose prose-red prose-invert max-w-none hover-text-glow">
+                  <div className="prose prose-red prose-invert max-w-none hover-text-glow prose-p:text-red-300/90 prose-p:leading-relaxed prose-p:text-[15px]">
                     <ReactMarkdown>{analysis.summary}</ReactMarkdown>
                   </div>
                 </div>
 
-                  {/* Key Traits Section */}
-                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
+                {/* Key Traits Section */}
+                <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                    <span className="ancient-text">Key Traits</span>
+                    <span className="ancient-text text-base">Key Traits</span>
                   </h4>
-                  <div className="space-y-2">
+                  <div className="space-y-6">
                     {analysis.traits.map((trait: { name: string; score: number; explanation: string }, index: number) => (
                       <div key={`trait-${index}-${trait.name}`} className="hover-glow">
-                        <div className="flex justify-between mb-1 text-xs text-red-400/70">
-                          <span className="hover-text-glow font-medium">{trait.name}</span>
-                          <span className="hover-text-glow">{trait.score}/10</span>
+                        <div className="flex justify-between mb-2 items-center">
+                          <span className="text-red-400/90 font-medium tracking-wide text-[15px] capitalize">{trait.name}</span>
+                          <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">{trait.score}/10</span>
                         </div>
-                        <div className="h-1.5 bg-red-500/10 rounded-full overflow-hidden glow-box mb-2">
+                        <div className="h-1.5 bg-red-500/10 rounded-full overflow-hidden glow-box mb-3">
                           <div 
-                            className="h-full bg-red-500/50 rounded-full"
+                            className="h-full bg-red-500/50 rounded-full transition-all duration-500 ease-out"
                             style={{ width: `${trait.score * 10}%` }}
                           />
                         </div>
-                        <div className="text-sm text-red-400/70 prose prose-red prose-invert max-w-none hover-text-glow">
+                        <div className="text-[14px] leading-relaxed text-red-300/80 prose prose-red prose-invert max-w-none hover-text-glow pl-2 border-l border-red-500/10">
                           <ReactMarkdown>{trait.explanation}</ReactMarkdown>
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
-                
-                  {/* Communication Style Section */}
-                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
+
+                {/* Communication Style Section */}
+                <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                    <span className="ancient-text">Communication Style</span>
+                    <span className="ancient-text text-base">Communication Style</span>
                   </h4>
-                  <div className="prose prose-red prose-invert max-w-none hover-text-glow mb-4">
+                  <div className="prose prose-red prose-invert max-w-none hover-text-glow prose-p:text-red-300/90 prose-p:leading-relaxed prose-p:text-[15px] mb-6">
                     <ReactMarkdown>{analysis.communicationStyle.description}</ReactMarkdown>
                   </div>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box"></div>
-                      <span className="text-red-300/80 hover-text-glow">
+                  <div className="space-y-4 bg-black/20 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
+                      <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
                         {analysis.communicationStyle.formality < 41 ? 'Prefers casual, relaxed communication with natural language patterns' :
                          analysis.communicationStyle.formality < 61 ? 'Balances casual and professional tones appropriately' :
                          analysis.communicationStyle.formality < 81 ? 'Maintains professional and structured communication' :
                          'Employs highly formal and sophisticated language'}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box"></div>
-                      <span className="text-red-300/80 hover-text-glow">
+                    <div className="flex items-start gap-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
+                      <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
                         {analysis.communicationStyle.enthusiasm < 41 ? 'Expresses thoughts in a reserved and measured manner' :
                          analysis.communicationStyle.enthusiasm < 61 ? 'Shows balanced enthusiasm in communications' :
                          analysis.communicationStyle.enthusiasm < 81 ? 'Demonstrates clear passion and energy in expression' :
                          'Exhibits intense enthusiasm and excitement in communication'}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box"></div>
-                      <span className="text-red-300/80 hover-text-glow">
+                    <div className="flex items-start gap-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
+                      <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
                         {analysis.communicationStyle.technicalLevel < 41 ? 'Uses accessible language with minimal technical terms' :
                          analysis.communicationStyle.technicalLevel < 61 ? 'Balances technical and general language effectively' :
                          analysis.communicationStyle.technicalLevel < 81 ? 'Frequently incorporates technical terminology' :
                          'Employs sophisticated technical discourse consistently'}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box"></div>
-                      <span className="text-red-300/80 hover-text-glow">
+                    <div className="flex items-start gap-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
+                      <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
                         {analysis.communicationStyle.emojiUsage < 41 ? 'Rarely uses emojis or emotional indicators' :
                          analysis.communicationStyle.emojiUsage < 61 ? 'Moderately incorporates emojis for emphasis' :
                          analysis.communicationStyle.emojiUsage < 81 ? 'Frequently enhances messages with emojis' :
@@ -1622,54 +1622,56 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     </div>
                   </div>
                 </div>
-                
-                  {/* Interests Section */}
-                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
+
+                {/* Interests Section */}
+                <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                    <span className="ancient-text">Interests</span>
+                    <span className="ancient-text text-base">Interests</span>
                   </h4>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2.5">
                     {analysis.interests.map((interest: string) => (
                       <span 
                         key={interest}
-                        className="px-2 py-1 bg-red-500/5 border border-red-500/20 rounded text-red-300/80 text-sm hover-glow"
+                        className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
                       >
-                        {interest}
+                        {interest.replace(/\*\*/g, '')}
                       </span>
                     ))}
                   </div>
                 </div>
-                
-                  {/* Topics & Themes Section */}
-                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
+
+                {/* Topics & Themes Section */}
+                <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                    <span className="ancient-text">Topics & Themes</span>
+                    <span className="ancient-text text-base">Topics & Themes</span>
                   </h4>
-                  <ul className="list-none space-y-2">
+                  <ul className="list-none space-y-3 bg-black/20 rounded-lg p-4">
                     {analysis.topicsAndThemes.map((topic: string, i: number) => (
-                      <li key={i} className="flex items-center gap-2 text-red-400/70 hover-text-glow">
-                        <div className="w-1 h-1 rounded-full bg-red-500/50"></div>
-                        {topic}
+                      <li key={i} className="flex items-center gap-3 text-red-300/90 hover-text-glow group">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500/30 group-hover:bg-red-500/50 transition-colors duration-200"></div>
+                        <span className="text-[14px] leading-relaxed tracking-wide">
+                          {topic.replace(/\*\*/g, '')}
+                        </span>
                       </li>
                     ))}
                   </ul>
                 </div>
-                
-                  {/* Emotional Tone Section */}
-                <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
+
+                {/* Emotional Tone Section */}
+                <div className="bg-black/20 text-justify rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                    <span className="ancient-text">Emotional Tone</span>
+                    <span className="ancient-text text-base">Emotional Tone</span>
                   </h4>
-                  <div className="prose prose-red prose-invert max-w-none hover-text-glow">
+                  <div className="prose prose-red prose-invert max-w-none hover-text-glow prose-p:text-red-300/90 prose-p:leading-relaxed prose-p:text-[15px] bg-black/20 rounded-lg p-4">
                     <ReactMarkdown>{analysis.emotionalTone}</ReactMarkdown>
                   </div>
                 </div>
               </div>
             )}
-            
+
             {error && (
               <div className="mt-4 p-4 bg-red-500/5 border border-red-500/20 rounded backdrop-blur-sm text-red-400/90">
                 {error}
@@ -1959,7 +1961,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                           <div className="flex justify-between items-center text-xs text-red-400/70">
                             <div className="flex-1">
                               <span className={tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}>
-                                {interest}
+                                {interest.replace(/\*\*/g, '')}
                                 <button
                                   onClick={() => handleInterestWeight(interest, 0)}
                                   className="ml-2 text-red-500/50 hover:text-red-500/70"
@@ -1994,7 +1996,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                         <div className="flex justify-between items-center text-xs text-red-400/70">
                           <div className="flex-1">
                             <span className={tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}>
-                              {interest}
+                              {interest.replace(/\*\*/g, '')}
                               <button
                                 onClick={() => handleRemoveCustomInterest(interest)}
                                 className="ml-2 text-red-500/50 hover:text-red-500/70"
@@ -2282,7 +2284,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
               ) : (
                 <div className="space-y-4">
                   {/* Summary Section */}
-                  <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                  <div className="bg-black/20 text-justify rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                     <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
                       <span className="ancient-text">Summary</span>
@@ -2293,25 +2295,25 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   </div>
 
                   {/* Key Traits Section */}
-                  <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
+                  <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                      <span className="ancient-text">Key Traits</span>
+                      <span className="ancient-text text-base">Key Traits</span>
                     </h4>
-                    <div className="space-y-2">
+                    <div className="space-y-6">
                       {analysis.traits.map((trait: { name: string; score: number; explanation: string }, index: number) => (
                         <div key={`trait-${index}-${trait.name}`} className="hover-glow">
-                          <div className="flex justify-between mb-1 text-xs text-red-400/70">
-                            <span className="hover-text-glow font-medium">{trait.name}</span>
-                            <span className="hover-text-glow">{trait.score}/10</span>
+                          <div className="flex justify-between mb-2 items-center">
+                            <span className="text-red-400/90 font-medium tracking-wide text-[15px] capitalize">{trait.name}</span>
+                            <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">{trait.score}/10</span>
                           </div>
-                          <div className="h-1.5 bg-red-500/10 rounded-full overflow-hidden glow-box mb-2">
+                          <div className="h-1.5 bg-red-500/10 rounded-full overflow-hidden glow-box mb-3">
                             <div 
-                              className="h-full bg-red-500/50 rounded-full"
+                              className="h-full bg-red-500/50 rounded-full transition-all duration-500 ease-out"
                               style={{ width: `${trait.score * 10}%` }}
                             />
                           </div>
-                          <div className="text-sm text-red-400/70 prose prose-red prose-invert max-w-none hover-text-glow">
+                          <div className="text-[14px] leading-relaxed text-red-300/80 prose prose-red prose-invert max-w-none hover-text-glow pl-2 border-l border-red-500/10">
                             <ReactMarkdown>{trait.explanation}</ReactMarkdown>
                           </div>
                         </div>
@@ -2320,45 +2322,45 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   </div>
 
                   {/* Communication Style Section */}
-                  <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
+                  <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                      <span className="ancient-text">Communication Style</span>
+                      <span className="ancient-text text-base">Communication Style</span>
                     </h4>
-                    <div className="prose prose-red prose-invert max-w-none hover-text-glow mb-4">
+                    <div className="prose prose-red prose-invert max-w-none hover-text-glow prose-p:text-red-300/90 prose-p:leading-relaxed prose-p:text-[15px] mb-6">
                       <ReactMarkdown>{analysis.communicationStyle.description}</ReactMarkdown>
                     </div>
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box"></div>
-                        <span className="text-red-300/80 hover-text-glow">
+                    <div className="space-y-4 bg-black/20 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
+                        <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
                           {analysis.communicationStyle.formality < 41 ? 'Prefers casual, relaxed communication with natural language patterns' :
                            analysis.communicationStyle.formality < 61 ? 'Balances casual and professional tones appropriately' :
                            analysis.communicationStyle.formality < 81 ? 'Maintains professional and structured communication' :
                            'Employs highly formal and sophisticated language'}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box"></div>
-                        <span className="text-red-300/80 hover-text-glow">
+                      <div className="flex items-start gap-3">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
+                        <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
                           {analysis.communicationStyle.enthusiasm < 41 ? 'Expresses thoughts in a reserved and measured manner' :
                            analysis.communicationStyle.enthusiasm < 61 ? 'Shows balanced enthusiasm in communications' :
                            analysis.communicationStyle.enthusiasm < 81 ? 'Demonstrates clear passion and energy in expression' :
                            'Exhibits intense enthusiasm and excitement in communication'}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box"></div>
-                        <span className="text-red-300/80 hover-text-glow">
+                      <div className="flex items-start gap-3">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
+                        <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
                           {analysis.communicationStyle.technicalLevel < 41 ? 'Uses accessible language with minimal technical terms' :
                            analysis.communicationStyle.technicalLevel < 61 ? 'Balances technical and general language effectively' :
                            analysis.communicationStyle.technicalLevel < 81 ? 'Frequently incorporates technical terminology' :
                            'Employs sophisticated technical discourse consistently'}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box"></div>
-                        <span className="text-red-300/80 hover-text-glow">
+                      <div className="flex items-start gap-3">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
+                        <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
                           {analysis.communicationStyle.emojiUsage < 41 ? 'Rarely uses emojis or emotional indicators' :
                            analysis.communicationStyle.emojiUsage < 61 ? 'Moderately incorporates emojis for emphasis' :
                            analysis.communicationStyle.emojiUsage < 81 ? 'Frequently enhances messages with emojis' :
@@ -2369,41 +2371,43 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   </div>
 
                   {/* Interests Section */}
-                  <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
+                  <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                      <span className="ancient-text">Interests</span>
+                      <span className="ancient-text text-base">Interests</span>
                     </h4>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2.5">
                       {analysis.interests.map((interest: string) => (
                         <span 
                           key={interest}
-                          className="px-2 py-1 bg-red-500/5 border border-red-500/20 rounded text-red-300/80 text-sm hover-glow"
+                          className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
                         >
-                          {interest}
+                          {interest.replace(/\*\*/g, '')}
                         </span>
                       ))}
                     </div>
                   </div>
 
                   {/* Topics & Themes Section */}
-                  <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
+                  <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                      <span className="ancient-text">Topics & Themes</span>
+                      <span className="ancient-text text-base">Topics & Themes</span>
                     </h4>
-                    <ul className="list-none space-y-2">
+                    <ul className="list-none space-y-3 bg-black/20 rounded-lg p-4">
                       {analysis.topicsAndThemes.map((topic: string, i: number) => (
-                        <li key={i} className="flex items-center gap-2 text-red-400/70 hover-text-glow">
-                          <div className="w-1 h-1 rounded-full bg-red-500/50"></div>
-                          {topic}
+                        <li key={i} className="flex items-center gap-3 text-red-300/90 hover-text-glow group">
+                          <div className="w-1.5 h-1.5 rounded-full bg-red-500/30 group-hover:bg-red-500/50 transition-colors duration-200"></div>
+                          <span className="text-[14px] leading-relaxed tracking-wide">
+                            {topic.replace(/\*\*/g, '')}
+                          </span>
                         </li>
                       ))}
                     </ul>
                   </div>
 
                   {/* Emotional Tone Section */}
-                  <div className="bg-black/20 rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                  <div className="bg-black/20 text-justify rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                     <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
                       <span className="ancient-text">Emotional Tone</span>
@@ -2487,7 +2491,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     <div className="p-4 space-y-4 relative z-30">
                       {messages.map((msg, i) => (
                         <div 
-                          key={i}
+                          key={i} 
                           className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}
                         >
                           <div 
