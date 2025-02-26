@@ -161,9 +161,15 @@ body {
 }
 
 .terminal-text {
-  animation: textShadow 1.6s infinite;
-  font-size: 12px; /* Base size for mobile */
+  font-size: clamp(14px, 1vw + 10px, 16px); /* Responsive base size */
   letter-spacing: 0.5px;
+  line-height: 1.5;
+}
+
+.terminal-header {
+  font-size: clamp(16px, 1.2vw + 12px, 20px); /* Larger size for headers */
+  letter-spacing: 0.1em;
+  font-weight: 600;
 }
 
 /* Custom Scrollbar */
@@ -412,6 +418,7 @@ body {
 /* ASCII Logo styles */
 pre.ascii-logo {
   font-family: 'Share Tech Mono', monospace;
+  font-size: clamp(14px, 1vw + 10px, 16px);  /* Match terminal-text scaling */
   white-space: pre !important;
   line-height: 1 !important;
   display: inline-block;
@@ -419,32 +426,6 @@ pre.ascii-logo {
   transform-origin: left top;
   margin: 0;
   padding: 0;
-  font-size: 12px;
   max-width: 100%;
-}
-
-@media (max-width: 767px) {
-  pre.ascii-logo {
-    font-size: 14px !important;
-    letter-spacing: 0;
-    transform: scale(0.95);
-    width: auto;
-    min-width: min-content;
-  }
-}
-
-@media (min-width: 768px) and (max-width: 1023px) {
-  pre.ascii-logo {
-    font-size: 16px !important;
-    letter-spacing: 0;
-    transform: scale(0.95);
-  }
-}
-
-@media (min-width: 1024px) {
-  pre.ascii-logo {
-    font-size: 16px !important;
-    letter-spacing: 0;
-  }
 }
 

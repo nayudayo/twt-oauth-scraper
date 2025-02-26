@@ -732,7 +732,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
               <div className="flex-none px-3 py-2 md:px-4 md:py-3 border-b border-red-500/20 bg-black/20">
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20"></div>
-                  <span className="text-red-500/70 text-xs md:text-sm tracking-[0.2em] uppercase terminal-text">Neural Terminal v1.0.3</span>
+                  <span className="text-red-500/70 uppercase terminal-header">Neural Terminal v1.0.3</span>
                 </div>
               </div>
 
@@ -751,18 +751,18 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
                     return (
                       <div key={i} className={`${isAsciiLogo ? 'pl-0 sm:pl-1 md:pl-2' : ''}`}>
                         <pre 
-                          className={`font-['Share_Tech_Mono'] whitespace-pre-wrap tracking-wider ${
+                          className={`font-['Share_Tech_Mono'] whitespace-pre-wrap tracking-wider terminal-text ${
                             isAsciiLogo 
                               ? 'ascii-logo' 
                               : line.isError 
-                                ? 'text-red-500/90 font-bold terminal-text' 
+                                ? 'text-red-500/90 font-bold' 
                                 : line.isSuccess
-                                  ? 'text-green-500/70 terminal-text'
+                                  ? 'text-green-500/70'
                                   : line.isSystem
-                                    ? 'text-yellow-500/70 terminal-text'
+                                    ? 'text-yellow-500/70'
                                     : line.isCommand 
-                                      ? 'text-red-500/70 terminal-text' 
-                                      : 'text-red-400/60 terminal-text'
+                                      ? 'text-red-500/70' 
+                                      : 'text-red-400/60'
                           }`}
                         >
                           {line.content}
@@ -775,13 +775,13 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
                 {/* Input Form */}
                 <form onSubmit={handleSubmit} className="flex-none px-3 sm:px-3 md:px-4 py-2 md:py-3 border-t border-red-500/20 bg-black/20">
                   <div className="flex items-center gap-2">
-                    <span className="text-red-500/70 tracking-wider terminal-text">{'>'}</span>
+                    <span className="text-red-500/70 terminal-text">{'>'}</span>
                     <input
                       ref={inputRef}
                       type="text"
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      className="flex-1 bg-transparent text-red-400/90 outline-none font-['Share_Tech_Mono'] tracking-wider terminal-input"
+                      className="flex-1 bg-transparent text-red-400/90 outline-none font-['Share_Tech_Mono'] tracking-wider terminal-text"
                       autoFocus
                       spellCheck={false}
                     />
@@ -814,16 +814,16 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
             }}
             onClick={e => e.stopPropagation()}
           >
-            {/* Header */}
+            {/* Share Dialog Header */}
             <div className="flex items-center justify-between gap-2 mb-4 border-b border-red-500/20 pb-4 glow-border">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                <h3 className="text-base md:text-lg font-bold text-red-500/80 tracking-wider glow-text">SHARE INTERFACE</h3>
+                <h3 className="terminal-header text-red-500/80">SHARE INTERFACE</h3>
               </div>
               {hasShared && (
                 <button
                   onClick={() => setShowShareDialog(false)}
-                  className="close-button text-red-500/70 hover:text-red-500/90 transition-colors hover-text-glow p-2"
+                  className="close-button text-red-500/70 hover:text-red-500/90 transition-colors hover-text-glow p-2 terminal-text"
                   aria-label="Close dialog"
                 >
                   ×
@@ -832,89 +832,49 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
             </div>
 
             <div className="space-y-4 md:space-y-6">
-              {/* Profile Section - Made more compact on mobile */}
-              <div className="flex flex-col items-center gap-3 md:gap-4">
-                {session?.user?.image ? (
-                  <div className="w-16 md:w-20 h-16 md:h-20 rounded-full border-2 border-red-500/20 overflow-hidden hover-glow">
-                    <Image
-                      src={session.user.image}
-                      alt={session?.username || 'Profile'}
-                      width={80}
-                      height={80}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-16 md:w-20 h-16 md:h-20 rounded-full bg-red-500/5 border-2 border-red-500/20 flex items-center justify-center">
-                    <span className="text-red-500/50 text-xl md:text-2xl">?</span>
-                  </div>
-                )}
-                <div className="text-center">
-                  <h4 className="text-sm md:text-base text-red-500/80 font-bold tracking-wider ancient-text">
-                    {session?.username || 'Anonymous User'}
-                  </h4>
-                  {session?.username && (
-                    <p className="text-xs md:text-sm text-red-400/60 mt-0.5 md:mt-1 hover-text-glow">
-                      @{session.username}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Referral Code Section - Improved mobile layout */}
-              <div className="bg-black/80 rounded-lg p-3 md:p-4 backdrop-blur-sm border border-red-500/20 hover-glow ancient-border">
-                <h4 className="text-xs md:text-sm font-bold text-red-500/80 tracking-wider uppercase flex items-center gap-2 mb-2 md:mb-3">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                  <span className="ancient-text">Your Referral Code</span>
+              {/* Profile Section */}
+              <div className="text-center">
+                <h4 className="terminal-header text-red-500/80">
+                  {session?.username || 'Anonymous'}
                 </h4>
-                <div className="flex flex-col md:flex-row gap-2">
-                  <code className="flex-1 bg-black/80 text-red-400/80 px-3 py-2 rounded font-mono text-xs md:text-sm hover-text-glow break-all">
-                    {isLoadingReferral ? (
-                      <span className="text-red-500/70 tracking-w ider">FETCHING DATA...</span>
-                    ) : (
-                      referralCode || commandResponses['GENERATE_REFERRAL'] || 'No referral code found'
-                    )}
-                  </code>
-                  <button
-                    onClick={() => {
-                      const code = referralCode || commandResponses['GENERATE_REFERRAL']
-                      if (code) {
-                        navigator.clipboard.writeText(code)
-                      }
-                    }}
-                    className="px-3 py-2 bg-red-500/10 text-red-500/80 border border-red-500/20 rounded hover:bg-red-500/20 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow whitespace-nowrap"
-                    disabled={isLoadingReferral || (!referralCode && !commandResponses['GENERATE_REFERRAL'])}
-                  >
-                    Copy Code
-                  </button>
-                </div>
+                <p className="terminal-text text-red-400/60 mt-1">
+                  Neural Network Participant
+                </p>
               </div>
 
-              {/* Instructions - Adjusted for mobile */}
-              <div className="text-xs md:text-sm text-red-400/60 space-y-1 md:space-y-2">
+              {/* Referral Code Section */}
+              <div>
+                <h4 className="terminal-header text-red-500/80 mb-2">
+                  YOUR REFERRAL CODE
+                </h4>
+                <code className="flex-1 bg-black/80 text-red-400/80 px-3 py-2 rounded font-mono terminal-text break-all">
+                  {isLoadingReferral ? (
+                    <span className="text-red-500/70">FETCHING DATA...</span>
+                  ) : (
+                    referralCode || 'ERROR: Code not found'
+                  )}
+                </code>
+              </div>
+
+              {/* Share Button */}
+              <button
+                onClick={handleShareToX}
+                disabled={isLoadingReferral}
+                className="terminal-text w-full px-4 py-2.5 bg-red-500/10 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/20 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow flex items-center justify-center gap-2"
+              >
+                Share on X
+              </button>
+
+              {/* Instructions */}
+              <div className="terminal-text text-red-400/60 space-y-2">
                 <p className="hover-text-glow">Share your referral code with others to earn rewards!</p>
                 <p className="hover-text-glow">Each successful referral increases your influence in the network.</p>
               </div>
 
-              {/* Share Button - Full width on mobile */}
-              <div className="mt-4 md:mt-6">
-                <button
-                  onClick={handleShareToX}
-                  disabled={isLoadingReferral || (!referralCode && !commandResponses['GENERATE_REFERRAL'])}
-                  className="w-full px-4 py-2.5 md:py-3 bg-red-500/10 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/20 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs md:text-sm backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow flex items-center justify-center gap-2"
-                >
-                  <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                  </svg>
-                  Download and Share to X
-                </button>
+              {/* Footer Note */}
+              <div className="terminal-text text-red-500/60 text-center tracking-wider px-2">
+                Note: You must share your code to complete the initialization process.
               </div>
-
-              {!hasShared && (
-                <div className="mt-2 md:mt-4 text-center text-red-500/60 text-[10px] md:text-xs tracking-wider px-2">
-                  Download the Image and Share to X to close this interface
-                </div>
-              )}
             </div>
           </div>
         </div>
