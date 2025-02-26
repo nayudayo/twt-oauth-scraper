@@ -11,11 +11,17 @@ export default {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        'terminal-red': '#ef4444',
+      },
+      fontFamily: {
+        mono: ['Share Tech Mono', 'monospace'],
+        terminal: ['VT323', 'monospace'],
       },
       animation: {
         fadeOut: 'fadeOut 0.5s ease-in-out forwards',
         fadeIn: 'fadeIn 0.5s ease-in-out forwards',
         scan: 'scan 2s linear infinite',
+        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
       },
       keyframes: {
         fadeOut: {
@@ -34,4 +40,19 @@ export default {
     },
   },
   plugins: [],
+  // Ensure Tailwind processes all CSS
+  safelist: [
+    'text-terminal-red',
+    'bg-black',
+    'border-terminal-red',
+    'opacity-30',
+    'opacity-50',
+    'opacity-100',
+    'justify-start',
+    'justify-end',
+    'line-through',
+    'animate-fadeOut',
+    'animate-fadeIn',
+    'animate-scan'
+  ],
 } satisfies Config;

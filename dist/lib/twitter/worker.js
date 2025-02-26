@@ -61,27 +61,39 @@ async function runTwitterScraper() {
                 cursor: nextCursor,
                 includeReplies: true
             });
-            // Filter valid tweets and store raw API response
-            const validTweets = response.tweets.filter(tweet => tweet.id);
-            // Transform tweets for progress reporting only
-            const transformedTweets = validTweets.map(tweet => transformer_1.TwitterDataTransformer.toTweet(tweet));
-            // Add raw tweets to collection
-            allTweets.push(...validTweets);
-            totalProcessed += validTweets.length;
+            // Transform tweets and ensure proper date handling
+            const transformedTweets = response.tweets
+                .filter(tweet => tweet.createdAt) // Only include tweets with valid timestamps
+                .map(tweet => {
+                // Ensure proper date handling
+                let createdAt;
+                try {
+                    const date = new Date(tweet.createdAt);
+                    if (isNaN(date.getTime())) {
+                        console.warn('Invalid date format received:', tweet.createdAt);
+                        createdAt = new Date().toISOString();
+                    }
+                    else {
+                        createdAt = date.toISOString();
+                    }
+                }
+                catch (error) {
+                    console.error('Error parsing tweet date:', error);
+                    createdAt = new Date().toISOString();
+                }
+                return Object.assign(Object.assign({}, tweet), { createdAt });
+            });
+            // Add to collection
+            allTweets.push(...transformedTweets);
+            totalProcessed += transformedTweets.length;
             // Calculate remaining tweets to collect
             const remainingTweets = maxTweets - totalProcessed;
-            // Send progress update with transformed tweets
+            // Send progress update
             worker_threads_1.parentPort.postMessage({
                 progress: Math.min(80, 20 + Math.floor((totalProcessed / maxTweets) * 60)),
                 status: `Collecting tweets (${totalProcessed}/${Math.min(maxTweets, totalProcessed + remainingTweets)})...`,
                 phase: 'posts',
-                scanProgress: {
-                    phase: 'posts',
-                    count: totalProcessed,
-                    message: transformedTweets.length > 0 ?
-                        `Tweet found! (${totalProcessed}/${maxTweets})\n${transformedTweets[0].text}` :
-                        `Processing tweets (${totalProcessed}/${maxTweets})`
-                },
+                scanProgress: { phase: 'posts', count: totalProcessed },
                 tweets: transformedTweets,
                 isChunk: true,
                 chunkIndex: allTweets.length

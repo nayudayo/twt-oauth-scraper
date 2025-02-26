@@ -327,13 +327,58 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
           })
         } else if (currentCommand.command === 'SOL_WALLET') {
           const walletAddress = command.split(' ').slice(1).join(' ')
+          
+          // 1. Original wallet success message
           newLines.push({
             content: `[SUCCESS] Wallet address ${walletAddress} verified and stored successfully`,
             isSuccess: true
           })
-        } else if (currentCommand.command === 'SUBMIT_REFERRAL') {
-          // Validate the referral code with the API
+          
+          // 2. Automatically show referral info
+          newLines.push({ 
+            content: SYSTEM_MESSAGES.COMMAND_RESPONSES.REFERRAL_INFO,
+            isSystem: true 
+          })
+          
+          // 3. Update command responses to include both
+          const updatedResponses = {
+            ...commandResponses,
+            'SOL_WALLET': walletAddress,
+            'REFER': 'auto_completed'  // Mark as auto-completed
+          }
+          setCommandResponses(updatedResponses)
+          
+          // 4. Update completed commands to include both SOL_WALLET and REFER
+          const updatedCompletedCommands = [
+            ...completedCommands, 
+            currentCommand.command,
+            'REFER'  // Add REFER as completed
+          ]
+          
           try {
+            // 5. Save progress with both commands completed
+            await saveProgress(currentCommandIndex + 2, updatedCompletedCommands)
+            
+            // 6. Update state to skip REFER command
+            setCompletedCommands(updatedCompletedCommands)
+            setCurrentCommandIndex(currentCommandIndex + 2)
+            
+            // 7. Show next command prompt
+            newLines.push({ 
+              content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[currentCommandIndex + 2].command}`,
+              isSystem: true 
+            })
+          } catch (error) {
+            console.error('Failed to save progress:', error)
+            // On error, still show success but don't update progress
+            newLines.push({ 
+              content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[currentCommandIndex + 1].command}`,
+              isSystem: true 
+            })
+          }
+        } else if (currentCommand.command === 'SUBMIT_REFERRAL') {
+          try {
+            // 1. Validate the referral code with the API
             const referralCode = extractReferralResponse(command)
             if (!referralCode) {
               throw new Error('Invalid referral code format')
@@ -343,7 +388,8 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
               throw new Error('Not authenticated')
             }
 
-            const response = await fetch('/api/validate-referral', {
+            // 2. Validate submitted referral code
+            const validationResponse = await fetch('/api/validate-referral', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -352,20 +398,84 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
                 userId: session.username,
                 referralCode: referralCode
               }),
-              credentials: 'include' // Include cookies for authentication
+              credentials: 'include'
             })
 
-            if (!response.ok) {
-              const errorData = await response.json().catch(() => ({}))
+            if (!validationResponse.ok) {
+              const errorData = await validationResponse.json().catch(() => ({}))
               throw new Error(errorData.error || 'Invalid referral code')
             }
 
+            // 3. Show success message for referral submission
             newLines.push({
-              content: "[SUCCESS] Command accepted: " + currentCommand.description,
+              content: "[SUCCESS] Referral code accepted",
               isSuccess: true
             })
+
+            // 4. Automatically generate new referral code
+            const generationResponse = await fetch('/api/referral-code', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                userId: session.username
+              }),
+              credentials: 'include'
+            })
+
+            if (!generationResponse.ok) {
+              const errorData = await generationResponse.json().catch(() => ({}))
+              throw new Error(errorData.error || 'Failed to generate referral code')
+            }
+
+            const data = await generationResponse.json()
+            const generatedCode = data.referralCode
+
+            // 5. Store both responses in command responses
+            const updatedResponses = {
+              ...commandResponses,
+              'SUBMIT_REFERRAL': referralCode,
+              'GENERATE_REFERRAL': generatedCode
+            }
+            setCommandResponses(updatedResponses)
+
+            // 6. Show generated code message
+            newLines.push({
+              content: `[SUCCESS] Your unique referral code has been generated:\n\n${generatedCode}\n\nShare this code with others to earn rewards!`,
+              isSuccess: true
+            })
+
+            // 7. Update completed commands to include both
+            const updatedCompletedCommands = [
+              ...completedCommands,
+              currentCommand.command,
+              'GENERATE_REFERRAL'
+            ]
+
+            try {
+              // 8. Save progress with both commands completed
+              await saveProgress(currentCommandIndex + 2, updatedCompletedCommands)
+              
+              // 9. Update state to skip GENERATE_REFERRAL
+              setCompletedCommands(updatedCompletedCommands)
+              setCurrentCommandIndex(currentCommandIndex + 2)
+              
+              // 10. Show next command prompt
+              newLines.push({ 
+                content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[currentCommandIndex + 2].command}`,
+                isSystem: true 
+              })
+            } catch (error) {
+              console.error('Failed to save progress:', error)
+              // On error, still show success but don't update progress
+              newLines.push({ 
+                content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[currentCommandIndex + 1].command}`,
+                isSystem: true 
+              })
+            }
           } catch (error) {
-            console.error('Failed to validate referral code:', error)
+            console.error('Failed to process referral:', error)
             newLines.push({
               content: `[ERROR] Invalid input. Please enter a valid referral code or type "NO" if you weren't referred.\nExample: submit_referral PUSH-USER-CODE1\nOr: submit_referral NO`,
               isError: true

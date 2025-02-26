@@ -1,0 +1,11 @@
+=================================
+   NEURAL INTERFACE ACCESS CODES
+=================================
+
+FORMAT: NEURAL-[HEX]-[HASH]
+BATCH GENERATED: 2025-02-26T09:02:08.006Z
+TOTAL CODES: 2
+
+---------------------------------
+NEURAL-62D5-5CF4
+NEURAL-E4ED-4A38
