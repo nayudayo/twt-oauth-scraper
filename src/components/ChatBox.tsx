@@ -497,74 +497,30 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
 
   // Add handlers for terminal session
   const handleScrape = async () => {
+    // Show consent modal first
     setShowConsent(true)
   }
 
-  const handleCancelScraping = useCallback(async () => {
-    if (abortController) {
-      console.log('Aborting scraping process...')
-      try {
-      abortController.abort()
-      setAbortController(null)
-    setLoading(false)
-    setScanProgress(null)
-    setShowComplete(false)
-        setScrapingStartTime(null)
-        // Only set error if this was a user-initiated cancellation
-        if (!abortController.signal.aborted) {
-        setError('Operation cancelled by user')
-        }
-      } catch (error) {
-        console.error('Error during abort:', error)
-        setError('Failed to cancel operation')
-      }
-    }
-  }, [abortController])
-
-  const handleClearData = async () => {
-    if (!profile.name) {
-      setError('Profile name is required');
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/tweets/clear', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          username: profile.name,
-          timestamp: Date.now() 
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to clear tweets from database');
-      }
-
-      // Only clear tweets from state, don't close the chat box
-      onTweetsUpdate([]); 
-      setAnalysis(null);
-      setScanProgress(null);
-      setShowAnalysisPrompt(false);
+  // Handle tweet updates from scraping
+  const handleTweetUpdate = (newTweets: Tweet[]) => {
+    console.log('handleTweetUpdate called with tweets:', newTweets.length)
+    if (Array.isArray(newTweets)) {
+      const validTweets = newTweets.filter((t: unknown): t is Tweet => Boolean(t))
+      console.log('Updating tweets in UI with valid tweets:', validTweets.length)
       
-      // Show success message
-      setError('Tweet data cleared successfully');
-    } catch (error) {
-      console.error('Error clearing tweets:', error);
-      setError(error instanceof Error ? error.message : 'Failed to clear tweet data');
+      // Ensure state updates are processed in order
+      Promise.resolve().then(() => {
+        onTweetsUpdate(validTweets)
+        setScanProgress(prev => {
+          const newProgress = {
+            phase: prev?.phase || 'posts',
+            count: validTweets.length
+          }
+          console.log('Updating scan progress:', newProgress)
+          return newProgress
+        })
+      })
     }
-  }
-
-  const handleCloseModal = () => {
-    console.log('Closing modal - Current states:', { loading, showComplete })
-    if (loading) {
-      console.log('Closing modal and cancelling scraping...')
-      handleCancelScraping()
-    }
-    setShowComplete(false)
-    console.log('Modal closed - showComplete set to false')
   }
 
   const startScraping = async () => {
@@ -805,6 +761,86 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     }
   }
 
+  // Replace with a more focused effect for handling completion
+  useEffect(() => {
+    if (showComplete) {
+      console.log('Completion modal shown - current states:', { loading, showComplete, scanProgress })
+    }
+  }, [showComplete, loading, scanProgress])
+
+  // Handle modal close
+  const handleCloseModal = () => {
+    setShowComplete(false)
+  }
+
+  // Add auto-scroll effect
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages, isTyping])
+
+  const handleCancelScraping = useCallback(async () => {
+    if (abortController) {
+      console.log('Aborting scraping process...')
+      try {
+      abortController.abort()
+      setAbortController(null)
+    setLoading(false)
+    setScanProgress(null)
+    setShowComplete(false)
+        setScrapingStartTime(null)
+        // Only set error if this was a user-initiated cancellation
+        if (!abortController.signal.aborted) {
+        setError('Operation cancelled by user')
+        }
+      } catch (error) {
+        console.error('Error during abort:', error)
+        setError('Failed to cancel operation')
+      }
+    }
+  }, [abortController])
+
+  const handleClearData = async () => {
+    if (!profile.name) {
+      setError('Profile name is required');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/tweets/clear', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          username: profile.name,
+          timestamp: Date.now() 
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to clear tweets from database');
+      }
+
+      // Only clear tweets from state, don't close the chat box
+      onTweetsUpdate([]); 
+      setAnalysis(null);
+      setScanProgress(null);
+      setShowAnalysisPrompt(false);
+      
+      // Show success message
+      setError('Tweet data cleared successfully');
+    } catch (error) {
+      console.error('Error clearing tweets:', error);
+      setError(error instanceof Error ? error.message : 'Failed to clear tweet data');
+    }
+  }
+
+
+
   useEffect(() => {
     // Load existing tweets for this user when component mounts
     const loadExistingTweets = async () => {
@@ -838,37 +874,6 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     loadExistingTweets();
   }, [profile.name]); // Reload when profile changes
 
-  // Handle tweet updates from scraping
-  const handleTweetUpdate = (newTweets: Tweet[]) => {
-    console.log('handleTweetUpdate called with tweets:', newTweets.length)
-    if (Array.isArray(newTweets)) {
-      const validTweets = newTweets.filter((t: unknown): t is Tweet => Boolean(t))
-      console.log('Updating tweets in UI with valid tweets:', validTweets.length)
-      
-      // Ensure state updates are processed in order
-      Promise.resolve().then(() => {
-        onTweetsUpdate(validTweets)
-        setScanProgress(prev => {
-          const newProgress = {
-            phase: prev?.phase || 'posts',
-            count: validTweets.length
-          }
-          console.log('Updating scan progress:', newProgress)
-          return newProgress
-        })
-      })
-    }
-  }
-
-  // Add auto-scroll effect
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages, isTyping])
-
   // Handle text input with Shift+Enter
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -897,13 +902,6 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     setAnalysis(null);
     await handleAnalyze();
   };
-
-  // Replace with a more focused effect for handling completion
-  useEffect(() => {
-    if (showComplete) {
-      console.log('Completion modal shown - current states:', { loading, showComplete, scanProgress })
-    }
-  }, [showComplete, loading, scanProgress])
 
   // Load conversations and personality cache on mount
   useEffect(() => {

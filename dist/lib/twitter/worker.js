@@ -61,30 +61,12 @@ async function runTwitterScraper() {
                 cursor: nextCursor,
                 includeReplies: true
             });
-            // Transform tweets and ensure proper date handling
+            // Transform tweets using the transformer to ensure consistent date handling
             const transformedTweets = response.tweets
-                .filter(tweet => tweet.createdAt) // Only include tweets with valid timestamps
-                .map(tweet => {
-                // Ensure proper date handling
-                let createdAt;
-                try {
-                    const date = new Date(tweet.createdAt);
-                    if (isNaN(date.getTime())) {
-                        console.warn('Invalid date format received:', tweet.createdAt);
-                        createdAt = new Date().toISOString();
-                    }
-                    else {
-                        createdAt = date.toISOString();
-                    }
-                }
-                catch (error) {
-                    console.error('Error parsing tweet date:', error);
-                    createdAt = new Date().toISOString();
-                }
-                return Object.assign(Object.assign({}, tweet), { createdAt });
-            });
-            // Add to collection
-            allTweets.push(...transformedTweets);
+                .filter(tweet => tweet.id) // Only filter out tweets without IDs
+                .map(tweet => transformer_1.TwitterDataTransformer.toTweet(tweet));
+            // Add transformed tweets to collection
+            allTweets.push(...response.tweets.filter(tweet => tweet.id));
             totalProcessed += transformedTweets.length;
             // Calculate remaining tweets to collect
             const remainingTweets = maxTweets - totalProcessed;
@@ -143,7 +125,7 @@ async function runTwitterScraper() {
         if (!user) {
             throw new Error('Failed to create user profile');
         }
-        // Convert tweets to database format
+        // Convert tweets to database format using transformer
         const dbTweets = allTweets.map(tweet => transformer_1.TwitterDataTransformer.toDBTweet(tweet, user.id));
         // Save tweets in batches
         for (let i = 0; i < dbTweets.length; i += batchSize) {
