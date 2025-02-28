@@ -39,7 +39,8 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   const [messages, setMessages] = useState<Array<{text: string, isUser: boolean}>>([])
   const [input, setInput] = useState('')
   const [analysis, setAnalysis] = useState<PersonalityAnalysis | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(false) // For data fetching
+  const [isChatLoading, setIsChatLoading] = useState(false) // For chat responses
   const [error, setError] = useState<string | null>(null)
   const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null)
   const [showConsent, setShowConsent] = useState(false)
@@ -241,7 +242,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   }
 
   const generatePersonalityResponse = async (userMessage: string) => {
-    setLoading(true)
+    setIsChatLoading(true) // Use chat-specific loading state
     setError(null)
     try {
       setIsTyping(true)
@@ -293,13 +294,13 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       setError(err instanceof Error ? err.message : 'Failed to get response')
       return null
     } finally {
-      setLoading(false)
+      setIsChatLoading(false) // Clear chat loading state
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim() || loading) return
+    if (!input.trim() || isChatLoading) return // Use chat loading state here
 
     const userMessage = input.trim()
     setInput('')
@@ -1162,16 +1163,16 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Enter your message... (Shift+Enter for new line)"
-                    disabled={loading}
+                    disabled={isChatLoading}
                     rows={1}
                     className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-2 md:px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow disabled:opacity-50 resize-none min-h-[38px] max-h-[200px] overflow-y-auto custom-scrollbar"
                   />
                   <button
                     type="submit"
-                    disabled={!input.trim() || loading}
+                    disabled={!input.trim() || isChatLoading}
                     className="px-2 md:px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow min-w-[60px] md:min-w-[80px] h-[38px]"
                   >
-                    {loading ? (
+                    {isChatLoading ? (
                       <Spinner size="sm" />
                     ) : (
                       'Send'
@@ -2536,16 +2537,16 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={handleKeyDown}
                       placeholder="Enter your message... (Shift+Enter for new line)"
-                      disabled={loading}
+                      disabled={isChatLoading}
                       rows={1}
                       className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-2 md:px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow disabled:opacity-50 resize-none min-h-[38px] max-h-[200px] overflow-y-auto custom-scrollbar"
                     />
                     <button
                       type="submit"
-                      disabled={!input.trim() || loading}
+                      disabled={!input.trim() || isChatLoading}
                       className="px-2 md:px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow min-w-[60px] md:min-w-[80px] h-[38px]"
                     >
-                      {loading ? (
+                      {isChatLoading ? (
                         <Spinner size="sm" />
                       ) : (
                         'Send'
