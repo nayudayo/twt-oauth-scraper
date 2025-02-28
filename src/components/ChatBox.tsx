@@ -589,7 +589,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
             // Fetch final tweets after stream completes
             console.log(`Making final API call to /api/tweets/${profile.name}/all`);
             const fetchTweetsResponse = await fetch(`/api/tweets/${profile.name}/all`, {
-              credentials: 'include' // Add this line to include session cookies
+              credentials: 'include'
             });
             
             if (!fetchTweetsResponse.ok) {
@@ -652,10 +652,12 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 return;
               }
 
-              if (data.progress) {
+              // Handle progress updates
+              if (data.scanProgress) {
                 setScanProgress({
-                  phase: data.phase || 'posts',
-                  count: data.scanProgress?.count || 0
+                  phase: data.scanProgress.phase,
+                  count: data.scanProgress.count,
+                  message: data.scanProgress.message
                 });
               }
 
@@ -674,7 +676,8 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   if (data.scanProgress) {
                     setScanProgress({
                       phase: data.scanProgress.phase,
-                      count: data.totalTweets || data.scanProgress.count
+                      count: data.totalTweets || data.scanProgress.count,
+                      message: data.scanProgress.message
                     });
                   }
 
@@ -697,7 +700,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
 
                     // Immediately fetch and update UI after each batch save
                     const fetchResponse = await fetch(`/api/tweets/${profile.name}/all`, {
-                      credentials: 'include' // Add this line to include session cookies
+                      credentials: 'include'
                     });
                     if (!fetchResponse.ok) {
                       throw new Error('Failed to fetch tweets');
@@ -712,20 +715,31 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   } catch (error) {
                     console.error('Error updating frontend during scraping:', error);
                   }
-                } else {
-                  // For non-chunked updates, just update progress
-                  if (data.scanProgress) {
-                    setScanProgress({
-                      phase: data.scanProgress.phase,
-                      count: data.tweets.length
-                    });
-                  }
                 }
               }
 
               // Handle explicit completion signal if received
               if (data.type === 'complete' && data.username === profile.name) {
                 console.log('Received explicit completion signal');
+                
+                // Fetch final tweets one last time
+                try {
+                  const finalResponse = await fetch(`/api/tweets/${profile.name}/all`, {
+                    credentials: 'include'
+                  });
+                  if (!finalResponse.ok) {
+                    throw new Error('Failed to fetch final tweets');
+                  }
+
+                  const finalTweets = await finalResponse.json();
+                  if (Array.isArray(finalTweets)) {
+                    handleTweetUpdate(finalTweets);
+                    console.log('Final tweet update complete:', finalTweets.length);
+                  }
+                } catch (error) {
+                  console.error('Error fetching final tweets:', error);
+                }
+
                 setLoading(false);
                 setShowComplete(true);
                 setShowAnalysisPrompt(true);
