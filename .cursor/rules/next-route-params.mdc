@@ -1,12 +1,4 @@
----
-description: 
-globs: 
----
----
-description: next route param handling
-globs: */api
----
- # Next.js App Router Route Parameters
+# Next.js App Router Route Parameters
 
 ## Problem
 Next.js App Router's route parameter typing system can cause type errors with dynamic routes (e.g., [id], [username]) due to parameter types being treated as Promises.

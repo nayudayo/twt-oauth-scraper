@@ -631,7 +631,9 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
           try {
             // Fetch final tweets after stream completes
             console.log(`Making final API call to /api/tweets/${profile.name}/all`);
-            const fetchTweetsResponse = await fetch(`/api/tweets/${profile.name}/all`);
+            const fetchTweetsResponse = await fetch(`/api/tweets/${profile.name}/all`, {
+              credentials: 'include' // Add this line to include session cookies
+            });
             
             if (!fetchTweetsResponse.ok) {
               throw new Error(`Failed to fetch tweets: ${fetchTweetsResponse.status}`);
@@ -737,7 +739,9 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     }
 
                     // Immediately fetch and update UI after each batch save
-                    const fetchResponse = await fetch(`/api/tweets/${profile.name}/all`);
+                    const fetchResponse = await fetch(`/api/tweets/${profile.name}/all`, {
+                      credentials: 'include' // Add this line to include session cookies
+                    });
                     if (!fetchResponse.ok) {
                       throw new Error('Failed to fetch tweets');
                     }
