@@ -29,6 +29,8 @@ interface RequestBody {
     content: string
   }>
   conversationId?: number
+  regenerationKey?: string
+  isRegeneration?: boolean
 }
 
 // Style validation function
@@ -69,6 +71,22 @@ function isValidResponse(response: string): boolean {
   return true;
 }
 
+// Add interface for chat request with regeneration
+interface ChatRequestWithRegeneration {
+  messages: ChatCompletionMessage[]
+  tuning: {
+    temperature?: number
+    maxTokens?: number
+    presencePenalty?: number
+    frequencyPenalty?: number
+  }
+  consciousness: {
+    state?: string
+    effects?: string[]
+  }
+  regenerationKey?: string
+}
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions)
@@ -82,7 +100,17 @@ export async function POST(req: Request) {
     // Store username in a const to preserve type narrowing
     const username = session.username
 
-    const { message, profile, analysis, tuning, consciousness, conversationHistory = [], conversationId } = await req.json() as RequestBody
+    const { 
+      message, 
+      profile, 
+      analysis, 
+      tuning, 
+      consciousness, 
+      conversationHistory = [], 
+      conversationId,
+      regenerationKey,
+      isRegeneration 
+    } = await req.json() as RequestBody
 
     if (!message || !analysis) {
       return NextResponse.json(
@@ -205,6 +233,16 @@ export async function POST(req: Request) {
 
 Summary: ${analysis.summary}
 
+AUTHENTIC TWEET EXAMPLES (Study these carefully for style matching):
+${analysis.exampleTweets?.map((tweet: string, i: number) => 
+  `Example ${i + 1}:
+  "${tweet}"
+  Style elements: ${identifyStyleElements(tweet)}`
+).join('\n\n')}
+
+COMMUNICATION PATTERNS TO MATCH:
+${generateCommunicationPatterns(analysis.exampleTweets || [])}
+
 PERSONALITY FOUNDATION:
 ${adjustedTraits.map(t => `- ${t.name} (${t.score}/10): ${t.explanation}${t.details ? `\n  Details: ${t.details}` : ''}${t.relatedTraits ? `\n  Related traits: ${t.relatedTraits.join(', ')}` : ''}`).join('\n')}
 
@@ -215,36 +253,96 @@ ${allInterests.map(i => `- ${i.name} (${i.weight}% focus)`).join('\n')}
 Core Themes:
 ${analysis.topicsAndThemes.map(t => `- ${t}`).join('\n')}
 
-STRICT STYLE ENFORCEMENT:
+CONTEXT MARKERS:
+1. Casual Conversation
+- Use natural, conversational tone
+- Match tweet-like brevity
+- Maintain personality while being responsive
+
+2. Technical Discussion
+- Adapt technical depth based on context
+- Keep explanations personality-consistent
+- Use field-specific language when appropriate
+
+3. Emotional Expression
+- Show genuine reactions while staying in character
+- Use emotional markers from example tweets
+- Match enthusiasm levels naturally
+
+4. Style Consistency
+- Mirror the sentence structures from examples
+- Use similar emphasis patterns
+- Match hashtag and emoji usage patterns
+
+CRITICAL STYLE NOTES:
 ${tuning.communicationStyle.formality < 40 ? 
-  "YOU MUST USE VERY CASUAL LANGUAGE. Use slang, abbreviations, and informal expressions." :
+  "Keep it casual and relaxed, similar to example tweets" :
   tuning.communicationStyle.formality > 80 ?
-  "YOU MUST USE HIGHLY FORMAL LANGUAGE. Use sophisticated vocabulary and proper grammar." :
-  "Use moderately formal language."
+  "Maintain sophistication while staying authentic to tweet style" :
+  "Balance formality while matching tweet patterns"
 }
 
 ${tuning.communicationStyle.enthusiasm > 80 ?
-  "YOU MUST SHOW EXTREME ENTHUSIASM! Use multiple exclamation marks!! Express excitement!!!" :
+  "Show high energy like in the enthusiastic example tweets" :
   tuning.communicationStyle.enthusiasm < 20 ?
-  "Maintain a very reserved tone. No exclamation marks." :
-  "Show moderate enthusiasm."
+  "Keep it cool and reserved, matching calmer examples" :
+  "Match the moderate enthusiasm shown in examples"
 }
 
 ${tuning.communicationStyle.technicalLevel > 80 ?
-  "YOU MUST USE EXPERT TECHNICAL TERMS extensively in your responses." :
+  "Use expert language while maintaining tweet-like delivery" :
   tuning.communicationStyle.technicalLevel < 20 ?
-  "Avoid all technical terms. Use simple language only." :
-  "Mix technical and non-technical terms appropriately."
+  "Keep it simple and accessible, like casual tweet examples" :
+  "Balance technical content with natural tweet style"
 }
 
 ${tuning.communicationStyle.emojiUsage > 80 ?
-  "YOU MUST USE AT LEAST 3 EMOJIS in every response! 🚀 💫 ✨" :
+  "Use emojis frequently, matching high-emoji examples" :
   tuning.communicationStyle.emojiUsage < 20 ?
-  "Do not use any emojis or emoticons." :
-  "Use 1-2 emojis where appropriate."
+  "Minimize emoji usage, following formal examples" :
+  "Use emojis moderately, matching example patterns"
 }
 
-YOUR RESPONSE MUST STRICTLY FOLLOW THESE STYLE REQUIREMENTS. THIS IS NOT A SUGGESTION.
+PERSONALITY ENFORCEMENT:
+1. Core Traits Expression:
+${adjustedTraits.slice(0, 3).map(t => 
+  `- ${t.name.toUpperCase()} (${t.score}/10): Your responses MUST consistently demonstrate this trait
+   Key aspects: ${t.explanation}
+   ${t.details ? `Additional context: ${t.details}` : ''}`
+).join('\n')}
+
+2. Communication Style Metrics:
+- Formality: ${tuning.communicationStyle.formality}/100 
+  ${tuning.communicationStyle.formality > 80 ? "Use sophisticated language and proper grammar" :
+    tuning.communicationStyle.formality < 20 ? "Use very casual, informal language" :
+    "Balance formal and informal elements"}
+- Enthusiasm: ${tuning.communicationStyle.enthusiasm}/100
+  ${tuning.communicationStyle.enthusiasm > 80 ? "Show high energy and excitement" :
+    tuning.communicationStyle.enthusiasm < 20 ? "Maintain reserved, calm tone" :
+    "Show moderate enthusiasm"}
+- Technical Level: ${tuning.communicationStyle.technicalLevel}/100
+  ${tuning.communicationStyle.technicalLevel > 80 ? "Use domain expertise and technical terms" :
+    tuning.communicationStyle.technicalLevel < 20 ? "Use simple, accessible language" :
+    "Balance technical and simple terms"}
+- Emoji Usage: ${tuning.communicationStyle.emojiUsage}/100
+  ${tuning.communicationStyle.emojiUsage > 80 ? "Use multiple emojis for expression" :
+    tuning.communicationStyle.emojiUsage < 20 ? "Avoid emojis completely" :
+    "Use emojis sparingly"}
+
+3. Interest Integration:
+${allInterests.slice(0, 3).map(i => 
+  `- ${i.name} (${i.weight}% focus): Actively incorporate when relevant`
+).join('\n')}
+
+4. Emotional Expression:
+- Overall Tone: ${analysis.emotionalTone}
+- Express emotions that align with personality traits
+- Maintain consistent emotional depth
+
+5. Response Structure:
+- Keep responses concise and Twitter-appropriate
+- Use natural language patterns matching the personality
+- Maintain consistent voice across interactions
 
 N.E.U.R.A.L INTERACTION FRAMEWORK:
 
@@ -300,7 +398,202 @@ CRITICAL RULES:
 10. Be engaging and show genuine interest in topics that align with the analyzed interests
 11. STRICTLY FOLLOW THE CONSCIOUSNESS STATE INSTRUCTIONS
 
+${isRegeneration ? `REGENERATION CONTEXT:
+This is a regeneration attempt. Maintain the same personality and style, but vary your response to be distinct from previous attempts while staying true to the character.
+
+VARIATION GUIDELINES:
+1. Keep core personality traits consistent
+2. Vary word choice and sentence structure
+3. Explore different aspects of the same topic
+4. Maintain style parameters but with fresh expression
+5. Use alternative examples or metaphors if applicable` : ''}
+
 Remember: You are this person, not just describing them. Respond authentically as them based on their analyzed personality, interests, and communication style.`
+
+    // Add helper functions for style analysis
+    function identifyStyleElements(tweet: string): string {
+      const elements = [];
+      
+      // Emoji usage
+      const emojis = tweet.match(/[\p{Emoji}]/gu);
+      if (emojis) elements.push(`Emoji style: ${emojis.join(' ')}`);
+      
+      // Enthusiasm markers
+      const exclamations = tweet.match(/!/g);
+      if (exclamations) elements.push(`Enthusiasm level: ${exclamations.length} exclamation marks`);
+      
+      // Capitalization pattern
+      const upperCaseCount = (tweet.match(/[A-Z]/g) || []).length;
+      const lowerCaseCount = (tweet.match(/[a-z]/g) || []).length;
+      const capitalizationStyle = 
+        upperCaseCount > lowerCaseCount ? 'mostly-uppercase' :
+        upperCaseCount < lowerCaseCount ? 'mostly-lowercase' : 'mixed';
+      elements.push(`Capitalization: ${capitalizationStyle}`);
+      
+      // Punctuation patterns
+      const punctuation = tweet.match(/[.!?…-]+/g);
+      if (punctuation) elements.push(`Punctuation style: ${Array.from(new Set(punctuation)).join(' ')}`);
+      
+      // Line break analysis
+      const lineBreaks = (tweet.match(/\n/g) || []).length;
+      const lineBreakStyle = 
+        lineBreaks > 2 ? 'frequent' :
+        lineBreaks > 0 ? 'moderate' : 'minimal';
+      elements.push(`Line breaks: ${lineBreakStyle}`);
+      
+      // Formality indicators
+      const hasSlang = /(?:gonna|wanna|gotta|idk|tbh|imo)/i.test(tweet);
+      elements.push(`Formality: ${hasSlang ? 'casual' : 'formal'}`);
+      
+      // Technical terms
+      const technicalTerms = tweet.match(/\b(?:algorithm|framework|implementation|api|function|data|code|system)\b/gi);
+      if (technicalTerms) elements.push(`Technical terms: ${technicalTerms.join(', ')}`);
+      
+      // Extract n-grams
+      const words = tweet.toLowerCase().split(/\s+/);
+      const bigrams = words.slice(0, -1).map((word, i) => `${word} ${words[i + 1]}`);
+      const trigrams = words.slice(0, -2).map((word, i) => `${word} ${words[i + 1]} ${words[i + 2]}`);
+      
+      if (bigrams.length) elements.push(`Common bigrams: ${bigrams.slice(0, 3).join(', ')}`);
+      if (trigrams.length) elements.push(`Common trigrams: ${trigrams.slice(0, 2).join(', ')}`);
+      
+      // Message structure
+      const isOpening = /^(?:gm|hey|ok|alright|just|thinking)/i.test(tweet);
+      const isClosing = /(?:lfg|stay locked|big love|beautiful|great work)/i.test(tweet);
+      if (isOpening) elements.push('Structure: Opening message');
+      if (isClosing) elements.push('Structure: Closing message');
+      
+      return elements.join(' | ');
+    }
+
+    function generateCommunicationPatterns(examples: string[]): string {
+      const patterns = new Set<string>();
+      const vocabulary = {
+        commonTerms: new Set<string>(),
+        commonPhrases: new Set<string>(),
+        enthusiasmMarkers: new Set<string>(),
+        bigrams: new Set<string>(),
+        trigrams: new Set<string>()
+      };
+      
+      examples.forEach(tweet => {
+        // Sentence structure patterns
+        const sentences = tweet.split(/[.!?]+/).filter(Boolean);
+        sentences.forEach(sentence => {
+          const structure = sentence
+            .replace(/[^\w\s!?]/g, '')
+            .replace(/\b\w+\b/g, 'WORD')
+            .replace(/\d+/g, 'NUM');
+          patterns.add(`Sentence pattern: ${structure}`);
+        });
+        
+        // Emphasis patterns
+        const emphasis = tweet.match(/[A-Z]{2,}|\*\w+\*|_\w+_/g);
+        if (emphasis) patterns.add(`Emphasis style: ${emphasis.join(' ')}`);
+        
+        // Special character usage
+        const specialChars = tweet.match(/[#@]|\.\.\./g);
+        if (specialChars) patterns.add(`Special characters: ${specialChars.join(' ')}`);
+        
+        // Extract vocabulary patterns
+        const words = tweet.toLowerCase().split(/\s+/);
+        words.forEach(word => {
+          if (word.length > 3) vocabulary.commonTerms.add(word);
+        });
+        
+        // Extract phrases
+        const phrases = tweet.match(/\b\w+\s+\w+\s+\w+\b/g) || [];
+        phrases.forEach(phrase => vocabulary.commonPhrases.add(phrase.toLowerCase()));
+        
+        // Identify enthusiasm markers
+        const enthusiasmWords = tweet.match(/\b(?:wow|omg|lol|amazing|incredible|awesome|beautiful|perfect|love|great)\b/gi);
+        if (enthusiasmWords) {
+          enthusiasmWords.forEach(word => vocabulary.enthusiasmMarkers.add(word.toLowerCase()));
+        }
+        
+        // Extract n-grams
+        const bigrams = words.slice(0, -1).map((word, i) => `${word} ${words[i + 1]}`);
+        const trigrams = words.slice(0, -2).map((word, i) => `${word} ${words[i + 1]} ${words[i + 2]}`);
+        
+        bigrams.forEach(bigram => vocabulary.bigrams.add(bigram));
+        trigrams.forEach(trigram => vocabulary.trigrams.add(trigram));
+      });
+      
+      // Add vocabulary patterns to output
+      if (vocabulary.commonTerms.size) {
+        patterns.add(`Common terms: ${Array.from(vocabulary.commonTerms).slice(0, 5).join(', ')}`);
+      }
+      if (vocabulary.commonPhrases.size) {
+        patterns.add(`Common phrases: ${Array.from(vocabulary.commonPhrases).slice(0, 3).join(', ')}`);
+      }
+      if (vocabulary.enthusiasmMarkers.size) {
+        patterns.add(`Enthusiasm markers: ${Array.from(vocabulary.enthusiasmMarkers).slice(0, 5).join(', ')}`);
+      }
+      if (vocabulary.bigrams.size) {
+        patterns.add(`Common bigrams: ${Array.from(vocabulary.bigrams).slice(0, 3).join(', ')}`);
+      }
+      if (vocabulary.trigrams.size) {
+        patterns.add(`Common trigrams: ${Array.from(vocabulary.trigrams).slice(0, 2).join(', ')}`);
+      }
+      
+      return Array.from(patterns).join('\n');
+    }
+
+    // Enhanced style validation with pattern matching
+    const validateEnhancedStyle = (
+      response: string, 
+      tuning: RequestBody['tuning'], 
+      traits: PersonalityAnalysis['traits'],
+      examples: string[]
+    ): boolean => {
+      // Basic style checks
+      if (!validateStyle(response, tuning)) return false;
+      
+      // Extract style elements from response
+      const responseElements = identifyStyleElements(response);
+      
+      // Extract patterns from examples
+      const examplePatterns = examples.map(example => identifyStyleElements(example));
+      
+      // Check if response matches at least some patterns from examples
+      const matchesPattern = examplePatterns.some(pattern => {
+        const patternElements = pattern.split(' | ');
+        const responseElementsList = responseElements.split(' | ');
+        
+        // Should match at least 60% of the pattern elements
+        const requiredMatches = Math.ceil(patternElements.length * 0.6);
+        let matches = 0;
+        
+        patternElements.forEach(element => {
+          if (responseElementsList.some(respElement => 
+            respElement.toLowerCase().includes(element.toLowerCase())
+          )) {
+            matches++;
+          }
+        });
+        
+        return matches >= requiredMatches;
+      });
+      
+      if (!matchesPattern) {
+        console.warn('Response does not match example patterns');
+        return false;
+      }
+      
+      // Check vocabulary patterns
+      const responseWords = response.toLowerCase().split(/\s+/);
+      const exampleWords = examples.flatMap(ex => ex.toLowerCase().split(/\s+/));
+      const commonWords = responseWords.filter(word => exampleWords.includes(word));
+      
+      // Should use at least 30% similar vocabulary
+      if (commonWords.length < responseWords.length * 0.3) {
+        console.warn('Response vocabulary differs too much from examples');
+        return false;
+      }
+      
+      // Rest of the validation remains unchanged
+      return true;
+    };
 
     // Create messages array with conversation history
     const messages = [
@@ -336,15 +629,16 @@ Remember: You are this person, not just describing them. Respond authentically a
                 consciousness: {
                   state: generateConsciousnessInstructions(config),
                   effects
-                }
-              },
-              username,  // Use the stored username instead of session.username
+                },
+                regenerationKey: isRegeneration ? (regenerationKey || activeConversationId.toString()) : undefined
+              } as ChatRequestWithRegeneration,
+              username,
               (result) => {
                 const content = typeof result === 'object' && result !== null && 'content' in result 
                   ? result.content as string 
                   : String(result)
 
-                if (validateStyle(content, tuning) && isValidResponse(content)) {
+                if (validateEnhancedStyle(content, tuning, adjustedTraits, analysis.exampleTweets || [])) {
                   resolve(applyConsciousnessEffects(content, config))
                 } else {
                   reject(new Error('Response validation failed'))
@@ -398,7 +692,8 @@ Remember: You are this person, not just describing them. Respond authentically a
 
     return NextResponse.json({
       response,
-      conversationId: activeConversationId
+      conversationId: activeConversationId,
+      regenerationKey: isRegeneration ? (regenerationKey || activeConversationId.toString()) : undefined
     })
   } catch (error) {
     console.error('Chat error:', error)
