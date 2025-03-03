@@ -587,17 +587,22 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
           console.log('Stream complete')
           try {
             // Fetch final tweets after stream completes
-            console.log(`Making final API call to /api/tweets/${profile.name}/all`);
+            console.log('Stream done: Attempting to fetch final tweets...');
             const fetchTweetsResponse = await fetch(`/api/tweets/${profile.name}/all`, {
               credentials: 'include'
             });
             
             if (!fetchTweetsResponse.ok) {
+              console.error('Stream done: Failed to fetch tweets:', fetchTweetsResponse.status);
               throw new Error(`Failed to fetch tweets: ${fetchTweetsResponse.status}`);
             }
 
             const finalTweets = await fetchTweetsResponse.json();
-            console.log(`Successfully fetched ${finalTweets.length} tweets`);
+            console.log('Stream done: Successfully fetched tweets:', {
+              count: finalTweets.length,
+              firstId: finalTweets[0]?.id,
+              lastId: finalTweets[finalTweets.length - 1]?.id
+            });
             
             if (Array.isArray(finalTweets) && finalTweets.length > 0) {
               // Update tweets in UI first
@@ -720,7 +725,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
 
               // Handle explicit completion signal if received
               if (data.type === 'complete' && data.username === profile.name) {
-                console.log('Received explicit completion signal');
+                console.log('Completion signal: Starting final data fetch...');
                 
                 // Fetch final tweets one last time
                 try {
@@ -728,16 +733,22 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     credentials: 'include'
                   });
                   if (!finalResponse.ok) {
+                    console.error('Completion signal: Failed to fetch tweets:', finalResponse.status);
                     throw new Error('Failed to fetch final tweets');
                   }
 
                   const finalTweets = await finalResponse.json();
                   if (Array.isArray(finalTweets)) {
-                    handleTweetUpdate(finalTweets);
-                    console.log('Final tweet update complete:', finalTweets.length);
+                    console.log('Completion signal: Successfully fetched tweets:', {
+                      fetchedCount: finalTweets.length,
+                      firstTweet: finalTweets[0]?.id,
+                      lastTweet: finalTweets[finalTweets.length - 1]?.id
+                    });
+                    onTweetsUpdate(finalTweets);
                   }
                 } catch (error) {
-                  console.error('Error fetching final tweets:', error);
+                  console.error('Completion signal: Error fetching final tweets:', error);
+                  setError('Failed to fetch final tweets. Please refresh the page.');
                 }
 
                 setLoading(false);
