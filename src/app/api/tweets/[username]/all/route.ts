@@ -17,14 +17,8 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const pathParts = url.pathname.split('/');
     const username = pathParts[pathParts.indexOf('tweets') + 1];
-    console.log('API Route: Fetching tweets for username:', {
-      requestUrl: request.url,
-      pathParts,
-      extractedUsername: username,
-      sessionUsername: session?.username
-    });
 
-    // Validate session
+    // Validate session first
     const session = await getServerSession(authOptions)
     if (!session?.username) {
       return NextResponse.json(
@@ -32,6 +26,14 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       )
     }
+
+    // Now we can use session in our logging
+    console.log('API Route: Fetching tweets for username:', {
+      requestUrl: request.url,
+      pathParts,
+      extractedUsername: username,
+      sessionUsername: session?.username
+    });
 
     // Initialize database
     const db = await initDB()
