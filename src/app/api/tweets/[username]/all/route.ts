@@ -17,6 +17,12 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const pathParts = url.pathname.split('/');
     const username = pathParts[pathParts.indexOf('tweets') + 1];
+    console.log('API Route: Fetching tweets for username:', {
+      requestUrl: request.url,
+      pathParts,
+      extractedUsername: username,
+      sessionUsername: session?.username
+    });
 
     // Validate session
     const session = await getServerSession(authOptions)
@@ -32,6 +38,12 @@ export async function GET(request: NextRequest) {
 
     // Get user by username
     const user = await db.getUserByUsername(username)
+    console.log('API Route: User lookup result:', {
+      username,
+      userFound: !!user,
+      userId: user?.id
+    });
+
     if (!user) {
       return NextResponse.json(
         { error: 'User not found' },
@@ -43,6 +55,12 @@ export async function GET(request: NextRequest) {
     const tweets = await db.getTweetsByUserId(user.id, {
       includeReplies: true
     })
+    console.log('API Route: Fetched tweets:', {
+      userId: user.id,
+      tweetCount: tweets.length,
+      firstTweetId: tweets[0]?.id,
+      lastTweetId: tweets[tweets.length - 1]?.id
+    });
 
     // Create cache headers
     const headers = new Headers()

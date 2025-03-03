@@ -725,26 +725,63 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
 
               // Handle explicit completion signal if received
               if (data.type === 'complete' && data.username === profile.name) {
-                console.log('Completion signal: Starting final data fetch...');
+                console.log('Completion signal: Starting final data fetch...', {
+                  profileName: profile.name,
+                  dataUsername: data.username,
+                  match: data.username === profile.name
+                });
                 
-                // Fetch final tweets one last time
+                // Add retry mechanism for final fetch
+                let retryCount = 0;
+                const maxRetries = 3;
+                const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+ 
                 try {
-                  const finalResponse = await fetch(`/api/tweets/${profile.name}/all`, {
-                    credentials: 'include'
-                  });
-                  if (!finalResponse.ok) {
-                    console.error('Completion signal: Failed to fetch tweets:', finalResponse.status);
-                    throw new Error('Failed to fetch final tweets');
-                  }
-
-                  const finalTweets = await finalResponse.json();
-                  if (Array.isArray(finalTweets)) {
-                    console.log('Completion signal: Successfully fetched tweets:', {
-                      fetchedCount: finalTweets.length,
-                      firstTweet: finalTweets[0]?.id,
-                      lastTweet: finalTweets[finalTweets.length - 1]?.id
+                  while (retryCount < maxRetries) {
+                    // Add small delay before fetching
+                    await delay(1000 * (retryCount + 1));  // Exponential delay: 1s, 2s, 3s
+                    
+                    console.log(`Attempt ${retryCount + 1}: Fetching final tweets for ${profile.name}...`, {
+                      url: `/api/tweets/${profile.name}/all`,
+                      profileData: profile,
+                      currentTweetCount: tweets.length
                     });
-                    onTweetsUpdate(finalTweets);
+
+                    const finalResponse = await fetch(`/api/tweets/${profile.name}/all`, {
+                      credentials: 'include'
+                    });
+ 
+                    if (finalResponse.ok) {
+                      const finalTweets = await finalResponse.json();
+                      if (Array.isArray(finalTweets) && finalTweets.length > 0) {
+                        console.log('Completion signal: Successfully fetched tweets:', {
+                          fetchedCount: finalTweets.length,
+                          firstTweet: finalTweets[0]?.id,
+                          lastTweet: finalTweets[finalTweets.length - 1]?.id
+                        });
+                        onTweetsUpdate(finalTweets);
+                        break;  // Success - exit retry loop
+                      }
+                      console.log('Response OK but no tweets:', {
+                        responseStatus: finalResponse.status,
+                        finalTweetsArray: Array.isArray(finalTweets),
+                        finalTweetsLength: finalTweets?.length
+                      });
+                    }
+                    else {
+                      console.error('Failed response:', {
+                        status: finalResponse.status,
+                        statusText: finalResponse.statusText,
+                        url: finalResponse.url
+                      });
+                    }
+ 
+                    retryCount++;
+                    console.log(`Attempt ${retryCount} failed, ${maxRetries - retryCount} attempts remaining`);
+                  }
+  
+                  if (retryCount >= maxRetries) {
+                    throw new Error('Failed to fetch tweets after maximum retries');
                   }
                 } catch (error) {
                   console.error('Completion signal: Error fetching final tweets:', error);
