@@ -22,7 +22,8 @@ INITIALIZING SYSTEM...
 [OK] Network protocols active
 [!!] Security clearance required
 
-SECURITY PROTOCOL: Access verification needed.
+SECURITY PROTOCOL: Access verification 
+needed.
 Enter commands in sequence to proceed.
 Type 'help' for available commands.
 `,
