@@ -41,12 +41,6 @@ export const REQUIRED_COMMANDS: Command[] = [
     }
   },
   {
-    command: 'GENERATE_REFERRAL',
-    description: 'Generate your unique referral code',
-    expectedInput: 'generate_referral',
-    validation: (input: string) => input.trim().toLowerCase() === 'generate_referral'
-  },
-  {
     command: 'SHARE',
     description: 'Share your referral link on social media',
     expectedInput: 'share',

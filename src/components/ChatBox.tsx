@@ -72,6 +72,8 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<number>();
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
+  const [isLoadingInitialData, setIsLoadingInitialData] = useState(false);
+  const [isLoadingTweets, setIsLoadingTweets] = useState(false);
 
   // Add cache hook
   const personalityCache = usePersonalityCache({
@@ -908,8 +910,9 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   useEffect(() => {
     // Load existing tweets for this user when component mounts
     const loadExistingTweets = async () => {
-      if (!profile.name) return;
+      if (!profile.name || isLoadingTweets) return;
       
+      setIsLoadingTweets(true);
       try {
         const response = await fetch(`/api/tweets/${profile.name}/all`);
         if (!response.ok) {
@@ -932,11 +935,13 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       } catch (error) {
         console.error('Error loading existing tweets:', error);
         setError(error instanceof Error ? error.message : 'Failed to load existing tweets');
+      } finally {
+        setIsLoadingTweets(false);
       }
     };
 
     loadExistingTweets();
-  }, [profile.name, onTweetsUpdate]); // Add onTweetsUpdate to dependencies
+  }, [profile.name]); // Remove onTweetsUpdate from dependencies
 
   // Handle text input with Shift+Enter
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -970,8 +975,9 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   // Load conversations and personality cache on mount
   useEffect(() => {
     const loadInitialData = async () => {
-      if (!profile.name) return;
+      if (!profile.name || isLoadingInitialData) return;
       
+      setIsLoadingInitialData(true);
       try {
         setLoading(true);
         
@@ -1032,11 +1038,12 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       } finally {
         setLoading(false);
         setIsLoadingConversations(false);
+        setIsLoadingInitialData(false);
       }
     };
 
     loadInitialData();
-  }, [profile.name, personalityCache]); // Add personalityCache back to dependencies
+  }, [profile.name]); // Remove personalityCache from dependencies
 
   // Remove the old separate loading effects
   // ... existing code ...
