@@ -462,19 +462,18 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
               setCompletedCommands(updatedCompletedCommands)
               setCurrentCommandIndex(currentCommandIndex + 1)
               
-              // 9. Show next command prompt (only once)
+              // 9. Show next command prompt
               newLines.push({ 
                 content: `\n[SYSTEM] Next required command: SHARE`,
                 isSystem: true 
               })
             } catch (error) {
               console.error('Failed to save progress:', error)
-              // Don't show the command prompt again on error since it's already in newLines
+              newLines.push({ 
+                content: `\n[SYSTEM] Next required command: SHARE`,
+                isSystem: true 
+              })
             }
-
-            // Set the lines and return to prevent duplicate processing
-            setLines(newLines)
-            return
           } catch (error) {
             console.error('Failed to process referral:', error)
             newLines.push({
