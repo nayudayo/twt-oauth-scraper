@@ -7,8 +7,8 @@ import { Header } from '@/components/Header'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Twitter Analysis',
-  description: 'Analyze Twitter profiles and tweets',
+  title: 'PTB Terminal | Askance',
+  description: 'who are we?',
 }
 
 export default function RootLayout({
