@@ -1,5 +1,8 @@
+'use client'
+
 import { useEffect, useState } from 'react';
 import type { PersonalityAnalysis } from '@/lib/openai';
+import Image from 'next/image';
 
 interface UserDetailsModalProps {
   username: string;
@@ -94,9 +97,11 @@ export function UserDetailsModal({ username, onClose }: UserDetailsModalProps) {
                 title="View Twitter Profile"
               >
                 {details.profile.imageUrl ? (
-                  <img 
+                  <Image 
                     src={details.profile.imageUrl} 
                     alt={details.profile.name || 'Profile'} 
+                    width={96}
+                    height={96}
                     className="w-16 h-16 sm:w-24 sm:h-24 rounded-full border-2 border-red-500/20 shadow-lg shadow-red-500/10 transition-all group-hover:border-red-500/40 group-hover:shadow-red-500/20"
                   />
                 ) : (

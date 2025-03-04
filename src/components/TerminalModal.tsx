@@ -5,7 +5,6 @@ import { REQUIRED_COMMANDS, HELP_MESSAGE } from '@/constants/commands'
 import { SYSTEM_MESSAGES } from '@/constants/messages'
 import { useSession } from 'next-auth/react'
 import { extractReferralResponse } from '@/utils/referral'
-import Image from 'next/image'
 import { toPng } from 'html-to-image'
 
 interface TerminalModalProps {
@@ -121,7 +120,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
       }
     }
     loadProgress()
-  }, [session?.username, onComplete])
+  }, [session?.username, onComplete, completedCommands, currentCommandIndex])
 
   // Save progress when commands are completed
   const saveProgress = async (commandIndex: number, commands: string[]) => {

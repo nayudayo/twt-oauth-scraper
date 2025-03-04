@@ -936,7 +936,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     };
 
     loadExistingTweets();
-  }, [profile.name]); // Reload when profile changes
+  }, [profile.name, onTweetsUpdate]); // Add onTweetsUpdate to dependencies
 
   // Handle text input with Shift+Enter
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1036,7 +1036,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     };
 
     loadInitialData();
-  }, [profile.name]); // Remove personalityCache from dependencies
+  }, [profile.name, personalityCache]); // Add personalityCache back to dependencies
 
   // Remove the old separate loading effects
   // ... existing code ...
