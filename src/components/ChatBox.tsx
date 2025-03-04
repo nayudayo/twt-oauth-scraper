@@ -9,6 +9,7 @@ import Image from 'next/image'
 import { ConversationList } from './ConversationList'
 import { usePersonalityCache } from '@/hooks/usePersonalityCache';
 import { CacheStatusIndicator } from './CacheStatusIndicator';
+import { TweetList } from './TweetList';
 
 interface ChatBoxProps {
   tweets: Tweet[]
@@ -738,8 +739,8 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
  
                 try {
                   while (retryCount < maxRetries) {
-                    // Add small delay before fetching
-                    await delay(1000 * (retryCount + 1));  // Exponential delay: 1s, 2s, 3s
+                    // Add delay before fetching (increasing with each retry)
+                    await delay(2000 * (retryCount + 1));  // 2s, 4s, 6s delays
                     
                     console.log(`Attempt ${retryCount + 1}: Fetching final tweets for ${profile.name}...`, {
                       url: `/api/tweets/${profile.name}/all`,
@@ -1443,103 +1444,6 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     </div>
                   </div>
                 </div>
-
-                {/* Communication Style */}
-                <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                    <span className="ancient-text text-base">Communication Style</span>
-                  </h4>
-                  <div className="space-y-4 bg-black/20 rounded-lg p-4">
-                    <div className="space-y-2 hover-glow">
-                      <div className="flex justify-between text-red-400/90">
-                        <span className="text-[14px] tracking-wide">Formality</span>
-                        <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
-                          {tuning.communicationStyle.formality === 0 ? 'Very Casual' :
-                           tuning.communicationStyle.formality <= 25 ? 'Casual' :
-                           tuning.communicationStyle.formality <= 50 ? 'Balanced' :
-                           tuning.communicationStyle.formality <= 75 ? 'Professional' :
-                           'Very Formal'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
-                        value={tuning.communicationStyle.formality}
-                        onChange={(e) => handleStyleAdjustment('formality', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
-                      />
-                    </div>
-
-                    <div className="space-y-2 hover-glow">
-                      <div className="flex justify-between text-red-400/90">
-                        <span className="text-[14px] tracking-wide">Enthusiasm</span>
-                        <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
-                          {tuning.communicationStyle.enthusiasm === 0 ? 'Reserved' :
-                           tuning.communicationStyle.enthusiasm <= 25 ? 'Mild' :
-                           tuning.communicationStyle.enthusiasm <= 50 ? 'Moderate' :
-                           tuning.communicationStyle.enthusiasm <= 75 ? 'High' :
-                           'Very High'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
-                        value={tuning.communicationStyle.enthusiasm}
-                        onChange={(e) => handleStyleAdjustment('enthusiasm', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
-                      />
-                    </div>
-
-                    <div className="space-y-2 hover-glow">
-                      <div className="flex justify-between text-red-400/90">
-                        <span className="text-[14px] tracking-wide">Technical Level</span>
-                        <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
-                          {tuning.communicationStyle.technicalLevel === 0 ? 'Basic' :
-                           tuning.communicationStyle.technicalLevel <= 25 ? 'Simple' :
-                           tuning.communicationStyle.technicalLevel <= 50 ? 'Moderate' :
-                           tuning.communicationStyle.technicalLevel <= 75 ? 'Advanced' :
-                           'Expert'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
-                        value={tuning.communicationStyle.technicalLevel}
-                        onChange={(e) => handleStyleAdjustment('technicalLevel', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
-                      />
-                    </div>
-
-                    <div className="space-y-2 hover-glow">
-                      <div className="flex justify-between text-red-400/90">
-                        <span className="text-[14px] tracking-wide">Emoji Usage</span>
-                        <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
-                          {tuning.communicationStyle.emojiUsage === 0 ? 'None' :
-                           tuning.communicationStyle.emojiUsage <= 25 ? 'Minimal' :
-                           tuning.communicationStyle.emojiUsage <= 50 ? 'Moderate' :
-                           tuning.communicationStyle.emojiUsage <= 75 ? 'Frequent' :
-                           'Very Frequent'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
-                        value={tuning.communicationStyle.emojiUsage}
-                        onChange={(e) => handleStyleAdjustment('emojiUsage', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
-                      />
-                    </div>
-                  </div>
-                </div>
               </div>
             ) : (
               <div className="text-red-500/70 italic text-center glow-text">
@@ -2110,103 +2014,6 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     </div>
                   </div>
                 </div>
-
-                {/* Communication Style */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                    <span className="glow-text">Communication Style</span>
-                  </h4>
-                  <div className="space-y-3">
-                    <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/70">
-                        <span className="hover-text-glow">Formality</span>
-                        <span className="hover-text-glow">
-                          {tuning.communicationStyle.formality === 0 ? 'None' :
-                           tuning.communicationStyle.formality < 41 ? 'Very Casual' :
-                           tuning.communicationStyle.formality < 61 ? 'Casual' :
-                           tuning.communicationStyle.formality < 81 ? 'Professional' :
-                           'Highly Formal'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
-                        value={tuning.communicationStyle.formality}
-                        onChange={(e) => handleStyleAdjustment('formality', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
-                      />
-                    </div>
-
-                    <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/70">
-                        <span className="hover-text-glow">Technical Level</span>
-                        <span className="hover-text-glow">
-                          {tuning.communicationStyle.technicalLevel === 0 ? 'None' :
-                           tuning.communicationStyle.technicalLevel <= 25 ? 'Basic' :
-                           tuning.communicationStyle.technicalLevel <= 50 ? 'Mixed' :
-                           tuning.communicationStyle.technicalLevel <= 75 ? 'Detailed' :
-                           'Expert'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
-                        value={tuning.communicationStyle.technicalLevel}
-                        onChange={(e) => handleStyleAdjustment('technicalLevel', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
-                      />
-                    </div>
-
-                    <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/70">
-                        <span className="hover-text-glow">Enthusiasm</span>
-                        <span className="hover-text-glow">
-                          {tuning.communicationStyle.enthusiasm === 0 ? 'None' :
-                           tuning.communicationStyle.enthusiasm <= 25 ? 'Reserved' :
-                           tuning.communicationStyle.enthusiasm <= 50 ? 'Moderate' :
-                           tuning.communicationStyle.enthusiasm <= 75 ? 'High' :
-                           'Very High'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
-                        value={tuning.communicationStyle.enthusiasm}
-                        onChange={(e) => handleStyleAdjustment('enthusiasm', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
-                      />
-                    </div>
-
-                    <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/70">
-                        <span className="hover-text-glow">Emoji Usage</span>
-                        <span className="hover-text-glow">
-                          {tuning.communicationStyle.emojiUsage === 0 ? 'None' :
-                           tuning.communicationStyle.emojiUsage <= 25 ? 'Minimal' :
-                           tuning.communicationStyle.emojiUsage <= 50 ? 'Moderate' :
-                           tuning.communicationStyle.emojiUsage <= 75 ? 'Frequent' :
-                           'Very Frequent'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
-                        value={tuning.communicationStyle.emojiUsage}
-                        onChange={(e) => handleStyleAdjustment('emojiUsage', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
-                      />
-                    </div>
-                  </div>
-                </div>
               </div>
             ) : (
               <div className="text-red-500/70 italic text-center glow-text">
@@ -2237,74 +2044,45 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-6 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[50vh] sm:max-h-[45vh] md:max-h-[40vh] relative touch-action-pan-y">
-              <div className="space-y-2 w-full">
-                {/* Progress Status - Moved here */}
-                {loading && (
-                  <div className="mb-4 p-3 bg-black/20 border border-red-500/10 rounded-lg backdrop-blur-sm">
-                    <div className="flex items-center gap-2 text-red-500/60">
-                      <div className="flex items-center gap-1 flex-none">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20 glow-box" />
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-100 shadow-lg shadow-red-500/20 glow-box" />
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-200 shadow-lg shadow-red-500/20 glow-box" />
-                      </div>
-                      {scanProgress && (
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <span className="uppercase tracking-wider text-xs glow-text truncate">
-                            {scanProgress.message || `${scanProgress.phase === 'posts' ? 'SCANNING POSTS' : 'SCANNING REPLIES'}: ${scanProgress.count} TWEETS COLLECTED`}
-                          </span>
-                          {scrapingElapsedTime && (
-                            <span className="text-xs text-red-500/40 glow-text truncate flex-none">
-                              [{scrapingElapsedTime}]
-                            </span>
-                          )}
-                        </div>
+            {/* Progress Status */}
+            {loading && (
+              <div className="p-3 bg-black/20 border-b border-red-500/10 backdrop-blur-sm">
+                <div className="flex items-center gap-2 text-red-500/60">
+                  <div className="flex items-center gap-1 flex-none">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20 glow-box" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-100 shadow-lg shadow-red-500/20 glow-box" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-200 shadow-lg shadow-red-500/20 glow-box" />
+                  </div>
+                  {scanProgress && (
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="uppercase tracking-wider text-xs glow-text truncate">
+                        {scanProgress.message || `${scanProgress.phase === 'posts' ? 'SCANNING POSTS' : 'SCANNING REPLIES'}: ${scanProgress.count} TWEETS COLLECTED`}
+                      </span>
+                      {scrapingElapsedTime && (
+                        <span className="text-xs text-red-500/40 glow-text truncate flex-none">
+                          [{scrapingElapsedTime}]
+                        </span>
                       )}
                     </div>
-                  </div>
-                )}
-
-                {tweets.length === 0 ? (
-                  <div className="text-red-500/50 italic glow-text">
-                    {'>'} {loading ? 'Fetching data...' : 'Awaiting data collection initialization...'}
-                  </div>
-                ) : (
-                  <>
-                    {tweets.map((tweet, index) => (
-                      <div 
-                        key={`${tweet.id}-${index}`}
-                        className="text-red-400/80 flex gap-3 hover:bg-red-500/5 transition-all duration-300 py-2 px-3 rounded backdrop-blur-sm border border-transparent hover:border-red-500/10 hover-glow float"
-                      >
-                        <div className="text-red-500/50 select-none font-bold glow-text">
-                          [{String(index + 1).padStart(4, '0')}]
-                        </div>
-                  
-                        <div className="flex-1">
-                          <div className="text-red-300/90 hover-text-glow break-words">
-                            {tweet.text}
-                          </div>
-                          <div className="text-red-500/40 text-xs flex items-center gap-2 mt-1.5">
-                            <span>
-                              {tweet.timestamp && new Date(tweet.timestamp).toLocaleString()}
-                            </span>
-                            {tweet.isReply && (
-                              <>
-                                <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box" />
-                                <span className="glow-text">REPLY</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-
-                    <div className="mt-6 pt-4 border-t border-red-500/10 text-red-500/60 backdrop-blur-sm glow-border">
-                      {'>'} Collection Stats: {tweets.length} posts
-                    </div>
-                  </>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* Tweet List */}
+            {tweets.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-red-500/50 italic glow-text">
+                  {'>'} {loading ? 'Fetching data...' : 'Awaiting data collection initialization...'}
+                </div>
+              </div>
+            ) : (
+              <TweetList
+                username={profile.name || ''}
+                includeReplies={true}
+                className="flex-1"
+              />
+            )}
           </div>
 
           {/* Personality Analysis Panel - Bottom Half */}
