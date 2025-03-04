@@ -29,20 +29,18 @@ export function TweetList({
     error,
     isLoading,
     isFetching,
-    refetch
+    fetchNextPage
   } = useTweets({
     username,
-    includeReplies,
-    // Disable background refetching during scraping
-    refetchInterval: isScrapingActive ? 0 : undefined
+    includeReplies
   });
 
   // Error retry handler
   const handleRetry = useCallback(() => {
     if (error) {
-      refetch();
+      fetchNextPage();
     }
-  }, [error, refetch]);
+  }, [error, fetchNextPage]);
 
   // Show loading state during initial load
   if (isLoading && !isScrapingActive) {
