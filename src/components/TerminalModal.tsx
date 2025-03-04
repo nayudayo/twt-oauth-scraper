@@ -6,6 +6,7 @@ import { SYSTEM_MESSAGES } from '@/constants/messages'
 import { useSession } from 'next-auth/react'
 import { extractReferralResponse } from '@/utils/referral'
 import { toPng } from 'html-to-image'
+import Image from 'next/image'
 
 interface TerminalModalProps {
   onComplete: () => void
@@ -36,11 +37,13 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
   const shareModalRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const terminalRef = useRef<HTMLDivElement>(null)
+  const [isLoadingProgress, setIsLoadingProgress] = useState(false)
 
   // Load saved progress when component mounts
   useEffect(() => {
     const loadProgress = async () => {
-      if (session?.username) {
+      if (session?.username && !isLoadingProgress) {
+        setIsLoadingProgress(true)
         try {
           const response = await fetch(`/api/command-progress?userId=${session.username}`)
           
@@ -116,11 +119,13 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
               }
             ])
           }
+        } finally {
+          setIsLoadingProgress(false)
         }
       }
     }
     loadProgress()
-  }, [session?.username, onComplete, completedCommands, currentCommandIndex])
+  }, [session?.username, onComplete])
 
   // Save progress when commands are completed
   const saveProgress = async (commandIndex: number, commands: string[]) => {
@@ -445,31 +450,27 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
               isSuccess: true
             })
 
-            // 7. Update completed commands to include both
+            // 7. Update completed commands and move to SHARE
             const updatedCompletedCommands = [
               ...completedCommands,
-              currentCommand.command,
-              'GENERATE_REFERRAL'
+              currentCommand.command
             ]
 
             try {
-              // 8. Save progress with both commands completed
-              await saveProgress(currentCommandIndex + 2, updatedCompletedCommands)
-              
-              // 9. Update state to skip GENERATE_REFERRAL
+              // 8. Save progress and show SHARE as next command
+              await saveProgress(currentCommandIndex + 1, updatedCompletedCommands)
               setCompletedCommands(updatedCompletedCommands)
-              setCurrentCommandIndex(currentCommandIndex + 2)
+              setCurrentCommandIndex(currentCommandIndex + 1)
               
-              // 10. Show next command prompt
+              // 9. Show next command prompt
               newLines.push({ 
-                content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[currentCommandIndex + 2].command}`,
+                content: `\n[SYSTEM] Next required command: SHARE`,
                 isSystem: true 
               })
             } catch (error) {
               console.error('Failed to save progress:', error)
-              // On error, still show success but don't update progress
               newLines.push({ 
-                content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[currentCommandIndex + 1].command}`,
+                content: `\n[SYSTEM] Next required command: SHARE`,
                 isSystem: true 
               })
             }
@@ -813,16 +814,16 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
             }}
             onClick={e => e.stopPropagation()}
           >
-            {/* Share Dialog Header */}
+            {/* Header */}
             <div className="flex items-center justify-between gap-2 mb-4 border-b border-red-500/20 pb-4 glow-border">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                <h3 className="terminal-header text-red-500/80">SHARE INTERFACE</h3>
+                <h3 className="text-base md:text-lg font-bold text-red-500/80 tracking-wider glow-text">SHARE INTERFACE</h3>
               </div>
               {hasShared && (
                 <button
                   onClick={() => setShowShareDialog(false)}
-                  className="close-button text-red-500/70 hover:text-red-500/90 transition-colors hover-text-glow p-2 terminal-text"
+                  className="close-button text-red-500/70 hover:text-red-500/90 transition-colors hover-text-glow p-2"
                   aria-label="Close dialog"
                 >
                   ×
@@ -831,49 +832,89 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
             </div>
 
             <div className="space-y-4 md:space-y-6">
-              {/* Profile Section */}
-              <div className="text-center">
-                <h4 className="terminal-header text-red-500/80">
-                  {session?.username || 'Anonymous'}
-                </h4>
-                <p className="terminal-text text-red-400/60 mt-1">
-                  Neural Network Participant
-                </p>
-              </div>
-
-              {/* Referral Code Section */}
-              <div>
-                <h4 className="terminal-header text-red-500/80 mb-2">
-                  YOUR REFERRAL CODE
-                </h4>
-                <code className="flex-1 bg-black/80 text-red-400/80 px-3 py-2 rounded font-mono terminal-text break-all">
-                  {isLoadingReferral ? (
-                    <span className="text-red-500/70">FETCHING DATA...</span>
-                  ) : (
-                    referralCode || 'ERROR: Code not found'
+              {/* Profile Section - Made more compact on mobile */}
+              <div className="flex flex-col items-center gap-3 md:gap-4">
+                {session?.user?.image ? (
+                  <div className="w-16 md:w-20 h-16 md:h-20 rounded-full border-2 border-red-500/20 overflow-hidden hover-glow">
+                    <Image
+                      src={session.user.image}
+                      alt={session?.username || 'Profile'}
+                      width={80}
+                      height={80}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-16 md:w-20 h-16 md:h-20 rounded-full bg-red-500/5 border-2 border-red-500/20 flex items-center justify-center">
+                    <span className="text-red-500/50 text-xl md:text-2xl">?</span>
+                  </div>
+                )}
+                <div className="text-center">
+                  <h4 className="text-sm md:text-base text-red-500/80 font-bold tracking-wider ancient-text">
+                    {session?.username || 'Anonymous User'}
+                  </h4>
+                  {session?.username && (
+                    <p className="text-xs md:text-sm text-red-400/60 mt-0.5 md:mt-1 hover-text-glow">
+                      @{session.username}
+                    </p>
                   )}
-                </code>
+                </div>
               </div>
 
-              {/* Share Button */}
-              <button
-                onClick={handleShareToX}
-                disabled={isLoadingReferral}
-                className="terminal-text w-full px-4 py-2.5 bg-red-500/10 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/20 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow flex items-center justify-center gap-2"
-              >
-                Share on X
-              </button>
+              {/* Referral Code Section - Improved mobile layout */}
+              <div className="bg-black/80 rounded-lg p-3 md:p-4 backdrop-blur-sm border border-red-500/20 hover-glow ancient-border">
+                <h4 className="text-xs md:text-sm font-bold text-red-500/80 tracking-wider uppercase flex items-center gap-2 mb-2 md:mb-3">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                  <span className="ancient-text">Your Referral Code</span>
+                </h4>
+                <div className="flex flex-col md:flex-row gap-2">
+                  <code className="flex-1 bg-black/80 text-red-400/80 px-3 py-2 rounded font-mono text-xs md:text-sm hover-text-glow break-all">
+                    {isLoadingReferral ? (
+                      <span className="text-red-500/70 tracking-wider">FETCHING DATA...</span>
+                    ) : (
+                      referralCode || commandResponses['GENERATE_REFERRAL'] || 'No referral code found'
+                    )}
+                  </code>
+                  <button
+                    onClick={() => {
+                      const code = referralCode || commandResponses['GENERATE_REFERRAL']
+                      if (code) {
+                        navigator.clipboard.writeText(code)
+                      }
+                    }}
+                    className="px-3 py-2 bg-red-500/10 text-red-500/80 border border-red-500/20 rounded hover:bg-red-500/20 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow whitespace-nowrap"
+                    disabled={isLoadingReferral || (!referralCode && !commandResponses['GENERATE_REFERRAL'])}
+                  >
+                    Copy Code
+                  </button>
+                </div>
+              </div>
 
-              {/* Instructions */}
-              <div className="terminal-text text-red-400/60 space-y-2">
+              {/* Instructions - Adjusted for mobile */}
+              <div className="text-xs md:text-sm text-red-400/60 space-y-1 md:space-y-2">
                 <p className="hover-text-glow">Share your referral code with others to earn rewards!</p>
                 <p className="hover-text-glow">Each successful referral increases your influence in the network.</p>
               </div>
 
-              {/* Footer Note */}
-              <div className="terminal-text text-red-500/60 text-center tracking-wider px-2">
-                Note: You must share your code to complete the initialization process.
+              {/* Share Button - Full width on mobile */}
+              <div className="mt-4 md:mt-6">
+                <button
+                  onClick={handleShareToX}
+                  disabled={isLoadingReferral || (!referralCode && !commandResponses['GENERATE_REFERRAL'])}
+                  className="w-full px-4 py-2.5 md:py-3 bg-red-500/10 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/20 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs md:text-sm backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                  Download and Share to X
+                </button>
               </div>
+
+              {!hasShared && (
+                <div className="mt-2 md:mt-4 text-center text-red-500/60 text-[10px] md:text-xs tracking-wider px-2">
+                  Download the Image and Share to X to close this interface
+                </div>
+              )}
             </div>
           </div>
         </div>
