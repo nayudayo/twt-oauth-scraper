@@ -1444,6 +1444,103 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     </div>
                   </div>
                 </div>
+
+                {/* Communication Style */}
+                <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                    <span className="ancient-text text-base">Communication Style</span>
+                  </h4>
+                  <div className="space-y-4 bg-black/20 rounded-lg p-4">
+                    <div className="space-y-2 hover-glow">
+                      <div className="flex justify-between text-red-400/90">
+                        <span className="text-[14px] tracking-wide">Formality</span>
+                        <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
+                          {tuning.communicationStyle.formality === 0 ? 'Very Casual' :
+                           tuning.communicationStyle.formality <= 25 ? 'Casual' :
+                           tuning.communicationStyle.formality <= 50 ? 'Balanced' :
+                           tuning.communicationStyle.formality <= 75 ? 'Professional' :
+                           'Very Formal'}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="25"
+                        value={tuning.communicationStyle.formality}
+                        onChange={(e) => handleStyleAdjustment('formality', parseInt(e.target.value))}
+                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
+                      />
+                    </div>
+
+                    <div className="space-y-2 hover-glow">
+                      <div className="flex justify-between text-red-400/90">
+                        <span className="text-[14px] tracking-wide">Enthusiasm</span>
+                        <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
+                          {tuning.communicationStyle.enthusiasm === 0 ? 'Reserved' :
+                           tuning.communicationStyle.enthusiasm <= 25 ? 'Mild' :
+                           tuning.communicationStyle.enthusiasm <= 50 ? 'Moderate' :
+                           tuning.communicationStyle.enthusiasm <= 75 ? 'High' :
+                           'Very High'}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="25"
+                        value={tuning.communicationStyle.enthusiasm}
+                        onChange={(e) => handleStyleAdjustment('enthusiasm', parseInt(e.target.value))}
+                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
+                      />
+                    </div>
+
+                    <div className="space-y-2 hover-glow">
+                      <div className="flex justify-between text-red-400/90">
+                        <span className="text-[14px] tracking-wide">Technical Level</span>
+                        <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
+                          {tuning.communicationStyle.technicalLevel === 0 ? 'Basic' :
+                           tuning.communicationStyle.technicalLevel <= 25 ? 'Simple' :
+                           tuning.communicationStyle.technicalLevel <= 50 ? 'Moderate' :
+                           tuning.communicationStyle.technicalLevel <= 75 ? 'Advanced' :
+                           'Expert'}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="25"
+                        value={tuning.communicationStyle.technicalLevel}
+                        onChange={(e) => handleStyleAdjustment('technicalLevel', parseInt(e.target.value))}
+                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
+                      />
+                    </div>
+
+                    <div className="space-y-2 hover-glow">
+                      <div className="flex justify-between text-red-400/90">
+                        <span className="text-[14px] tracking-wide">Emoji Usage</span>
+                        <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
+                          {tuning.communicationStyle.emojiUsage === 0 ? 'None' :
+                           tuning.communicationStyle.emojiUsage <= 25 ? 'Minimal' :
+                           tuning.communicationStyle.emojiUsage <= 50 ? 'Moderate' :
+                           tuning.communicationStyle.emojiUsage <= 75 ? 'Frequent' :
+                           'Very Frequent'}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="25"
+                        value={tuning.communicationStyle.emojiUsage}
+                        onChange={(e) => handleStyleAdjustment('emojiUsage', parseInt(e.target.value))}
+                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="text-red-500/70 italic text-center glow-text">
@@ -2011,6 +2108,103 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                           Add
                         </button>
                       </form>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Communication Style */}
+                <div className="space-y-4">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+                    <span className="glow-text">Communication Style</span>
+                  </h4>
+                  <div className="space-y-3">
+                    <div className="space-y-1 hover-glow">
+                      <div className="flex justify-between text-xs text-red-400/70">
+                        <span className="hover-text-glow">Formality</span>
+                        <span className="hover-text-glow">
+                          {tuning.communicationStyle.formality === 0 ? 'None' :
+                           tuning.communicationStyle.formality < 41 ? 'Very Casual' :
+                           tuning.communicationStyle.formality < 61 ? 'Casual' :
+                           tuning.communicationStyle.formality < 81 ? 'Professional' :
+                           'Highly Formal'}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="25"
+                        value={tuning.communicationStyle.formality}
+                        onChange={(e) => handleStyleAdjustment('formality', parseInt(e.target.value))}
+                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
+                      />
+                    </div>
+
+                    <div className="space-y-1 hover-glow">
+                      <div className="flex justify-between text-xs text-red-400/70">
+                        <span className="hover-text-glow">Technical Level</span>
+                        <span className="hover-text-glow">
+                          {tuning.communicationStyle.technicalLevel === 0 ? 'None' :
+                           tuning.communicationStyle.technicalLevel <= 25 ? 'Basic' :
+                           tuning.communicationStyle.technicalLevel <= 50 ? 'Mixed' :
+                           tuning.communicationStyle.technicalLevel <= 75 ? 'Detailed' :
+                           'Expert'}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="25"
+                        value={tuning.communicationStyle.technicalLevel}
+                        onChange={(e) => handleStyleAdjustment('technicalLevel', parseInt(e.target.value))}
+                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
+                      />
+                    </div>
+
+                    <div className="space-y-1 hover-glow">
+                      <div className="flex justify-between text-xs text-red-400/70">
+                        <span className="hover-text-glow">Enthusiasm</span>
+                        <span className="hover-text-glow">
+                          {tuning.communicationStyle.enthusiasm === 0 ? 'None' :
+                           tuning.communicationStyle.enthusiasm <= 25 ? 'Reserved' :
+                           tuning.communicationStyle.enthusiasm <= 50 ? 'Moderate' :
+                           tuning.communicationStyle.enthusiasm <= 75 ? 'High' :
+                           'Very High'}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="25"
+                        value={tuning.communicationStyle.enthusiasm}
+                        onChange={(e) => handleStyleAdjustment('enthusiasm', parseInt(e.target.value))}
+                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
+                      />
+                    </div>
+
+                    <div className="space-y-1 hover-glow">
+                      <div className="flex justify-between text-xs text-red-400/70">
+                        <span className="hover-text-glow">Emoji Usage</span>
+                        <span className="hover-text-glow">
+                          {tuning.communicationStyle.emojiUsage === 0 ? 'None' :
+                           tuning.communicationStyle.emojiUsage <= 25 ? 'Minimal' :
+                           tuning.communicationStyle.emojiUsage <= 50 ? 'Moderate' :
+                           tuning.communicationStyle.emojiUsage <= 75 ? 'Frequent' :
+                           'Very Frequent'}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="25"
+                        value={tuning.communicationStyle.emojiUsage}
+                        onChange={(e) => handleStyleAdjustment('emojiUsage', parseInt(e.target.value))}
+                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
+                      />
                     </div>
                   </div>
                 </div>
