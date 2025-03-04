@@ -1,7 +1,8 @@
-import { useCallback } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useTweets } from '@/hooks/useTweets';
 import { Spinner } from './ui/spinner';
 import '../styles/glow.css';
+import { Tweet } from '@/types/scraper';
 
 interface TweetListProps {
   username: string;
@@ -11,6 +12,7 @@ interface TweetListProps {
   scrapingProgress?: {
     phase: string;
     count: number;
+    total?: number;
     message?: string;
   } | null;
 }
@@ -22,10 +24,13 @@ export function TweetList({
   isScrapingActive = false,
   scrapingProgress = null
 }: TweetListProps) {
+  // Track accumulated tweets during scraping
+  const [accumulatedTweets, setAccumulatedTweets] = useState<Tweet[]>([]);
+  const [displayedCount, setDisplayedCount] = useState(0);
+
   // Get tweets with our custom hook
   const {
     tweets,
-    totalTweets,
     error,
     isLoading,
     isFetching,
@@ -34,6 +39,22 @@ export function TweetList({
     username,
     includeReplies
   });
+
+  // Update displayed count based on scraping status or fetched tweets
+  useEffect(() => {
+    if (isScrapingActive && scrapingProgress) {
+      setDisplayedCount(scrapingProgress.count);
+    } else if (!isScrapingActive && tweets.length > 0) {
+      setDisplayedCount(tweets.length);
+    }
+  }, [isScrapingActive, scrapingProgress, tweets.length]);
+
+  // Reset accumulated tweets when scraping starts
+  useEffect(() => {
+    if (isScrapingActive) {
+      setAccumulatedTweets([]);
+    }
+  }, [isScrapingActive]);
 
   // Error retry handler
   const handleRetry = useCallback(() => {
@@ -68,6 +89,9 @@ export function TweetList({
     );
   }
 
+  // Determine which tweets to display
+  const tweetsToDisplay = isScrapingActive ? accumulatedTweets : tweets;
+
   return (
     <div
       className={`relative overflow-y-auto ancient-scrollbar dynamic-bg ${className}`}
@@ -78,7 +102,7 @@ export function TweetList({
         {/* Scraping progress */}
         {isScrapingActive && scrapingProgress && (
           <div className="bg-black/80 text-red-500/90 px-2 py-1 rounded text-sm border border-red-500/20">
-            {scrapingProgress.message || `Scanning: ${scrapingProgress.count} tweets`}
+            {scrapingProgress.message || `Scanning: ${displayedCount} tweets`}
           </div>
         )}
         
@@ -92,12 +116,12 @@ export function TweetList({
 
       {/* Tweet list */}
       <div className="space-y-2 p-4">
-        {tweets.length === 0 ? (
+        {tweetsToDisplay.length === 0 ? (
           <div className="text-red-500/60 italic text-center">
             {isScrapingActive ? 'Collecting tweets...' : 'No tweets found'}
           </div>
         ) : (
-          tweets.map((tweet) => (
+          tweetsToDisplay.map((tweet) => (
             <div
               key={tweet.id}
               className="p-3 bg-black/40 rounded border border-red-500/20 hover:bg-red-500/5 
@@ -109,7 +133,7 @@ export function TweetList({
               <p className="text-red-500/90 text-sm ancient-text">{tweet.text}</p>
               {tweet.isReply && (
                 <div className="mt-2 text-xs text-red-500/50 font-mono">
-                  Reply to @{tweet.inReplyToUsername}
+                  Reply to @{'inReplyToUsername' in tweet ? tweet.inReplyToUsername : null}
                 </div>
               )}
             </div>
@@ -118,7 +142,7 @@ export function TweetList({
 
         {/* Collection Stats */}
         <div className="mt-6 pt-4 border-t border-red-500/10 text-red-500/60 backdrop-blur-sm glow-border">
-          {'>'} Collection Stats: {totalTweets} posts
+          {'>'} Collection Stats: {displayedCount} {scrapingProgress?.total ? `/ ${scrapingProgress.total}` : ''} posts
           {isScrapingActive && (
             <span className="ml-2 text-red-500/40">(Scanning in progress...)</span>
           )}

@@ -42,97 +42,67 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
   // Load saved progress when component mounts
   useEffect(() => {
     const loadProgress = async () => {
-      if (session?.username && !isLoadingProgress) {
-        setIsLoadingProgress(true)
-        try {
-          const response = await fetch(`/api/command-progress?userId=${session.username}`)
-          
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}))
-            throw new Error(errorData.error || 'Failed to load progress')
-          }
-
-          const data = await response.json().catch(() => ({}))
-          
-          // If user has already completed the funnel, skip to main content
-          if (data.completion) {
-            setShowMainContent(true)
-            setTimeout(onComplete, 500)
-            return
-          }
-            
-          // Otherwise just set up for the next required command
-          if (data.progress) {
-            const { current_command_index, completed_commands, command_responses } = data.progress
-            
-            // Set the current state
-            setCurrentCommandIndex(current_command_index || 0)
-            setCompletedCommands(completed_commands || [])
-            setCommandResponses(command_responses || {})
-              
-            // Only show boot message and next command prompt
-            setLines([
-              { content: SYSTEM_MESSAGES.BOOT },
-              { 
-                content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[current_command_index || 0].command}`,
-                isSystem: true 
-              }
-            ])
-          } else {
-            // No progress yet, start from beginning
-            setLines([
-              { content: SYSTEM_MESSAGES.BOOT },
-              { 
-                content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[0].command}`,
-                isSystem: true 
-              }
-            ])
-          }
-        } catch (error) {
-          console.error('Failed to load funnel progress:', error)
-          
-          // On error, try to get progress from local state first
-          const lastIndex = currentCommandIndex || 0
-          const lastCommands = completedCommands || []
-          
-          // If we have local state, use it
-          if (lastCommands.length > 0 || lastIndex > 0) {
-            console.log('Restoring from local state:', { lastIndex, lastCommands })
-            setLines([
-              { content: SYSTEM_MESSAGES.BOOT },
-              { 
-                content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[lastIndex].command}`,
-                isSystem: true 
-              }
-            ])
-          } else {
-            // If no local state, start from beginning
-            console.log('Starting from beginning due to error')
-            setCurrentCommandIndex(0)
-            setCompletedCommands([])
-            setCommandResponses({})
-            setLines([
-              { content: SYSTEM_MESSAGES.BOOT },
-              { 
-                content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[0].command}`,
-                isSystem: true 
-              }
-            ])
-          }
-        } finally {
-          // Add a delay before allowing next progress check
-          setTimeout(() => {
-            setIsLoadingProgress(false)
-          }, 5000) // 5 second cooldown
+      if (!session?.username || isLoadingProgress) return;
+      
+      setIsLoadingProgress(true);
+      try {
+        const response = await fetch(`/api/command-progress?userId=${session.username}`);
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to load progress');
         }
+
+        const data = await response.json();
+        
+        // If user has already completed the funnel, skip to main content
+        if (data.completion) {
+          setShowMainContent(true);
+          setTimeout(onComplete, 500);
+          return;
+        }
+            
+        // Otherwise just set up for the next required command
+        if (data.progress) {
+          const { current_command_index, completed_commands, command_responses } = data.progress;
+          
+          // Set the current state
+          setCurrentCommandIndex(current_command_index || 0);
+          setCompletedCommands(completed_commands || []);
+          setCommandResponses(command_responses || {});
+              
+          // Only show boot message and next command prompt
+          setLines([
+            { content: SYSTEM_MESSAGES.BOOT },
+            { 
+              content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[current_command_index || 0].command}`,
+              isSystem: true 
+            }
+          ]);
+        }
+      } catch (error) {
+        console.error('Failed to load funnel progress:', error);
+        // On error, start from beginning
+        setCurrentCommandIndex(0);
+        setCompletedCommands([]);
+        setCommandResponses({});
+        setLines([
+          { content: SYSTEM_MESSAGES.BOOT },
+          { 
+            content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[0].command}`,
+            isSystem: true 
+          }
+        ]);
+      } finally {
+        setIsLoadingProgress(false);
       }
-    }
+    };
 
     // Only load progress if we have a session and aren't already loading
     if (session?.username && !isLoadingProgress) {
-      loadProgress()
+      loadProgress();
     }
-  }, [session?.username, onComplete, isLoadingProgress, currentCommandIndex, completedCommands])
+  }, [session?.username]); // Remove polling-causing dependencies
 
   // Save progress when commands are completed
   const saveProgress = async (commandIndex: number, commands: string[]) => {
