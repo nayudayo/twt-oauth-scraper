@@ -120,12 +120,19 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
             ])
           }
         } finally {
-          setIsLoadingProgress(false)
+          // Add a delay before allowing next progress check
+          setTimeout(() => {
+            setIsLoadingProgress(false)
+          }, 5000) // 5 second cooldown
         }
       }
     }
-    loadProgress()
-  }, [session?.username, onComplete])
+
+    // Only load progress if we have a session and aren't already loading
+    if (session?.username && !isLoadingProgress) {
+      loadProgress()
+    }
+  }, [session?.username, onComplete, isLoadingProgress, currentCommandIndex, completedCommands])
 
   // Save progress when commands are completed
   const saveProgress = async (commandIndex: number, commands: string[]) => {
