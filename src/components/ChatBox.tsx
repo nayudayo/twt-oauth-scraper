@@ -731,23 +731,24 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 console.log('Completion signal: Starting final data fetch...', {
                   profileName: profile.name,
                   dataUsername: data.username,
-                  match: data.username === profile.name
+                  match: data.username === profile.name,
+                  currentTweets: tweets.length
                 });
                 
-                // Add retry mechanism for final fetch
+                // Add retry mechanism for final fetch with delay between attempts
                 let retryCount = 0;
                 const maxRetries = 3;
                 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+                let finalTweets = null;
  
                 try {
                   while (retryCount < maxRetries) {
-                    // Add delay before fetching (increasing with each retry)
+                    // Add increasing delay before each retry
                     await delay(2000 * (retryCount + 1));  // 2s, 4s, 6s delays
                     
                     console.log(`Attempt ${retryCount + 1}: Fetching final tweets for ${profile.name}...`, {
                       url: `/api/tweets/${profile.name}/all`,
-                      profileData: profile,
-                      currentTweetCount: tweets.length
+                      currentTweets: tweets.length
                     });
 
                     const finalResponse = await fetch(`/api/tweets/${profile.name}/all`, {
@@ -755,20 +756,25 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     });
  
                     if (finalResponse.ok) {
-                      const finalTweets = await finalResponse.json();
-                      if (Array.isArray(finalTweets) && finalTweets.length > 0) {
-                        console.log('Completion signal: Successfully fetched tweets:', {
-                          fetchedCount: finalTweets.length,
-                          firstTweet: finalTweets[0]?.id,
-                          lastTweet: finalTweets[finalTweets.length - 1]?.id
+                      const fetchedTweets = await finalResponse.json();
+                      
+                      // Only consider it a success if we got tweets and count is >= current count
+                      if (Array.isArray(fetchedTweets) && fetchedTweets.length >= tweets.length) {
+                        console.log('Stream done: Successfully fetched tweets:', {
+                          fetchedCount: fetchedTweets.length,
+                          currentCount: tweets.length,
+                          firstId: fetchedTweets[0]?.id,
+                          lastId: fetchedTweets[fetchedTweets.length - 1]?.id
                         });
-                        onTweetsUpdate(finalTweets);
+                        
+                        finalTweets = fetchedTweets;
                         break;  // Success - exit retry loop
                       }
-                      console.log('Response OK but no tweets:', {
+                      
+                      console.log('Response OK but tweets not ready:', {
                         responseStatus: finalResponse.status,
-                        finalTweetsArray: Array.isArray(finalTweets),
-                        finalTweetsLength: finalTweets?.length
+                        fetchedCount: fetchedTweets?.length || 0,
+                        currentCount: tweets.length
                       });
                     }
                     else {
@@ -780,32 +786,66 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     }
  
                     retryCount++;
-                    console.log(`Attempt ${retryCount} failed, ${maxRetries - retryCount} attempts remaining`);
+                    if (retryCount < maxRetries) {
+                      console.log(`Attempt ${retryCount} failed, ${maxRetries - retryCount} attempts remaining`);
+                    }
                   }
   
-                  if (retryCount >= maxRetries) {
+                  if (retryCount >= maxRetries && !finalTweets) {
                     throw new Error('Failed to fetch tweets after maximum retries');
                   }
+
+                  // Only update UI if we got final tweets
+                  if (finalTweets) {
+                    // Update tweets in UI
+                    onTweetsUpdate(finalTweets);
+                    
+                    // Set completion states
+                    setScanProgress({
+                      phase: 'complete',
+                      count: finalTweets.length,
+                      message: `Collection complete! ${finalTweets.length} tweets collected.`
+                    });
+                  } else {
+                    // If no final tweets, keep current count but mark as complete
+                    setScanProgress({
+                      phase: 'complete',
+                      count: tweets.length,
+                      message: `Collection complete! ${tweets.length} tweets collected.`
+                    });
+                  }
+
+                  // Set final states regardless of final tweet fetch
+                  setLoading(false);
+                  setShowComplete(true);
+                  setShowAnalysisPrompt(true);
+                  setScrapingStartTime(null);
+                  setAbortController(null);
+                  
+                  console.log('Set completion states:', { 
+                    loading: false, 
+                    showComplete: true, 
+                    scanProgress: 'complete', 
+                    tweetCount: finalTweets?.length || tweets.length 
+                  });
                 } catch (error) {
                   console.error('Completion signal: Error fetching final tweets:', error);
-                  setError('Failed to fetch final tweets. Please refresh the page.');
+                  
+                  // Even on error, we should complete the process with current tweets
+                  setScanProgress({
+                    phase: 'complete',
+                    count: tweets.length,
+                    message: `Collection complete! ${tweets.length} tweets collected.`
+                  });
+                  setLoading(false);
+                  setShowComplete(true);
+                  setShowAnalysisPrompt(true);
+                  setScrapingStartTime(null);
+                  setAbortController(null);
                 }
-
-                setLoading(false);
-                setShowComplete(true);
-                setShowAnalysisPrompt(true);
-                setScrapingStartTime(null);
-                setAbortController(null);
-                
-                // Ensure we have the final tweet count
-                setScanProgress({
-                  phase: 'complete',
-                  count: data.totalTweets || scanProgress?.count || 0,
-                  message: `Collection complete! ${data.totalTweets || scanProgress?.count || 0} tweets collected.`
-                });
                 
                 reader.cancel();
-                break;
+                return;
               }
             } catch (err) {
               console.error('Failed to parse:', line, err);
@@ -1773,63 +1813,18 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
 
           <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-4 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[50vh] sm:max-h-[45vh] md:max-h-[40vh] relative touch-action-pan-y">
             <div className="space-y-2 w-full">
-              {/* Progress Status - Moved here */}
-              {loading && (
-                <div className="mb-4 p-3 bg-black/20 border border-red-500/10 rounded-lg backdrop-blur-sm">
-                  <div className="flex items-center gap-2 text-red-500/60">
-                    <div className="flex items-center gap-1 flex-none">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20 glow-box" />
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-100 shadow-lg shadow-red-500/20 glow-box" />
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-200 shadow-lg shadow-red-500/20 glow-box" />
-                    </div>
-                    {scanProgress && (
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <span className="uppercase tracking-wider text-xs glow-text truncate">
-                          {scanProgress.message || `${scanProgress.phase === 'posts' ? 'SCANNING POSTS' : 'SCANNING REPLIES'}: ${scanProgress.count} TWEETS COLLECTED`}
-                        </span>
-                        {scrapingElapsedTime && (
-                          <span className="text-xs text-red-500/40 glow-text truncate flex-none">
-                            [{scrapingElapsedTime}]
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {tweets.length === 0 && (
+              {tweets.length === 0 ? (
                 <div className="text-red-500/50 italic glow-text">
-                  {'>'} Awaiting data collection initialization...
+                  {'>'} {loading ? 'Fetching data...' : 'Awaiting data collection initialization...'}
                 </div>
-              )}
-
-              {tweets.map((tweet, index) => (
-                <div 
-                  key={tweet.id} 
-                  className="text-red-400/80 flex gap-3 hover:bg-red-500/5 transition-all duration-300 py-2 px-3 rounded backdrop-blur-sm border border-transparent hover:border-red-500/10 hover-glow float"
-                >
-                  <div className="text-red-500/50 select-none font-bold glow-text">[{String(index + 1).padStart(4, '0')}]</div>
-                  
-                  <div className="flex-1">
-                    <div className="text-red-300/90 hover-text-glow">{tweet.text}</div>
-                    <div className="text-red-500/40 text-xs flex items-center gap-2 mt-1.5">
-                      <span>{tweet.timestamp && new Date(tweet.timestamp).toLocaleString()}</span>
-                      {tweet.isReply && (
-                        <>
-                          <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box" />
-                          <span className="glow-text">REPLY</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              {tweets.length > 0 && (
-                <div className="mt-6 pt-4 border-t border-red-500/10 text-red-500/60 backdrop-blur-sm glow-border">
-                  {'>'} Collection Stats: {tweets.length} posts
-                </div>
+              ) : (
+                <TweetList
+                  username={profile.name || ''}
+                  includeReplies={true}
+                  className="flex-1"
+                  isScrapingActive={loading}
+                  scrapingProgress={scanProgress}
+                />
               )}
             </div>
           </div>
@@ -2282,6 +2277,8 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 username={profile.name || ''}
                 includeReplies={true}
                 className="flex-1"
+                isScrapingActive={loading}
+                scrapingProgress={scanProgress}
               />
             )}
           </div>
