@@ -1,7 +1,10 @@
 export interface TwitterAPITweet {
   id: string;
   text: string;
-  createdAt: string;  // Format: "Tue Dec 10 07:00:30 +0000 2024"
+  /** Twitter date format: "Day Mon DD HH:mm:ss +0000 YYYY" (e.g. "Mon Dec 23 11:27:55 +0000 2024") */
+  createdAt: string;
+  /** ISO format timestamp (legacy field, may not be present) */
+  timestamp?: string;
   url: string;
   isReply: boolean;
   conversationId?: string;

@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const pathParts = url.pathname.split('/');
     const username = pathParts[pathParts.indexOf('tweets') + 1];
 
-    // Validate session
+    // Validate session first
     const session = await getServerSession(authOptions)
     if (!session?.username) {
       return NextResponse.json(
@@ -27,11 +27,25 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Now we can use session in our logging
+    console.log('API Route: Fetching tweets for username:', {
+      requestUrl: request.url,
+      pathParts,
+      extractedUsername: username,
+      sessionUsername: session?.username
+    });
+
     // Initialize database
     const db = await initDB()
 
     // Get user by username
     const user = await db.getUserByUsername(username)
+    console.log('API Route: User lookup result:', {
+      username,
+      userFound: !!user,
+      userId: user?.id
+    });
+
     if (!user) {
       return NextResponse.json(
         { error: 'User not found' },
@@ -43,6 +57,12 @@ export async function GET(request: NextRequest) {
     const tweets = await db.getTweetsByUserId(user.id, {
       includeReplies: true
     })
+    console.log('API Route: Fetched tweets:', {
+      userId: user.id,
+      tweetCount: tweets.length,
+      firstTweetId: tweets[0]?.id,
+      lastTweetId: tweets[tweets.length - 1]?.id
+    });
 
     // Create cache headers
     const headers = new Headers()

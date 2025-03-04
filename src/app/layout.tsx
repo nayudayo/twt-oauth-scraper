@@ -1,13 +1,14 @@
+import type { Metadata } from 'next';
 import './globals.css'
 import { Inter } from 'next/font/google'
-import { NextAuthProvider } from './providers'
+import { Providers } from './providers'
 import { Header } from '@/components/Header'
 
 const inter = Inter({ subsets: ['latin'] })
 
-export const metadata = {
-  title: 'PTB Terminal | Askance',
-  description: 'what are we?',
+export const metadata: Metadata = {
+  title: 'Twitter Analysis',
+  description: 'Analyze Twitter profiles and tweets',
 }
 
 export default function RootLayout({
@@ -22,7 +23,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body className={inter.className}>
-        <NextAuthProvider>
+        <Providers>
           <div className="min-h-screen bg-black text-red-500/90">
             <Header />
             <main className="pt-12">
@@ -31,7 +32,7 @@ export default function RootLayout({
             <div className="scanline" />
             <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_50%,rgba(239,68,68,0.05),transparent_100%)]" />
           </div>
-        </NextAuthProvider>
+        </Providers>
       </body>
     </html>
   )

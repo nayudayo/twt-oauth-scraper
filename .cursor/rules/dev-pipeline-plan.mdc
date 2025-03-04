@@ -1,6 +1,7 @@
 ---
-description: this is the format for the .md plans
+description: This format standardizes how we document implementation plans across the project, ensuring consistency and clarity in technical documentation.
 globs: *.md
+alwaysApply: false
 ---
 # Development Pipeline Plan Format
 

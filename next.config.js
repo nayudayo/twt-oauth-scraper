@@ -25,9 +25,6 @@ const nextConfig = {
     ]
   },
   reactStrictMode: true,
-  swcMinify: true,
-  // Add optimization for CSS
-  optimizeFonts: true,
   // Ensure CSS modules are properly handled
   webpack(config) {
     return config;

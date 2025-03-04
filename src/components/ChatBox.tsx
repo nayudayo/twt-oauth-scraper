@@ -9,6 +9,7 @@ import Image from 'next/image'
 import { ConversationList } from './ConversationList'
 import { usePersonalityCache } from '@/hooks/usePersonalityCache';
 import { CacheStatusIndicator } from './CacheStatusIndicator';
+import { TweetList } from './TweetList';
 
 interface ChatBoxProps {
   tweets: Tweet[]
@@ -39,7 +40,8 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   const [messages, setMessages] = useState<Array<{text: string, isUser: boolean}>>([])
   const [input, setInput] = useState('')
   const [analysis, setAnalysis] = useState<PersonalityAnalysis | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(false) // For data fetching
+  const [isChatLoading, setIsChatLoading] = useState(false) // For chat responses
   const [error, setError] = useState<string | null>(null)
   const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null)
   const [showConsent, setShowConsent] = useState(false)
@@ -241,7 +243,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
   }
 
   const generatePersonalityResponse = async (userMessage: string) => {
-    setLoading(true)
+    setIsChatLoading(true) // Use chat-specific loading state
     setError(null)
     try {
       setIsTyping(true)
@@ -293,13 +295,13 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
       setError(err instanceof Error ? err.message : 'Failed to get response')
       return null
     } finally {
-      setLoading(false)
+      setIsChatLoading(false) // Clear chat loading state
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim() || loading) return
+    if (!input.trim() || isChatLoading) return // Use chat loading state here
 
     const userMessage = input.trim()
     setInput('')
@@ -497,74 +499,30 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
 
   // Add handlers for terminal session
   const handleScrape = async () => {
+    // Show consent modal first
     setShowConsent(true)
   }
 
-  const handleCancelScraping = useCallback(async () => {
-    if (abortController) {
-      console.log('Aborting scraping process...')
-      try {
-      abortController.abort()
-      setAbortController(null)
-    setLoading(false)
-    setScanProgress(null)
-    setShowComplete(false)
-        setScrapingStartTime(null)
-        // Only set error if this was a user-initiated cancellation
-        if (!abortController.signal.aborted) {
-        setError('Operation cancelled by user')
-        }
-      } catch (error) {
-        console.error('Error during abort:', error)
-        setError('Failed to cancel operation')
-      }
-    }
-  }, [abortController])
-
-  const handleClearData = async () => {
-    if (!profile.name) {
-      setError('Profile name is required');
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/tweets/clear', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          username: profile.name,
-          timestamp: Date.now() 
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to clear tweets from database');
-      }
-
-      // Only clear tweets from state, don't close the chat box
-      onTweetsUpdate([]); 
-      setAnalysis(null);
-      setScanProgress(null);
-      setShowAnalysisPrompt(false);
+  // Handle tweet updates from scraping
+  const handleTweetUpdate = (newTweets: Tweet[]) => {
+    console.log('handleTweetUpdate called with tweets:', newTweets.length)
+    if (Array.isArray(newTweets)) {
+      const validTweets = newTweets.filter((t: unknown): t is Tweet => Boolean(t))
+      console.log('Updating tweets in UI with valid tweets:', validTweets.length)
       
-      // Show success message
-      setError('Tweet data cleared successfully');
-    } catch (error) {
-      console.error('Error clearing tweets:', error);
-      setError(error instanceof Error ? error.message : 'Failed to clear tweet data');
+      // Ensure state updates are processed in order
+      Promise.resolve().then(() => {
+        onTweetsUpdate(validTweets)
+        setScanProgress(prev => {
+          const newProgress = {
+            phase: prev?.phase || 'posts',
+            count: validTweets.length
+          }
+          console.log('Updating scan progress:', newProgress)
+          return newProgress
+        })
+      })
     }
-  }
-
-  const handleCloseModal = () => {
-    console.log('Closing modal - Current states:', { loading, showComplete })
-    if (loading) {
-      console.log('Closing modal and cancelling scraping...')
-      handleCancelScraping()
-    }
-    setShowComplete(false)
-    console.log('Modal closed - showComplete set to false')
   }
 
   const startScraping = async () => {
@@ -630,15 +588,22 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
           console.log('Stream complete')
           try {
             // Fetch final tweets after stream completes
-            console.log(`Making final API call to /api/tweets/${profile.name}/all`);
-            const fetchTweetsResponse = await fetch(`/api/tweets/${profile.name}/all`);
+            console.log('Stream done: Attempting to fetch final tweets...');
+            const fetchTweetsResponse = await fetch(`/api/tweets/${profile.name}/all`, {
+              credentials: 'include'
+            });
             
             if (!fetchTweetsResponse.ok) {
+              console.error('Stream done: Failed to fetch tweets:', fetchTweetsResponse.status);
               throw new Error(`Failed to fetch tweets: ${fetchTweetsResponse.status}`);
             }
 
             const finalTweets = await fetchTweetsResponse.json();
-            console.log(`Successfully fetched ${finalTweets.length} tweets`);
+            console.log('Stream done: Successfully fetched tweets:', {
+              count: finalTweets.length,
+              firstId: finalTweets[0]?.id,
+              lastId: finalTweets[finalTweets.length - 1]?.id
+            });
             
             if (Array.isArray(finalTweets) && finalTweets.length > 0) {
               // Update tweets in UI first
@@ -693,10 +658,12 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                 return;
               }
 
-              if (data.progress) {
+              // Handle progress updates
+              if (data.scanProgress) {
                 setScanProgress({
-                  phase: data.phase || 'posts',
-                  count: data.scanProgress?.count || 0
+                  phase: data.scanProgress.phase,
+                  count: data.scanProgress.count,
+                  message: data.scanProgress.message
                 });
               }
 
@@ -715,7 +682,8 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   if (data.scanProgress) {
                     setScanProgress({
                       phase: data.scanProgress.phase,
-                      count: data.totalTweets || data.scanProgress.count
+                      count: data.totalTweets || data.scanProgress.count,
+                      message: data.scanProgress.message
                     });
                   }
 
@@ -737,7 +705,9 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     }
 
                     // Immediately fetch and update UI after each batch save
-                    const fetchResponse = await fetch(`/api/tweets/${profile.name}/all`);
+                    const fetchResponse = await fetch(`/api/tweets/${profile.name}/all`, {
+                      credentials: 'include'
+                    });
                     if (!fetchResponse.ok) {
                       throw new Error('Failed to fetch tweets');
                     }
@@ -751,20 +721,74 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                   } catch (error) {
                     console.error('Error updating frontend during scraping:', error);
                   }
-                } else {
-                  // For non-chunked updates, just update progress
-                  if (data.scanProgress) {
-                    setScanProgress({
-                      phase: data.scanProgress.phase,
-                      count: data.tweets.length
-                    });
-                  }
                 }
               }
 
               // Handle explicit completion signal if received
               if (data.type === 'complete' && data.username === profile.name) {
-                console.log('Received explicit completion signal');
+                console.log('Completion signal: Starting final data fetch...', {
+                  profileName: profile.name,
+                  dataUsername: data.username,
+                  match: data.username === profile.name
+                });
+                
+                // Add retry mechanism for final fetch
+                let retryCount = 0;
+                const maxRetries = 3;
+                const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+ 
+                try {
+                  while (retryCount < maxRetries) {
+                    // Add delay before fetching (increasing with each retry)
+                    await delay(2000 * (retryCount + 1));  // 2s, 4s, 6s delays
+                    
+                    console.log(`Attempt ${retryCount + 1}: Fetching final tweets for ${profile.name}...`, {
+                      url: `/api/tweets/${profile.name}/all`,
+                      profileData: profile,
+                      currentTweetCount: tweets.length
+                    });
+
+                    const finalResponse = await fetch(`/api/tweets/${profile.name}/all`, {
+                      credentials: 'include'
+                    });
+ 
+                    if (finalResponse.ok) {
+                      const finalTweets = await finalResponse.json();
+                      if (Array.isArray(finalTweets) && finalTweets.length > 0) {
+                        console.log('Completion signal: Successfully fetched tweets:', {
+                          fetchedCount: finalTweets.length,
+                          firstTweet: finalTweets[0]?.id,
+                          lastTweet: finalTweets[finalTweets.length - 1]?.id
+                        });
+                        onTweetsUpdate(finalTweets);
+                        break;  // Success - exit retry loop
+                      }
+                      console.log('Response OK but no tweets:', {
+                        responseStatus: finalResponse.status,
+                        finalTweetsArray: Array.isArray(finalTweets),
+                        finalTweetsLength: finalTweets?.length
+                      });
+                    }
+                    else {
+                      console.error('Failed response:', {
+                        status: finalResponse.status,
+                        statusText: finalResponse.statusText,
+                        url: finalResponse.url
+                      });
+                    }
+ 
+                    retryCount++;
+                    console.log(`Attempt ${retryCount} failed, ${maxRetries - retryCount} attempts remaining`);
+                  }
+  
+                  if (retryCount >= maxRetries) {
+                    throw new Error('Failed to fetch tweets after maximum retries');
+                  }
+                } catch (error) {
+                  console.error('Completion signal: Error fetching final tweets:', error);
+                  setError('Failed to fetch final tweets. Please refresh the page.');
+                }
+
                 setLoading(false);
                 setShowComplete(true);
                 setShowAnalysisPrompt(true);
@@ -801,6 +825,86 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     }
   }
 
+  // Replace with a more focused effect for handling completion
+  useEffect(() => {
+    if (showComplete) {
+      console.log('Completion modal shown - current states:', { loading, showComplete, scanProgress })
+    }
+  }, [showComplete, loading, scanProgress])
+
+  // Handle modal close
+  const handleCloseModal = () => {
+    setShowComplete(false)
+  }
+
+  // Add auto-scroll effect
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages, isTyping])
+
+  const handleCancelScraping = useCallback(async () => {
+    if (abortController) {
+      console.log('Aborting scraping process...')
+      try {
+      abortController.abort()
+      setAbortController(null)
+    setLoading(false)
+    setScanProgress(null)
+    setShowComplete(false)
+        setScrapingStartTime(null)
+        // Only set error if this was a user-initiated cancellation
+        if (!abortController.signal.aborted) {
+        setError('Operation cancelled by user')
+        }
+      } catch (error) {
+        console.error('Error during abort:', error)
+        setError('Failed to cancel operation')
+      }
+    }
+  }, [abortController])
+
+  const handleClearData = async () => {
+    if (!profile.name) {
+      setError('Profile name is required');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/tweets/clear', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          username: profile.name,
+          timestamp: Date.now() 
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to clear tweets from database');
+      }
+
+      // Only clear tweets from state, don't close the chat box
+      onTweetsUpdate([]); 
+      setAnalysis(null);
+      setScanProgress(null);
+      setShowAnalysisPrompt(false);
+      
+      // Show success message
+      setError('Tweet data cleared successfully');
+    } catch (error) {
+      console.error('Error clearing tweets:', error);
+      setError(error instanceof Error ? error.message : 'Failed to clear tweet data');
+    }
+  }
+
+
+
   useEffect(() => {
     // Load existing tweets for this user when component mounts
     const loadExistingTweets = async () => {
@@ -832,38 +936,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     };
 
     loadExistingTweets();
-  }, [profile.name]); // Reload when profile changes
-
-  // Handle tweet updates from scraping
-  const handleTweetUpdate = (newTweets: Tweet[]) => {
-    console.log('handleTweetUpdate called with tweets:', newTweets.length)
-    if (Array.isArray(newTweets)) {
-      const validTweets = newTweets.filter((t: unknown): t is Tweet => Boolean(t))
-      console.log('Updating tweets in UI with valid tweets:', validTweets.length)
-      
-      // Ensure state updates are processed in order
-      Promise.resolve().then(() => {
-        onTweetsUpdate(validTweets)
-        setScanProgress(prev => {
-          const newProgress = {
-            phase: prev?.phase || 'posts',
-            count: validTweets.length
-          }
-          console.log('Updating scan progress:', newProgress)
-          return newProgress
-        })
-      })
-    }
-  }
-
-  // Add auto-scroll effect
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages, isTyping])
+  }, [profile.name, onTweetsUpdate]); // Add onTweetsUpdate to dependencies
 
   // Handle text input with Shift+Enter
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -893,13 +966,6 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     setAnalysis(null);
     await handleAnalyze();
   };
-
-  // Replace with a more focused effect for handling completion
-  useEffect(() => {
-    if (showComplete) {
-      console.log('Completion modal shown - current states:', { loading, showComplete, scanProgress })
-    }
-  }, [showComplete, loading, scanProgress])
 
   // Load conversations and personality cache on mount
   useEffect(() => {
@@ -970,7 +1036,7 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
     };
 
     loadInitialData();
-  }, [profile.name]); // Remove personalityCache from dependencies
+  }, [profile.name, personalityCache]); // Add personalityCache back to dependencies
 
   // Remove the old separate loading effects
   // ... existing code ...
@@ -1160,16 +1226,16 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Enter your message... (Shift+Enter for new line)"
-                    disabled={loading}
+                    disabled={isChatLoading}
                     rows={1}
                     className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-2 md:px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow disabled:opacity-50 resize-none min-h-[38px] max-h-[200px] overflow-y-auto custom-scrollbar"
                   />
                   <button
                     type="submit"
-                    disabled={!input.trim() || loading}
+                    disabled={!input.trim() || isChatLoading}
                     className="px-2 md:px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow min-w-[60px] md:min-w-[80px] h-[38px]"
                   >
-                    {loading ? (
+                    {isChatLoading ? (
                       <Spinner size="sm" />
                     ) : (
                       'Send'
@@ -2172,74 +2238,45 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-6 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[50vh] sm:max-h-[45vh] md:max-h-[40vh] relative touch-action-pan-y">
-              <div className="space-y-2 w-full">
-                {/* Progress Status - Moved here */}
-                {loading && (
-                  <div className="mb-4 p-3 bg-black/20 border border-red-500/10 rounded-lg backdrop-blur-sm">
-                    <div className="flex items-center gap-2 text-red-500/60">
-                      <div className="flex items-center gap-1 flex-none">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20 glow-box" />
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-100 shadow-lg shadow-red-500/20 glow-box" />
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-200 shadow-lg shadow-red-500/20 glow-box" />
-                      </div>
-                      {scanProgress && (
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <span className="uppercase tracking-wider text-xs glow-text truncate">
-                            {scanProgress.message || `${scanProgress.phase === 'posts' ? 'SCANNING POSTS' : 'SCANNING REPLIES'}: ${scanProgress.count} TWEETS COLLECTED`}
-                          </span>
-                          {scrapingElapsedTime && (
-                            <span className="text-xs text-red-500/40 glow-text truncate flex-none">
-                              [{scrapingElapsedTime}]
-                            </span>
-                          )}
-                        </div>
+            {/* Progress Status */}
+            {loading && (
+              <div className="p-3 bg-black/20 border-b border-red-500/10 backdrop-blur-sm">
+                <div className="flex items-center gap-2 text-red-500/60">
+                  <div className="flex items-center gap-1 flex-none">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20 glow-box" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-100 shadow-lg shadow-red-500/20 glow-box" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse delay-200 shadow-lg shadow-red-500/20 glow-box" />
+                  </div>
+                  {scanProgress && (
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="uppercase tracking-wider text-xs glow-text truncate">
+                        {scanProgress.message || `${scanProgress.phase === 'posts' ? 'SCANNING POSTS' : 'SCANNING REPLIES'}: ${scanProgress.count} TWEETS COLLECTED`}
+                      </span>
+                      {scrapingElapsedTime && (
+                        <span className="text-xs text-red-500/40 glow-text truncate flex-none">
+                          [{scrapingElapsedTime}]
+                        </span>
                       )}
                     </div>
-                  </div>
-                )}
-
-                {tweets.length === 0 ? (
-                  <div className="text-red-500/50 italic glow-text">
-                    {'>'} {loading ? 'Fetching data...' : 'Awaiting data collection initialization...'}
-                  </div>
-                ) : (
-                  <>
-                    {tweets.map((tweet, index) => (
-                      <div 
-                        key={`${tweet.id}-${index}`}
-                        className="text-red-400/80 flex gap-3 hover:bg-red-500/5 transition-all duration-300 py-2 px-3 rounded backdrop-blur-sm border border-transparent hover:border-red-500/10 hover-glow float"
-                      >
-                        <div className="text-red-500/50 select-none font-bold glow-text">
-                          [{String(index + 1).padStart(4, '0')}]
-                        </div>
-                  
-                        <div className="flex-1">
-                          <div className="text-red-300/90 hover-text-glow break-words">
-                            {tweet.text}
-                          </div>
-                          <div className="text-red-500/40 text-xs flex items-center gap-2 mt-1.5">
-                            <span>
-                              {tweet.timestamp && new Date(tweet.timestamp).toLocaleString()}
-                            </span>
-                            {tweet.isReply && (
-                              <>
-                                <div className="w-1 h-1 rounded-full bg-red-500/20 glow-box" />
-                                <span className="glow-text">REPLY</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-
-                    <div className="mt-6 pt-4 border-t border-red-500/10 text-red-500/60 backdrop-blur-sm glow-border">
-                      {'>'} Collection Stats: {tweets.length} posts
-                    </div>
-                  </>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* Tweet List */}
+            {tweets.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-red-500/50 italic glow-text">
+                  {'>'} {loading ? 'Fetching data...' : 'Awaiting data collection initialization...'}
+                </div>
+              </div>
+            ) : (
+              <TweetList
+                username={profile.name || ''}
+                includeReplies={true}
+                className="flex-1"
+              />
+            )}
           </div>
 
           {/* Personality Analysis Panel - Bottom Half */}
@@ -2534,16 +2571,16 @@ export default function ChatBox({ tweets, profile, onClose, onTweetsUpdate }: Ch
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={handleKeyDown}
                       placeholder="Enter your message... (Shift+Enter for new line)"
-                      disabled={loading}
+                      disabled={isChatLoading}
                       rows={1}
                       className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-2 md:px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow disabled:opacity-50 resize-none min-h-[38px] max-h-[200px] overflow-y-auto custom-scrollbar"
                     />
                     <button
                       type="submit"
-                      disabled={!input.trim() || loading}
+                      disabled={!input.trim() || isChatLoading}
                       className="px-2 md:px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow min-w-[60px] md:min-w-[80px] h-[38px]"
                     >
-                      {loading ? (
+                      {isChatLoading ? (
                         <Spinner size="sm" />
                       ) : (
                         'Send'

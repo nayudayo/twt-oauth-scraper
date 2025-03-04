@@ -73,33 +73,13 @@ async function runTwitterScraper() {
         includeReplies: true
       });
 
-      // Transform tweets and ensure proper date handling
+      // Transform tweets using the transformer to ensure consistent date handling
       const transformedTweets = response.tweets
-        .filter(tweet => tweet.createdAt) // Only include tweets with valid timestamps
-        .map(tweet => {
-          // Ensure proper date handling
-          let createdAt: string;
-          try {
-            const date = new Date(tweet.createdAt);
-            if (isNaN(date.getTime())) {
-              console.warn('Invalid date format received:', tweet.createdAt);
-              createdAt = new Date().toISOString();
-            } else {
-              createdAt = date.toISOString();
-            }
-          } catch (error) {
-            console.error('Error parsing tweet date:', error);
-            createdAt = new Date().toISOString();
-          }
+        .filter(tweet => tweet.id) // Only filter out tweets without IDs
+        .map(tweet => TwitterDataTransformer.toTweet(tweet));
 
-          return {
-            ...tweet,
-            createdAt
-          };
-        });
-
-      // Add to collection
-      allTweets.push(...transformedTweets);
+      // Add transformed tweets to collection
+      allTweets.push(...response.tweets.filter(tweet => tweet.id));
       totalProcessed += transformedTweets.length;
 
       // Calculate remaining tweets to collect
@@ -169,7 +149,7 @@ async function runTwitterScraper() {
       throw new Error('Failed to create user profile');
     }
 
-    // Convert tweets to database format
+    // Convert tweets to database format using transformer
     const dbTweets: DBTweet[] = allTweets.map(tweet => TwitterDataTransformer.toDBTweet(tweet, user.id));
 
     // Save tweets in batches

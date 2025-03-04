@@ -421,51 +421,85 @@ export class TwitterAPIClient {
     userName?: string;
     includeReplies?: boolean;
     maxRetries?: number;
-    onProgress?: (progress: { collected: number, hasMore: boolean }) => void;
+    maxTweets?: number;
+    onProgress?: (progress: { collected: number, hasMore: boolean, remainingQuota?: number }) => void;
   }): Promise<TwitterAPITweet[]> {
     const allTweets: TwitterAPITweet[] = [];
     let hasNextPage = true;
     let nextCursor: string | undefined;
     let totalCollected = 0;
+    const tweetLimit = params.maxTweets || 500; // Default to 500 tweets if not specified
+    let reachedEndOfTweets = false;
 
-    console.log('Starting tweet collection for:', params.userName || params.userId);
+    console.log('Starting tweet collection for:', params.userName || params.userId, 'with limit:', tweetLimit);
 
-    while (hasNextPage) {
+    while (hasNextPage && totalCollected < tweetLimit) {
       const response = await this.getUserTweets({
         ...params,
         cursor: nextCursor
       });
 
-      allTweets.push(...response.tweets);
-      totalCollected += response.tweets.length;
+      // Check if we've reached the end of available tweets
+      if (!response.hasNextPage || response.tweets.length === 0) {
+        reachedEndOfTweets = true;
+      }
+
+      // Calculate how many tweets we can still add without exceeding the limit
+      const remainingQuota = tweetLimit - totalCollected;
+      const tweetsToAdd = response.tweets.slice(0, remainingQuota);
+      
+      allTweets.push(...tweetsToAdd);
+      totalCollected += tweetsToAdd.length;
 
       console.log('Collection progress:', {
-        batchSize: response.tweets.length,
+        batchSize: tweetsToAdd.length,
         totalCollected,
-        hasMore: response.hasNextPage,
-        nextCursor: response.nextCursor
+        remainingQuota: tweetLimit - totalCollected,
+        hasMore: response.hasNextPage && totalCollected < tweetLimit,
+        nextCursor: response.nextCursor,
+        reachedEndOfTweets: !response.hasNextPage || response.tweets.length === 0
       });
 
       // Update progress if callback provided
       if (params.onProgress) {
         params.onProgress({
           collected: totalCollected,
-          hasMore: response.hasNextPage
+          hasMore: response.hasNextPage && totalCollected < tweetLimit,
+          remainingQuota: tweetLimit - totalCollected
         });
       }
 
       // Update pagination state
-      hasNextPage = response.hasNextPage;
+      hasNextPage = response.hasNextPage && totalCollected < tweetLimit;
       nextCursor = response.nextCursor;
+
+      // If we got fewer tweets than expected in a batch, we've likely reached the end
+      if (response.tweets.length < 20) {
+        console.log('Received partial batch:', {
+          expectedBatchSize: 20,
+          actualBatchSize: response.tweets.length,
+          totalCollected
+        });
+        reachedEndOfTweets = true;
+      }
 
       // Optional: Add a small delay between requests to be nice to the API
       await this.wait(1000);
     }
 
+    const completionStatus = reachedEndOfTweets 
+      ? `Reached end of available tweets at ${totalCollected} tweets` 
+      : `Reached tweet limit of ${tweetLimit}`;
+
     console.log('Tweet collection completed:', {
       totalTweets: allTweets.length,
       firstTweetDate: allTweets[0]?.createdAt,
-      lastTweetDate: allTweets[allTweets.length - 1]?.createdAt
+      lastTweetDate: allTweets[allTweets.length - 1]?.createdAt,
+      reachedLimit: totalCollected >= tweetLimit,
+      reachedEndOfTweets,
+      completionReason: completionStatus,
+      expectedBatches: Math.ceil(tweetLimit / 20),
+      actualBatches: Math.ceil(totalCollected / 20)
     });
 
     return allTweets;
