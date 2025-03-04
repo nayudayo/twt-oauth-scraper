@@ -23,7 +23,13 @@ interface TerminalLine {
 export function TerminalModal({ onComplete }: TerminalModalProps) {
   const { data: session } = useSession()
   const [input, setInput] = useState('')
-  const [lines, setLines] = useState<TerminalLine[]>([{ content: SYSTEM_MESSAGES.BOOT }])
+  const [lines, setLines] = useState<TerminalLine[]>([
+    { content: SYSTEM_MESSAGES.BOOT },
+    { 
+      content: `\n[SYSTEM] Next required command: ${REQUIRED_COMMANDS[0].command}`,
+      isSystem: true 
+    }
+  ])
   const [currentCommandIndex, setCurrentCommandIndex] = useState(0)
   const [showCursor, setShowCursor] = useState(true)
   const [isLoading, setIsLoading] = useState(false)

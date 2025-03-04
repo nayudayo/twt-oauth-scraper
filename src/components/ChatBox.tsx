@@ -1145,10 +1145,13 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
   // Update the tweet saving logic
   const saveTweetsToDb = async (tweetsToSave: Tweet[]) => {
     try {
-      await fetch('/api/tweets', {
+      await fetch('/api/tweets/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tweets: tweetsToSave })
+        body: JSON.stringify({ 
+          username: profile.name,
+          tweets: tweetsToSave 
+        })
       })
     } catch (error) {
       console.warn('Failed to save tweets to database:', error)

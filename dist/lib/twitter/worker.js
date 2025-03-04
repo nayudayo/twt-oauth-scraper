@@ -75,10 +75,15 @@ async function runTwitterScraper() {
                 progress: Math.min(80, 20 + Math.floor((totalProcessed / maxTweets) * 60)),
                 status: `Collecting tweets (${totalProcessed}/${Math.min(maxTweets, totalProcessed + remainingTweets)})...`,
                 phase: 'posts',
-                scanProgress: { phase: 'posts', count: totalProcessed },
+                scanProgress: {
+                    phase: 'posts',
+                    count: totalProcessed,
+                    total: maxTweets
+                },
                 tweets: transformedTweets,
                 isChunk: true,
-                chunkIndex: allTweets.length
+                chunkIndex: allTweets.length,
+                totalTweets: maxTweets
             });
             // Get metrics for monitoring
             const metrics = client.getMetrics(`/user/tweets?userName=${targetUsername}`);
