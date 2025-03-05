@@ -861,6 +861,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
         const existingTweets = await response.json();
         if (Array.isArray(existingTweets)) {
           const validTweets = existingTweets.filter((t: unknown): t is Tweet => Boolean(t));
+          setAccumulatedTweets(validTweets); // Add this line to set accumulated tweets
           onTweetsUpdate(validTweets);
           
           if (validTweets.length > 0) {
@@ -885,6 +886,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     // Load existing tweets and handle initial tweets
     const initializeTweets = async () => {
       if (initialTweets.length > 0) {
+        setAccumulatedTweets(initialTweets); // Add this line to set accumulated tweets
         onTweetsUpdate(initialTweets);
       } else {
         await loadExistingTweets();
@@ -892,7 +894,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     };
 
     initializeTweets();
-  }, [profile.name, initialTweets, onTweetsUpdate]); // Include all dependencies
+  }, [profile.name, initialTweets, onTweetsUpdate, isLoadingTweets]); // Add isLoadingTweets to dependencies
 
   // Handle text input with Shift+Enter
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1120,13 +1122,6 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       console.warn('Failed to save tweets to database:', error)
     }
   }
-
-  // Initialize with initial tweets
-  useEffect(() => {
-    if (initialTweets.length > 0) {
-      onTweetsUpdate(initialTweets);
-    }
-  }, [initialTweets, onTweetsUpdate]);
 
   // Create EventSource in useEffect with cleanup
   useEffect(() => {

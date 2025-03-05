@@ -33,10 +33,39 @@ function formatDate(dateStr) {
         return new Date();
     }
 }
+// Add connection management at the top level
+process.on('exit', async () => {
+    if (db) {
+        try {
+            await db.disconnect();
+        }
+        catch (error) {
+            console.error('Error closing database on exit:', error);
+        }
+    }
+});
+let db = null;
 async function runTwitterScraper() {
     var _a;
-    let db = null;
     try {
+        // Initialize database if not already connected
+        if (!db) {
+            db = await (0, db_1.initDB)({
+                type: 'postgres',
+                host: process.env.PG_HOST,
+                port: parseInt(process.env.PG_PORT || '5432'),
+                database: process.env.PG_DATABASE,
+                user: process.env.PG_USER,
+                password: process.env.PG_PASSWORD,
+                connectionTimeoutMs: 30000,
+                maxConnections: 5,
+                minConnections: 1,
+                monitoring: {
+                    slowQueryThreshold: 5000,
+                    metricsInterval: 10000
+                }
+            });
+        }
         const { username: targetUsername, apiKey } = worker_threads_1.workerData;
         // Debug logging for API key
         console.log('Worker received API key:', {
@@ -183,22 +212,6 @@ async function runTwitterScraper() {
         if (isTerminating) {
             throw new Error('Operation cancelled by user');
         }
-        // Initialize database
-        db = await (0, db_1.initDB)({
-            type: 'postgres',
-            host: process.env.PG_HOST,
-            port: parseInt(process.env.PG_PORT || '5432'),
-            database: process.env.PG_DATABASE,
-            user: process.env.PG_USER,
-            password: process.env.PG_PASSWORD,
-            connectionTimeoutMs: 30000, // Increase timeout to 30 seconds
-            maxConnections: 5, // Limit connections for worker
-            minConnections: 1,
-            monitoring: {
-                slowQueryThreshold: 5000, // 5 seconds
-                metricsInterval: 10000 // 10 seconds
-            }
-        });
         // Create user profile with retry logic
         let retryCount = 0;
         const MAX_RETRIES = 3;
@@ -280,17 +293,6 @@ async function runTwitterScraper() {
             progress: 0
         });
         throw error;
-    }
-    finally {
-        // Ensure we always try to send a final message
-        if (db) {
-            try {
-                await db.disconnect();
-            }
-            catch (error) {
-                console.error('Error closing database:', error);
-            }
-        }
     }
 }
 // Run the scraper
