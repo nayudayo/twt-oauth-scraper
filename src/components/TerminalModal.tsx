@@ -675,8 +675,20 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
       link.href = dataUrl;
       link.click();
 
-      // Create Twitter intent URL
-      const tweetText = `come...: ${referralCode || commandResponses['GENERATE_REFERRAL']}`;
+      // Tweet text options
+      const tweetOptions = [
+        `we all fake it till we make it, but what if we didn't have to?\n${referralCode || commandResponses['GENERATE_REFERRAL']}`,
+        `be the love u've never encountered\n${referralCode || commandResponses['GENERATE_REFERRAL']}`,
+        `found the cheat codes to life\n${referralCode || commandResponses['GENERATE_REFERRAL']}`,
+        `your permission slip to be you\n${referralCode || commandResponses['GENERATE_REFERRAL']}`,
+        `finally playing my own game\n${referralCode || commandResponses['GENERATE_REFERRAL']}`
+      ];
+
+      // Randomly select a tweet text
+      const randomIndex = Math.floor(Math.random() * tweetOptions.length);
+      const tweetText = tweetOptions[randomIndex];
+      
+      // Create Twitter intent URL with randomly selected text
       const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
       
       // Open Twitter intent in new window
