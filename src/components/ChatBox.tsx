@@ -1780,7 +1780,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                 </div>
 
                 {/* Emotional Tone Section */}
-                <div className="bg-black/20 text-justify rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                <div className="bg-black/20 text-left rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
                     <span className="ancient-text text-base">Emotional Tone</span>
@@ -2457,7 +2457,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                   </div>
 
                   {/* Emotional Tone Section */}
-                  <div className="bg-black/20 text-justify rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                  <div className="bg-black/20 text-left rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                     <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
                       <span className="ancient-text">Emotional Tone</span>
