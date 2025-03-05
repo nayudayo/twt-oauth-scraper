@@ -263,11 +263,23 @@ class PostgresTweetOperations {
             client.release();
         }
     }
+    async deleteTweetsByUserId(userId) {
+        const client = await this.pool.connect();
+        try {
+            await client.query('DELETE FROM tweets WHERE user_id = $1', [userId]);
+        }
+        catch (error) {
+            if (this.isPostgresError(error)) {
+                throw errors_1.DatabaseError.fromPgError(error);
+            }
+            throw error;
+        }
+        finally {
+            client.release();
+        }
+    }
     isPostgresError(error) {
-        return (typeof error === 'object' &&
-            error !== null &&
-            'code' in error &&
-            'severity' in error);
+        return error instanceof Error && 'code' in error;
     }
 }
 exports.PostgresTweetOperations = PostgresTweetOperations;

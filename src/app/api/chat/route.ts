@@ -33,54 +33,6 @@ interface RequestBody {
   isRegeneration?: boolean
 }
 
-// Style validation function
-const validateStyle = (response: string, tuning: RequestBody['tuning'], analysis: PersonalityAnalysis): boolean => {
-  // For responses with consciousness effects, be more lenient
-  const hasConfusionMarkers = response.includes('what was I saying') || 
-                             response.includes('oh wait') || 
-                             response.includes('...') ||
-                             response.includes('?!')
-
-  // Check emoji count - be more lenient if confusion markers present
-  const emojiCount = (response.match(/[\p{Emoji}]/gu) || []).length
-  const minEmojis = hasConfusionMarkers ? 1 : 2
-  if (tuning.communicationStyle.emojiUsage > 80 && emojiCount < minEmojis) return false
-  if (tuning.communicationStyle.emojiUsage < 20 && emojiCount > 0) return false
-  
-  // Check enthusiasm - be more lenient if confusion markers present
-  const exclamationCount = (response.match(/!/g) || []).length
-  const minExclamations = hasConfusionMarkers ? 1 : 2
-  if (tuning.communicationStyle.enthusiasm > 80 && exclamationCount < minExclamations) return false
-  if (tuning.communicationStyle.enthusiasm < 20 && exclamationCount > 1) return false
-
-  // Check capitalization pattern - be more lenient with mixed case if confused
-  const upperCaseCount = (response.match(/[A-Z]/g) || []).length
-  const lowerCaseCount = (response.match(/[a-z]/g) || []).length
-  const expectedPattern = analysis.communicationStyle.patterns.capitalization
-  const actualPattern = upperCaseCount > lowerCaseCount * 2 ? 'UPPERCASE' : 
-                       lowerCaseCount > upperCaseCount * 2 ? 'lowercase' : 'mixed'
-  if (!hasConfusionMarkers && expectedPattern.toLowerCase() !== actualPattern.toLowerCase()) return false
-
-  // Check for common phrases/terms - be more lenient if confused
-  const hasCommonTerm = analysis.vocabulary.commonTerms.some(term => 
-    response.toLowerCase().includes(term.toLowerCase())
-  )
-  if (!hasConfusionMarkers && !hasCommonTerm) return false
-
-  // Check message structure - be very lenient if confused
-  if (!hasConfusionMarkers) {
-    const hasValidOpening = analysis.communicationStyle.patterns.messageStructure.opening.some(pattern =>
-      new RegExp(pattern, 'i').test(response)
-    )
-    const hasValidClosing = analysis.communicationStyle.patterns.messageStructure.closing.some(pattern =>
-      new RegExp(pattern, 'i').test(response)
-    )
-    if (!hasValidOpening && !hasValidClosing) return false
-  }
-  
-  return true
-}
-
 // Calculate dynamic temperature based on style settings
 const calculateTemperature = (tuning: RequestBody['tuning']): number => {
   const formalityTemp = tuning.communicationStyle.formality / 100
@@ -92,15 +44,12 @@ const calculateTemperature = (tuning: RequestBody['tuning']): number => {
 
 const MAX_RETRIES = 3;
 const TIMEOUT_MS = 30000; // 30 seconds
-const MIN_RESPONSE_LENGTH = 20;
-const MAX_TOKENS = 500; // Increased from 150
+const MAX_TOKENS = 500;
 
-// Add response validation
+// Basic validation - just check if we have a non-empty response
 function isValidResponse(response: string): boolean {
-  if (!response || response.length < MIN_RESPONSE_LENGTH) return false;
+  if (!response || response.length < 20) return false;
   if (response === 'Failed to generate a valid response') return false;
-  // Check for common error patterns
-  if (response.toLowerCase().includes('error') && response.toLowerCase().includes('generating')) return false;
   return true;
 }
 
@@ -259,118 +208,6 @@ function analyzeMessageStructure(tweet: string): string {
   
   return structure.join(' → ') || 'Direct statement';
 }
-
-// Update validateEnhancedStyle to use the new types
-const validateEnhancedStyle = (
-  response: string, 
-  tuning: RequestBody['tuning'], 
-  traits: PersonalityAnalysis['traits'],
-  examples: string[],
-  analysis: PersonalityAnalysis
-): boolean => {
-  // Basic style checks
-  if (!validateStyle(response, tuning, analysis)) return false;
-  
-  // Extract style elements from response
-  const responseElements = identifyStyleElements(response);
-  
-  // Extract patterns from examples
-  const examplePatterns = examples.map(example => identifyStyleElements(example));
-  
-  // Check if response matches at least some patterns from examples
-  const matchesPattern = examplePatterns.some(pattern => {
-    let matches = 0;
-    const requiredMatches = Math.ceil(Object.keys(pattern).length * 0.6);
-    
-    // Compare each element type with null-safe checks
-    if (pattern.emoji.some(e => responseElements.emoji.includes(e))) matches++;
-    if (Math.abs(pattern.enthusiasm - responseElements.enthusiasm) <= 2) matches++;
-    if (pattern.capitalization === responseElements.capitalization) matches++;
-    if (pattern.punctuation.some(p => responseElements.punctuation.includes(p))) matches++;
-    if (pattern.lineBreaks === responseElements.lineBreaks) matches++;
-    if (pattern.formality === responseElements.formality) matches++;
-    if (pattern.technicalTerms.some(t => responseElements.technicalTerms.includes(t))) matches++;
-    if (pattern.bigrams.some(b => responseElements.bigrams.includes(b))) matches++;
-    if (pattern.trigrams.some(t => responseElements.trigrams.includes(t))) matches++;
-    if (pattern.structure.some(s => responseElements.structure.includes(s))) matches++;
-    
-    return matches >= requiredMatches;
-  });
-  
-  if (!matchesPattern) {
-    console.warn('Response does not match example patterns');
-    return false;
-  }
-  
-  return true;
-};
-
-// Update validateEnhancedStyleRelaxed to use the new types
-const validateEnhancedStyleRelaxed = (
-  response: string, 
-  tuning: RequestBody['tuning'], 
-  traits: PersonalityAnalysis['traits'],
-  examples: string[],
-  analysis: PersonalityAnalysis
-): boolean => {
-  console.log('\n=== Relaxed Validation Debug Info ===');
-  console.log('Response:', response);
-  
-  // Basic style validation with full analysis
-  const basicStyleValid = validateStyle(response, tuning, analysis);
-  console.log('Basic Style Valid:', basicStyleValid);
-  
-  // Extract style elements
-  const responseElements = identifyStyleElements(response);
-  console.log('Response Elements:', styleElementsToString(responseElements));
-  
-  // If no examples, use basic validation
-  if (!examples || examples.length === 0) {
-    console.log('No examples available, using basic validation only');
-    return basicStyleValid;
-  }
-  
-  // Extract patterns from examples
-  const examplePatterns = examples.map(example => identifyStyleElements(example));
-  console.log('Example Patterns:', examplePatterns.map(styleElementsToString));
-  
-  // More lenient pattern matching (40% match required)
-  const matchesPattern = examplePatterns.some(pattern => {
-    let matches = 0;
-    const requiredMatches = Math.ceil(Object.keys(pattern).length * 0.4);
-    
-    // Compare each element type with null-safe checks
-    if (pattern.emoji.some(e => responseElements.emoji.includes(e))) matches++;
-    if (Math.abs(pattern.enthusiasm - responseElements.enthusiasm) <= 3) matches++;
-    if (pattern.capitalization === responseElements.capitalization) matches++;
-    if (pattern.punctuation.some(p => responseElements.punctuation.includes(p))) matches++;
-    if (pattern.lineBreaks === responseElements.lineBreaks) matches++;
-    if (pattern.formality === responseElements.formality) matches++;
-    if (pattern.technicalTerms.some(t => responseElements.technicalTerms.includes(t))) matches++;
-    if (pattern.bigrams.some(b => responseElements.bigrams.includes(b))) matches++;
-    if (pattern.trigrams.some(t => responseElements.trigrams.includes(t))) matches++;
-    if (pattern.structure.some(s => responseElements.structure.includes(s))) matches++;
-    
-    console.log('Pattern Matches:', matches, 'Required:', requiredMatches);
-    return matches >= requiredMatches;
-  });
-  
-  console.log('Matches Pattern:', matchesPattern);
-  
-  // Check vocabulary with reduced similarity requirement
-  const responseWords = response.toLowerCase().split(/\s+/);
-  const exampleWords = examples.flatMap(ex => ex.toLowerCase().split(/\s+/));
-  const commonWords = responseWords.filter(word => exampleWords.includes(word));
-  
-  const vocabularySimilarity = commonWords.length / responseWords.length;
-  console.log('Vocabulary Similarity:', vocabularySimilarity, 'Required: 0.2');
-  
-  const isValid = basicStyleValid && (matchesPattern || vocabularySimilarity >= 0.2);
-  console.log('Final Validation Result:', isValid);
-  console.log('=== End Debug Info ===\n');
-  
-  return isValid;
-};
 
 export async function POST(req: Request) {
   try {
@@ -575,7 +412,23 @@ Supportive Patterns:
 ${analysis.emotionalIntelligence.supportivePatterns.map(pattern => `- ${pattern}`).join('\n')}
 
 PERSONALITY FOUNDATION:
-${adjustedTraits.map(t => `- ${t.name} (${t.score}/10): ${t.explanation}${t.details ? `\n  Details: ${t.details}` : ''}${t.relatedTraits ? `\n  Related traits: ${t.relatedTraits.join(', ')}` : ''}`).join('\n')}
+${adjustedTraits.map(t => {
+  const sliderValue = tuning.traitModifiers[t.name] || 50; // Default to middle if not set
+  const intensityLabel = sliderValue === 0 ? 'None' :
+                        sliderValue <= 25 ? 'Very Low' :
+                        sliderValue <= 50 ? 'Low' :
+                        sliderValue <= 75 ? 'High' : 'Very High';
+  
+  return `- ${t.name} (${intensityLabel}):
+    Base trait: ${t.explanation}
+    Expression level: ${
+      sliderValue === 0 ? "Do not express this trait" :
+      sliderValue <= 25 ? "Show minimal signs of this trait" :
+      sliderValue <= 50 ? "Show moderate levels of this trait" :
+      sliderValue <= 75 ? "Strongly express this trait" :
+      "Very strongly express this trait"
+    }${t.details ? `\n    Details: ${t.details}` : ''}${t.relatedTraits ? `\n    Related traits: ${t.relatedTraits.join(', ')}` : ''}`
+}).join('\n')}
 
 INTERESTS & THEMES:
 Primary Interests (by weight):
@@ -586,32 +439,48 @@ ${analysis.topicsAndThemes.map(t => `- ${t}`).join('\n')}
 
 STYLE PARAMETERS:
 1. Formality (${tuning.communicationStyle.formality}/100):
-${tuning.communicationStyle.formality > 80 ? 
-  "Maintain sophisticated language while preserving authentic style" :
-  tuning.communicationStyle.formality < 20 ?
-  "Keep it very casual and relaxed" :
-  "Balance formal and informal elements"}
+${tuning.communicationStyle.formality === 0 ? 
+  "Be extremely casual and informal in your responses" :
+  tuning.communicationStyle.formality <= 25 ?
+  "Use casual, relaxed language while maintaining personality" :
+  tuning.communicationStyle.formality <= 50 ?
+  "Balance between casual and formal language" :
+  tuning.communicationStyle.formality <= 75 ?
+  "Maintain professional tone while preserving personality" :
+  "Use highly formal and sophisticated language"}
 
 2. Enthusiasm (${tuning.communicationStyle.enthusiasm}/100):
-${tuning.communicationStyle.enthusiasm > 80 ?
-  "Show high energy and excitement using enthusiasm markers" :
-  tuning.communicationStyle.enthusiasm < 20 ?
-  "Maintain reserved, calm tone" :
-  "Show moderate enthusiasm"}
+${tuning.communicationStyle.enthusiasm === 0 ?
+  "Maintain reserved and neutral tone" :
+  tuning.communicationStyle.enthusiasm <= 25 ?
+  "Show mild enthusiasm when appropriate" :
+  tuning.communicationStyle.enthusiasm <= 50 ?
+  "Express moderate enthusiasm and engagement" :
+  tuning.communicationStyle.enthusiasm <= 75 ?
+  "Show high enthusiasm and energy" :
+  "Express very high enthusiasm and excitement"}
 
 3. Technical Level (${tuning.communicationStyle.technicalLevel}/100):
-${tuning.communicationStyle.technicalLevel > 80 ?
-  "Use industry expertise and technical vocabulary" :
-  tuning.communicationStyle.technicalLevel < 20 ?
-  "Keep language simple and accessible" :
-  "Balance technical and simple terms"}
+${tuning.communicationStyle.technicalLevel === 0 ?
+  "Use basic, non-technical language" :
+  tuning.communicationStyle.technicalLevel <= 25 ?
+  "Keep technical terms simple and accessible" :
+  tuning.communicationStyle.technicalLevel <= 50 ?
+  "Balance technical and simple terms" :
+  tuning.communicationStyle.technicalLevel <= 75 ?
+  "Use advanced technical language when relevant" :
+  "Employ expert-level technical terminology"}
 
 4. Emoji Usage (${tuning.communicationStyle.emojiUsage}/100):
-${tuning.communicationStyle.emojiUsage > 80 ?
-  "Use emojis frequently for expression" :
-  tuning.communicationStyle.emojiUsage < 20 ?
-  "Avoid emojis completely" :
-  "Use emojis moderately"}
+${tuning.communicationStyle.emojiUsage === 0 ?
+  "Do not use any emojis" :
+  tuning.communicationStyle.emojiUsage <= 25 ?
+  "Use emojis very sparingly" :
+  tuning.communicationStyle.emojiUsage <= 50 ?
+  "Use emojis moderately to enhance expression" :
+  tuning.communicationStyle.emojiUsage <= 75 ?
+  "Frequently incorporate relevant emojis" :
+  "Use emojis very frequently for expression"}
 
 CONVERSATION CONTEXT:
 ${conversationHistory.length > 0 ? `
@@ -679,44 +548,16 @@ Remember: You are this person, not just describing them. Every response must mat
                   ? result.content as string 
                   : String(result)
 
-                // Debug logging
-                console.log('\n=== Response Debug Info ===')
-                console.log('Raw response:', content)
-                console.log('Consciousness config:', config)
-                console.log('Tuning:', tuning)
-                console.log('Analysis traits:', adjustedTraits)
-                console.log('Communication style:', analysis.communicationStyle)
-                console.log('Vocabulary:', analysis.vocabulary)
-
-                // First apply consciousness effects
+                // Apply consciousness effects if any
                 const processedContent = applyConsciousnessEffects(content, config)
-                console.log('After consciousness effects:', processedContent)
-
-                // Simple validation
-                if (validateStyle(processedContent, tuning, analysis) && isValidResponse(processedContent)) {
-                  console.log('Passed simple validation')
+                
+                // Basic validation for non-empty response
+                if (isValidResponse(processedContent)) {
                   resolve(processedContent)
                   return
                 }
 
-                // Try enhanced validation
-                const strictValid = validateEnhancedStyle(processedContent, tuning, adjustedTraits, analysis.exampleTweets || [], analysis)
-                if (strictValid) {
-                  console.log('Passed enhanced validation')
-                  resolve(processedContent)
-                  return
-                }
-
-                // Try relaxed validation
-                const relaxedValid = validateEnhancedStyleRelaxed(processedContent, tuning, adjustedTraits, analysis.exampleTweets || [], analysis)
-                if (relaxedValid) {
-                  console.log('Passed relaxed validation')
-                  resolve(processedContent)
-                  return
-                }
-
-                console.log('=== End Debug Info ===\n')
-                reject(new Error('Response validation failed'))
+                reject(new Error('Invalid or empty response'))
               },
               reject
             )
@@ -725,10 +566,6 @@ Remember: You are this person, not just describing them. Every response must mat
             setTimeout(() => reject(new Error('Request timeout')), TIMEOUT_MS)
           )
         ])
-
-        if (!isValidResponse(response)) {
-          throw new Error('Invalid response received')
-        }
 
         return response
       } catch (error) {

@@ -1,13 +1,12 @@
 import { Worker } from 'worker_threads'
 import path from 'path'
 import { EventEmitter } from 'events'
-import type { EventData } from '@/types/scraper'
+import type { WorkerMessage } from '@/lib/twitter/types'
 
 export interface ScrapingJob {
   id: string
   username: string
-  sessionId: string  // Changed from accessToken to sessionId
-  onProgress?: (data: EventData) => void
+  onProgress?: (data: WorkerMessage) => void
 }
 
 export class WorkerPool {
@@ -43,6 +42,11 @@ export class WorkerPool {
   }
 
   private async startWorker(job: ScrapingJob): Promise<void> {
+    // Check for API key
+    if (!process.env.TWITTER_API_KEY) {
+      throw new Error('TWITTER_API_KEY environment variable is not set');
+    }
+
     // Use absolute path to worker file
     const workerPath = path.join(process.cwd(), 'dist', 'lib', 'twitter', 'worker.js')
     console.log('Starting worker with path:', workerPath)
@@ -50,10 +54,9 @@ export class WorkerPool {
     const worker = new Worker(workerPath, {
       workerData: {
         username: job.username,
-        sessionId: job.sessionId,
-        batchSize: 100,  // Default batch size
-        maxTweets: 1000  // Default max tweets to fetch
-      }
+        apiKey: process.env.TWITTER_API_KEY
+      },
+      env: process.env // Pass environment variables to worker
     })
 
     this.workers.push(worker)
@@ -61,14 +64,44 @@ export class WorkerPool {
 
     // Handle worker messages
     worker.on('message', (message) => {
+      console.log(`Worker message received for job ${job.id}:`, {
+        type: message.type,
+        phase: message.phase,
+        progress: message.progress,
+        error: message.error
+      });
+
       if (job.onProgress) {
-        job.onProgress(message)
+        try {
+          job.onProgress(message)
+        } catch (error) {
+          console.error(`Error in onProgress handler for job ${job.id}:`, error);
+          // Try to send error through worker
+          worker.postMessage({ 
+            type: 'error',
+            error: 'Error processing worker message'
+          });
+        }
       }
     })
 
     // Handle worker completion
     worker.on('exit', async (code) => {
       console.log(`Worker for job ${job.id} exited with code ${code}`)
+      
+      // If worker exited with non-zero code and we haven't sent an error yet, send one
+      if (code !== 0 && job.onProgress) {
+        try {
+          job.onProgress({
+            type: 'error',
+            error: `Worker exited with code ${code}`,
+            progress: 0
+          });
+        } catch (error) {
+          console.error(`Error sending exit error for job ${job.id}:`, error);
+        }
+      }
+
       this.workers = this.workers.filter(w => w !== worker)
       this.activeJobs.delete(job.id)
 
@@ -83,7 +116,15 @@ export class WorkerPool {
     worker.on('error', (error) => {
       console.error(`Worker error for job ${job.id}:`, error)
       if (job.onProgress) {
-        job.onProgress({ error: error.message, progress: 0 })
+        try {
+          job.onProgress({ 
+            type: 'error',
+            error: error.message,
+            progress: 0
+          })
+        } catch (err) {
+          console.error(`Error sending error message for job ${job.id}:`, err);
+        }
       }
     })
   }

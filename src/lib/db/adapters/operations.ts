@@ -56,6 +56,9 @@ export interface TweetOperations {
     offset?: number;
   }): Promise<DBTweet[]>;
   
+  // Delete operations
+  deleteTweetsByUserId(userId: string): Promise<void>;
+  
   // Utility operations
   getTweetCount(userId?: string): Promise<number>;
   getLatestTweet(userId: string): Promise<DBTweet | null>;

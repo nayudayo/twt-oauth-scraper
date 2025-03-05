@@ -23,6 +23,7 @@ interface TweetOperations {
   }): Promise<DBTweet[]>;
   getTweetCount(userId?: string): Promise<number>;
   getLatestTweet(userId: string): Promise<DBTweet | null>;
+  deleteTweetsByUserId(userId: string): Promise<void>;
 }
 
 export class PostgresTweetOperations implements TweetOperations {
@@ -323,12 +324,21 @@ export class PostgresTweetOperations implements TweetOperations {
     }
   }
 
+  async deleteTweetsByUserId(userId: string): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('DELETE FROM tweets WHERE user_id = $1', [userId]);
+    } catch (error) {
+      if (this.isPostgresError(error)) {
+        throw DatabaseError.fromPgError(error);
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   private isPostgresError(error: unknown): error is PostgresError {
-    return (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      'severity' in error
-    );
+    return error instanceof Error && 'code' in error;
   }
 } 

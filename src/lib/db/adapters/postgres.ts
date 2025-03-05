@@ -177,6 +177,10 @@ export class PostgresAdapter implements DatabaseAdapter {
     return this.tweetOperations.saveTweets(userId, tweets);
   }
 
+  deleteTweetsByUserId(userId: string): Promise<void> {
+    return this.tweetOperations.deleteTweetsByUserId(userId);
+  }
+
   createTweet(tweet: DBTweet): Promise<void> {
     return this.tweetOperations.createTweet(tweet);
   }

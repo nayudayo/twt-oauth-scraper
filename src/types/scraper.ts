@@ -36,9 +36,9 @@ export interface Tweet {
   createdAt: string
   timestamp: string
   metrics: {
-    likes: number | null
-    retweets: number | null
-    views: number | null
+    likes: number
+    retweets: number
+    views: number
   }
   images: string[]
   isReply: boolean
@@ -68,26 +68,23 @@ export interface ScrapedData {
   tweets: Tweet[]
 }
 
+export interface ScanProgress {
+  phase: 'posts' | 'replies' | 'complete'
+  count: number
+  message?: string
+}
+
 export interface EventData {
-  progress: number
-  status?: string
+  type?: 'complete' | 'error' | 'progress'
   error?: string
-  phase?: string
-  type?: 'complete'
   tweets?: Tweet[]
-  scanProgress?: {
-    phase: string
-    count: number
-  }
-  data?: {
-    profile: TwitterProfile
-    tweets: Tweet[]
-    analysis: PersonalityAnalysis
-  }
-  // Chunk-related fields
+  username?: string
   isChunk?: boolean
   chunkIndex?: number
-  totalChunks?: number
+  totalTweets?: number
+  isLastBatch?: boolean
+  scanProgress?: ScanProgress
+  status?: string
 }
 
 export interface WorkerMessage {

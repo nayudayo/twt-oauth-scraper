@@ -27,7 +27,7 @@ export async function DELETE(request: NextRequest) {
     // Use transaction to ensure both operations complete or neither does
     await db.transaction(async () => {
       // Delete all tweets for this user
-      await db.saveTweets(user.id, []) // Empty array to clear tweets
+      await db.deleteTweetsByUserId(user.id)
       
       // Update user profile to clear data
       await db.updateUser(user.id, {

@@ -106,6 +106,9 @@ class PostgresAdapter {
     saveTweets(userId, tweets) {
         return this.tweetOperations.saveTweets(userId, tweets);
     }
+    deleteTweetsByUserId(userId) {
+        return this.tweetOperations.deleteTweetsByUserId(userId);
+    }
     createTweet(tweet) {
         return this.tweetOperations.createTweet(tweet);
     }

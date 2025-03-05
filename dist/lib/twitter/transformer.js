@@ -48,8 +48,8 @@ class TwitterDataTransformer {
             timestamp: timestamp,
             metrics: {
                 views: apiTweet.viewCount || 0,
-                likes: null, // Not available in new API
-                retweets: null // Not available in new API
+                likes: 0, // Not available in new API
+                retweets: 0 // Not available in new API
             },
             images: [], // Will be populated if we add media support
             isReply: apiTweet.isReply || false

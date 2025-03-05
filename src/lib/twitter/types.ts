@@ -46,7 +46,35 @@ export interface TwitterAPIProfile {
 
 export interface WorkerData {
   username: string;
-  sessionId: string;
+  apiKey: string;
   batchSize?: number;
   maxTweets?: number;
+}
+
+export interface ScanProgress {
+  phase: 'init' | 'profile' | 'posts' | 'complete';
+  count: number;
+  total: number;
+  currentBatch?: number;
+  totalBatches?: number;
+  message?: string;
+}
+
+export interface WorkerMessage {
+  // Progress updates
+  progress?: number;
+  status?: string;
+  phase?: string;
+  scanProgress?: ScanProgress;
+  
+  // Tweet data
+  tweets?: TwitterAPITweet[];
+  isChunk?: boolean;
+  chunkIndex?: number;
+  totalBatches?: number;
+  
+  // Completion
+  type?: 'progress' | 'warning' | 'error' | 'complete';
+  error?: string;
+  reset?: Date;
 } 
