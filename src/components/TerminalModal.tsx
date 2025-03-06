@@ -661,11 +661,11 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
 
       // Tweet text options
       const tweetOptions = [
-        `we all fake it till we make it, but what if we didn't have to?\n${referralCode || commandResponses['GENERATE_REFERRAL']}`,
-        `be the love u've never encountered\n${referralCode || commandResponses['GENERATE_REFERRAL']}`,
-        `found the cheat codes to life\n${referralCode || commandResponses['GENERATE_REFERRAL']}`,
-        `your permission slip to be you\n${referralCode || commandResponses['GENERATE_REFERRAL']}`,
-        `finally playing my own game\n${referralCode || commandResponses['GENERATE_REFERRAL']}`
+        `"We all fake it till we make it, but what if we didn't have to?\n\n${referralCode || commandResponses['GENERATE_REFERRAL']}"`,
+        `"Be the love u've never encountered\n\n${referralCode || commandResponses['GENERATE_REFERRAL']}"`,
+        `"Putting your people on is real love. Get them in, and everyone eats.\n\n${referralCode || commandResponses['GENERATE_REFERRAL']}"`,
+        `"The best way to level up? Bring your people with you. Let's get it.\n\n${referralCode || commandResponses['GENERATE_REFERRAL']}"`,
+        `"Good things multiply—wealth, knowledge, and referrals. Get your share.\n\n${referralCode || commandResponses['GENERATE_REFERRAL']}"`
       ];
 
       // Randomly select a tweet text
