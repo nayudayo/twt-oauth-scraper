@@ -661,11 +661,26 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
 
       // Tweet text options
       const tweetOptions = [
-        `"We all fake it till we make it, but what if we didn't have to?\n\n${referralCode || commandResponses['GENERATE_REFERRAL']}"`,
-        `"Be the love u've never encountered\n\n${referralCode || commandResponses['GENERATE_REFERRAL']}"`,
-        `"Putting your people on is real love. Get them in, and everyone eats.\n\n${referralCode || commandResponses['GENERATE_REFERRAL']}"`,
-        `"The best way to level up? Bring your people with you. Let's get it.\n\n${referralCode || commandResponses['GENERATE_REFERRAL']}"`,
-        `"Good things multiply—wealth, knowledge, and referrals. Get your share.\n\n${referralCode || commandResponses['GENERATE_REFERRAL']}"`
+        `"We all fake it till we make it, but what if we didn't have to?\n\n
+        
+        ${referralCode || commandResponses['GENERATE_REFERRAL']}
+        
+        \n\n https://pushthebutton.ai @pushthebuttonlol
+        "`,
+        `"Be the love u've never encountered\n\n
+        
+        \n\n${referralCode || commandResponses['GENERATE_REFERRAL']}
+        
+        \n\n https://pushthebutton.ai @pushthebuttonlol
+        "`,
+        `"The best way to level up? Bring your people with you. Let's get it.\n\n${referralCode || commandResponses['GENERATE_REFERRAL']}
+        
+        \n\n https://pushthebutton.ai @pushthebuttonlol
+        "`,
+        `"Good things multiply—wealth, knowledge, and referrals. Get your share.\n\n${referralCode || commandResponses['GENERATE_REFERRAL']}
+        
+        \n\n https://pushthebutton.ai @pushthebuttonlol
+        "`
       ];
 
       // Randomly select a tweet text

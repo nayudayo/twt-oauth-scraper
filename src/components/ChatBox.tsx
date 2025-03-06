@@ -1002,11 +1002,26 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
             emojiUsage: 50
           };
           
-          // Extract interests and their weights
-          const interestWeights: Record<string, number> = {};
-          cachedAnalysis.interests.forEach((interest: string) => {
-            interestWeights[interest] = 50; // Default weight if not specified
-          });
+          // Extract interests and their weights based on expertise levels
+          const interestWeights = cachedAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => {
+            // Get expertise level if present
+            const expertiseLevel = interest.split(':')[1]?.trim();
+            
+            // Set weight based on expertise level text
+            let weight = 50; // Default to medium if no clear match
+            if (expertiseLevel) {
+              const level = expertiseLevel.toLowerCase();
+              if (level.includes('advanced') || level.includes('high')) {
+                weight = 75;
+              } else if (level.includes('intermediate') || level.includes('moderate')) {
+                weight = 50;
+              } else if (level.includes('basic') || level.includes('low')) {
+                weight = 25;
+              }
+            }
+            
+            return { ...acc, [interest]: weight };
+          }, {});
 
           setTuning(prev => ({
             ...prev,
@@ -1810,7 +1825,12 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                         key={interest}
                         className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
                       >
-                        {interest.replace(/\*\*/g, '')}
+                        <span>{interest.split(':')[0].trim()}</span>
+                        {interest.includes(':') && (
+                          <span className="text-red-500/60 ml-2">
+                            {interest.split(':')[1].trim()}
+                          </span>
+                        )}
                       </span>
                     ))}
                   </div>
@@ -1827,7 +1847,12 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                       <li key={i} className="flex items-center gap-3 text-red-300/90 hover-text-glow group">
                         <div className="w-1.5 h-1.5 rounded-full bg-red-500/30 group-hover:bg-red-500/50 transition-colors duration-200"></div>
                         <span className="text-[14px] leading-relaxed tracking-wide">
-                          {topic.replace(/\*\*/g, '')}
+                          <span className="text-red-500/90">
+                            {topic.match(/^\d+\.\s/) ? topic.match(/^\d+\.\s/)?.[0] : ''}
+                          </span>
+                          <span className="text-red-300/90">
+                            {topic.replace(/^\d+\.\s/, '')}
+                          </span>
                         </span>
                       </li>
                     ))}

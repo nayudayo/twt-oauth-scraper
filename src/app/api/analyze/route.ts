@@ -22,8 +22,13 @@ export async function POST(req: Request) {
       context?: string
     }
     
-    if (!tweets || !Array.isArray(tweets)) {
-      return NextResponse.json({ error: 'Invalid tweets data' }, { status: 400 })
+    // Validate input data
+    if (!tweets || !Array.isArray(tweets) || tweets.length === 0) {
+      return NextResponse.json({ error: 'Invalid or empty tweets data' }, { status: 400 })
+    }
+
+    if (!profile || !profile.name) {
+      return NextResponse.json({ error: 'Invalid profile data' }, { status: 400 })
     }
 
     // Get queue instance
@@ -42,8 +47,8 @@ export async function POST(req: Request) {
         {
           tweets,
           profile,
-          prompt,
-          context
+          prompt: prompt || undefined,
+          context: context || undefined
         },
         session.username,
         resolve,
@@ -53,6 +58,11 @@ export async function POST(req: Request) {
       console.error('Analysis error:', error)
       throw error
     })
+
+    // Validate the analysis response
+    if (!analysis || typeof analysis !== 'object') {
+      throw new Error('Invalid analysis response from OpenAI')
+    }
 
     return NextResponse.json(analysis)
   } catch (error) {

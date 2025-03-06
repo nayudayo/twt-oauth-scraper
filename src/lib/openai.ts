@@ -220,9 +220,9 @@ class ModelUnavailableError extends OpenAIError {
 // Add fallback configuration
 const FALLBACK_CONFIG = {
   maxRetries: 3,
-  fallbackModel: 'gpt-3.5-turbo',
-  minTokens: 100,
-  maxTokens: 1500,
+  fallbackModel: 'gpt-4o-mini',
+  minTokens: 1000,
+  maxTokens: 2500,
   defaultTemperature: 0.85,
   styleVariationStep: 0.1,
   maxStyleVariation: 0.3,
@@ -807,11 +807,42 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
           }
         }
       }
-      else if (section.includes('Primary Interests')) {
-        const interestLines = section.split('\n').slice(1)
-        analysis.interests = interestLines
-          .filter(line => line.trim().match(/^[-•*]\s|^\d+\.\s/)) // Support various bullet point formats
-          .map(line => line.replace(/^[-•*]\s|\d+\.\s/, '').trim())
+      else if (section.toLowerCase().includes('primary interests') || 
+               section.toLowerCase().includes('interests & expertise')) {
+        const lines = section.split('\n')
+        const interestLines: string[] = []
+        
+        for (const line of lines) {
+          const trimmedLine = line.trim()
+          if (!trimmedLine || 
+              trimmedLine.toLowerCase().includes('primary interests') ||
+              trimmedLine.toLowerCase().includes('interests & expertise')) {
+            continue
+          }
+          
+          // Check for bullet points
+          if (trimmedLine.startsWith('-') || trimmedLine.startsWith('*') || trimmedLine.startsWith('•')) {
+            let interest = trimmedLine.replace(/^[-•*]\s*/, '').replace(/\*\*/g, '')
+            
+            // Extract expertise level if present
+            const expertiseMatch = interest.match(/:\s*(.*?(?:expertise|interest|engagement))/i)
+            if (expertiseMatch) {
+              // Keep the expertise level as part of the interest
+              interest = interest.trim()
+            }
+            
+            if (interest) {
+              interestLines.push(interest)
+            }
+          }
+        }
+        
+        analysis.interests = interestLines.filter(Boolean)
+        
+        // Provide default interests only if none were found
+        if (analysis.interests.length === 0) {
+          analysis.interests = ['General topics']
+        }
       }
       else if (section.includes('Communication Style Analysis') || section.includes('Communication Style')) {
         // First get the numerical scores
@@ -864,11 +895,67 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
       else if (section.toLowerCase().includes('key themes') || 
                section.toLowerCase().includes('topics') || 
                section.toLowerCase().includes('themes')) {
-        const lines = section.split('\n').slice(1)
-        analysis.topicsAndThemes = lines
-          .filter(line => line.trim().match(/^[-•*]\s|^\d+\.\s/)) // Support various bullet point formats
-          .map(line => line.replace(/^[-•*]\s|\d+\.\s/, '').trim())
-          .filter(Boolean) // Remove empty lines
+        const lines = section.split('\n')
+        const themeLines: string[] = []
+        let currentTheme = ''
+        
+        for (const line of lines) {
+          const trimmedLine = line.trim()
+          // Skip section headers and empty lines
+          if (!trimmedLine || 
+              trimmedLine.toLowerCase().includes('topics and themes:') ||
+              trimmedLine.toLowerCase() === 'topics and themes' ||
+              trimmedLine.toLowerCase() === 'key themes') {
+            continue
+          }
+          
+          // Check for numbered items or bullet points
+          const isNumberedItem = /^\d+\.\s/.test(trimmedLine)
+          const isBulletPoint = /^[-•*]\s/.test(trimmedLine)
+          
+          if (isNumberedItem || isBulletPoint) {
+            // If we have a previous theme, add it
+            if (currentTheme) {
+              themeLines.push(currentTheme)
+            }
+            // Keep the number for themes but remove markdown
+            currentTheme = isNumberedItem ? 
+              trimmedLine.replace(/\*\*/g, '').trim() :
+              trimmedLine.replace(/^[-•*]\s*/, '').replace(/\*\*/g, '').trim()
+          } else if (!trimmedLine.toLowerCase().includes('these themes interconnect')) {
+            // Append to current theme if it's not the interconnection text
+            if (currentTheme) {
+              currentTheme += ' ' + trimmedLine
+            } else {
+              currentTheme = trimmedLine
+            }
+          }
+        }
+        
+        // Add the last theme if exists
+        if (currentTheme) {
+          themeLines.push(currentTheme)
+        }
+        
+        // Clean up and filter themes
+        analysis.topicsAndThemes = themeLines
+          .map(theme => theme.trim())
+          .filter(theme => {
+            // Filter out interconnection text and empty themes
+            return theme.length > 0 && 
+                   !theme.toLowerCase().includes('these themes interconnect')
+          })
+        
+        // Only use fallback if no themes were found
+        if (analysis.topicsAndThemes.length === 0) {
+          if (analysis.interests.length > 0) {
+            analysis.topicsAndThemes = analysis.interests.map(interest => 
+              interest.split(':')[0].trim() // Use base interest without expertise level
+            )
+          } else {
+            analysis.topicsAndThemes = ['General themes']
+          }
+        }
       }
       else if (section.toLowerCase().includes('emotion')) {
         const lines = section.split('\n').slice(1)
