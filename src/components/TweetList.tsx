@@ -26,8 +26,6 @@ export function TweetList({
   scrapingProgress = null,
   tweets: parentTweets = []
 }: TweetListProps) {
-  // Track accumulated tweets during scraping
-  const [accumulatedTweets, setAccumulatedTweets] = useState<Tweet[]>([]);
   const [displayedCount, setDisplayedCount] = useState(0);
 
   // Get tweets with our custom hook for non-scraping state
@@ -39,19 +37,6 @@ export function TweetList({
     includeReplies
   });
 
-  // Update accumulated tweets when parent tweets change during scraping
-  useEffect(() => {
-    if (isScrapingActive && parentTweets.length > 0) {
-      setAccumulatedTweets(prev => {
-        // Create a Set of existing tweet IDs
-        const existingIds = new Set(prev.map(t => t.id));
-        // Filter out duplicates and add new tweets
-        const newTweets = parentTweets.filter(t => !existingIds.has(t.id));
-        return [...prev, ...newTweets];
-      });
-    }
-  }, [isScrapingActive, parentTweets]);
-
   // Update displayed count based on scraping status or fetched tweets
   useEffect(() => {
     if (isScrapingActive && scrapingProgress) {
@@ -61,15 +46,8 @@ export function TweetList({
     }
   }, [isScrapingActive, scrapingProgress, fetchedTweets.length]);
 
-  // Reset accumulated tweets when scraping starts
-  useEffect(() => {
-    if (isScrapingActive) {
-      setAccumulatedTweets([]);
-    }
-  }, [isScrapingActive]);
-
   // Determine which tweets to display
-  const tweetsToDisplay = isScrapingActive ? accumulatedTweets : fetchedTweets;
+  const tweetsToDisplay = isScrapingActive ? parentTweets : fetchedTweets;
 
   return (
     <div
