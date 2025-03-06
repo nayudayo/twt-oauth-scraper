@@ -59,14 +59,21 @@ export async function POST() {
             return;
           }
 
+          // Add username to all messages
+          const messageWithUser = {
+            ...message,
+            username: session.username
+          };
+
           console.log('Writing message to stream:', {
-            type: message.type,
-            phase: message.phase,
-            progress: message.progress,
-            error: message.error
+            type: messageWithUser.type,
+            phase: messageWithUser.phase,
+            progress: messageWithUser.progress,
+            error: messageWithUser.error,
+            tweetCount: messageWithUser.tweets?.length
           });
 
-          await writer.write(encoder.encode(`data: ${JSON.stringify(message)}\n\n`));
+          await writer.write(encoder.encode(`data: ${JSON.stringify(messageWithUser)}\n\n`));
           
           // Close the stream if we're done or there's an error
           if (message.type === 'complete' || message.type === 'error') {
@@ -81,7 +88,8 @@ export async function POST() {
             try {
               await writer.write(encoder.encode(`data: ${JSON.stringify({
                 type: 'error',
-                error: error instanceof Error ? error.message : 'Error writing to stream'
+                error: error instanceof Error ? error.message : 'Error writing to stream',
+                username: session.username
               })}\n\n`));
             } finally {
               streamClosed = true;
@@ -101,7 +109,8 @@ export async function POST() {
       if (!streamClosed) {
         await writer.write(encoder.encode(`data: ${JSON.stringify({
           type: 'error',
-          error: error instanceof Error ? error.message : 'Failed to start scraping job'
+          error: error instanceof Error ? error.message : 'Failed to start scraping job',
+          username: session.username
         })}\n\n`));
         streamClosed = true;
         await writer.close();
@@ -112,8 +121,10 @@ export async function POST() {
     return new Response(stream.readable, {
       headers: {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive'
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+        'Content-Encoding': 'none'
       }
     });
 

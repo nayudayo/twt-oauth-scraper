@@ -29,6 +29,19 @@ export function usePersonalityCache({ username }: UsePersonalityCacheProps) {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
     try {
       const response = await fetch(`/api/personality/${username}/cache`);
+      
+      // Handle 404 gracefully - it just means no cache exists yet
+      if (response.status === 404) {
+        setState(prev => ({
+          ...prev,
+          isLoading: false,
+          isFresh: false,
+          data: null,
+          error: null
+        }));
+        return null;
+      }
+      
       const data = await response.json();
 
       if (!response.ok) {

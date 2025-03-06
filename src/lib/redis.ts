@@ -13,9 +13,16 @@ export async function getRedis(): Promise<Redis> {
     password: process.env.REDIS_PASSWORD,
     db: parseInt(process.env.REDIS_DB || '0'),
     retryStrategy: (times) => {
-      // Maximum retry time is 2 seconds
-      return Math.min(times * 50, 2000);
-    }
+      // More aggressive retry strategy
+      return Math.min(times * 25, 1000);
+    },
+    connectTimeout: 5000,
+    maxRetriesPerRequest: 3,
+    enableReadyCheck: true,
+    autoResubscribe: true,
+    autoResendUnfulfilledCommands: true,
+    lazyConnect: false,
+    showFriendlyErrorStack: process.env.NODE_ENV !== 'production'
   });
 
   // Handle connection events
@@ -25,6 +32,14 @@ export async function getRedis(): Promise<Redis> {
 
   redisClient.on('connect', () => {
     console.log('Connected to Redis');
+  });
+
+  redisClient.on('ready', () => {
+    console.log('Redis client ready');
+  });
+
+  redisClient.on('reconnecting', () => {
+    console.log('Redis client reconnecting');
   });
 
   return redisClient;

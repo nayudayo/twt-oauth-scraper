@@ -509,6 +509,35 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     setShowConsent(true)
   }
 
+  // Convert TwitterAPITweet to Tweet
+  const convertToTweet = (apiTweet: TwitterAPITweet): Tweet => ({
+    id: apiTweet.id,
+    text: apiTweet.text,
+    url: apiTweet.url,
+    createdAt: apiTweet.createdAt,
+    timestamp: apiTweet.timestamp || apiTweet.createdAt,
+    metrics: {
+      likes: 0,
+      retweets: 0,
+      views: apiTweet.viewCount || 0
+    },
+    images: [],
+    isReply: apiTweet.isReply
+  });
+
+  // Update the tweet filtering logic with proper types
+  const uniqueTweets = (newTweets: (Tweet | TwitterAPITweet)[]): Tweet[] => {
+    // Create a map of existing tweets by ID for faster lookup
+    const existingTweetsMap = new Map(accumulatedTweets.map(tweet => [tweet.id, tweet]));
+    
+    // Convert and deduplicate new tweets
+    const convertedTweets = newTweets.map(tweet => 
+      'metrics' in tweet ? tweet : convertToTweet(tweet)
+    ).filter(tweet => !existingTweetsMap.has(tweet.id));
+
+    return convertedTweets;
+  };
+
   // Add unified tweet update function
   const updateTweetsState = (newTweets: (Tweet | TwitterAPITweet)[]) => {
     if (!Array.isArray(newTweets)) return;
@@ -524,24 +553,25 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       console.warn('Failed to save tweets to database:', error);
     });
 
-    // Update both accumulated tweets and parent state
+    // Update both accumulated tweets and parent state with the complete new set
     const updateFunction = (prevTweets: Tweet[]) => {
-      const existingIds = new Set(prevTweets.map(tweet => tweet.id));
-      const newUniqueTweets = convertedTweets.filter(tweet => !existingIds.has(tweet.id));
-      return [...prevTweets, ...newUniqueTweets];
+      const updatedTweets = [...prevTweets, ...convertedTweets];
+      
+      console.log('Tweet update summary:', {
+        previousCount: prevTweets.length,
+        newCount: convertedTweets.length,
+        totalCount: updatedTweets.length,
+        uniqueCount: new Set(updatedTweets.map(t => t.id)).size
+      });
+      
+      // Force cache invalidation
+      queryClient.invalidateQueries({ queryKey: ['tweets', profile.name] });
+      
+      return updatedTweets;
     };
 
     setAccumulatedTweets(updateFunction);
     onTweetsUpdate(updateFunction);
-
-    // Update scan progress
-    setScanProgress(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        count: prev.count + validTweets.length
-      };
-    });
   };
 
   // Add unified state management functions
@@ -600,23 +630,24 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
         
         const finalTweets = await finalResponse.json();
         
-        if (Array.isArray(finalTweets) && finalTweets.length >= accumulatedTweets.length) {
+        if (Array.isArray(finalTweets) && finalTweets.length > 0) {
           console.log('Final fetch successful:', {
             fetchedCount: finalTweets.length,
             currentCount: accumulatedTweets.length
           });
-          updateTweetsState(finalTweets);
+          
+          // Force cache invalidation
+          await queryClient.invalidateQueries({ queryKey: ['tweets', profile.name] });
+          
+          // Update states with complete dataset
+          const validTweets = finalTweets.filter((t: unknown): t is Tweet => Boolean(t));
+          setAccumulatedTweets(validTweets);
+          onTweetsUpdate(validTweets);
           break;
         }
         
-        console.log('Final fetch returned fewer tweets than current, retrying...');
+        console.log('Final fetch returned no tweets, retrying...');
         retryCount++;
-        
-        if (retryCount === maxRetries) {
-          console.log('Max retries reached, using accumulated tweets:', {
-            accumulatedCount: accumulatedTweets.length
-          });
-        }
       }
     } catch (error) {
       console.error('Error in final tweet fetch:', error);
@@ -628,6 +659,9 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
         message: `Collection complete: ${finalTweetCount || accumulatedTweets.length} tweets found`
       });
       cleanupState({ isComplete: true, preserveProgress: true });
+      
+      // Final cache invalidation
+      queryClient.invalidateQueries({ queryKey: ['tweets', profile.name] });
     }
   };
 
@@ -643,7 +677,14 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     setShowConsent(false);
     setLoading(true);
     setScrapingStartTime(Date.now());
-    setAccumulatedTweets([]); // Reset accumulated tweets at start
+    
+    // Don't reset accumulated tweets when re-scraping
+    // Instead, mark them as being updated
+    setScanProgress({
+      phase: 'posts',
+      count: accumulatedTweets.length,
+      message: 'Initializing new scan...'
+    });
 
     const controller = new AbortController();
     setAbortController(controller);
@@ -655,8 +696,9 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           username: profile.name,
-          sessionId: Date.now().toString(),  // Add unique session ID
-          timestamp: Date.now()
+          sessionId: Date.now().toString(),
+          timestamp: Date.now(),
+          existingCount: accumulatedTweets.length
         })
       });
 
@@ -853,15 +895,26 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       
       setIsLoadingTweets(true);
       try {
-        const response = await fetch(`/api/tweets/${profile.name}/all`);
+        console.log('Loading tweets for:', profile.name);
+        const response = await fetch(`/api/tweets/${profile.name}/all`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache'
+          }
+        });
+        
         if (!response.ok) {
           throw new Error('Failed to fetch existing tweets');
         }
         
         const existingTweets = await response.json();
+        console.log('Loaded tweets from database:', existingTweets?.length || 0);
+        
         if (Array.isArray(existingTweets)) {
           const validTweets = existingTweets.filter((t: unknown): t is Tweet => Boolean(t));
-          setAccumulatedTweets(validTweets); // Add this line to set accumulated tweets
+          console.log('Valid tweets found:', validTweets.length);
+          
+          setAccumulatedTweets(validTweets);
           onTweetsUpdate(validTweets);
           
           if (validTweets.length > 0) {
@@ -874,10 +927,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
         }
       } catch (error) {
         console.error('Error loading existing tweets:', error);
-        cleanupState({ 
-          isError: true, 
-          error: error instanceof Error ? error.message : 'Failed to load existing tweets' 
-        });
+        setError(error instanceof Error ? error.message : 'Failed to load existing tweets');
       } finally {
         setIsLoadingTweets(false);
       }
@@ -885,16 +935,22 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
 
     // Load existing tweets and handle initial tweets
     const initializeTweets = async () => {
-      if (initialTweets.length > 0) {
-        setAccumulatedTweets(initialTweets); // Add this line to set accumulated tweets
+      if (initialTweets?.length > 0) {
+        console.log('Initializing with provided tweets:', initialTweets.length);
+        setAccumulatedTweets(initialTweets);
         onTweetsUpdate(initialTweets);
+        setScanProgress({
+          phase: 'complete',
+          count: initialTweets.length,
+          message: `${initialTweets.length} tweets loaded`
+        });
       } else {
         await loadExistingTweets();
       }
     };
 
     initializeTweets();
-  }, [profile.name, initialTweets, onTweetsUpdate, isLoadingTweets]); // Add isLoadingTweets to dependencies
+  }, [profile.name, initialTweets, onTweetsUpdate, isLoadingTweets]);
 
   // Handle text input with Shift+Enter
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1084,29 +1140,6 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     }
   };
 
-  // Convert TwitterAPITweet to Tweet
-  const convertToTweet = (apiTweet: TwitterAPITweet): Tweet => ({
-    id: apiTweet.id,
-    text: apiTweet.text,
-    url: apiTweet.url,
-    createdAt: apiTweet.createdAt,
-    timestamp: apiTweet.timestamp || apiTweet.createdAt,
-    metrics: {
-      likes: 0,
-      retweets: 0,
-      views: apiTweet.viewCount || 0
-    },
-    images: [],
-    isReply: apiTweet.isReply
-  })
-
-  // Update the tweet filtering logic with proper types
-  const uniqueTweets = (newTweets: (Tweet | TwitterAPITweet)[]): Tweet[] => {
-    const seenIds = new Set(accumulatedTweets.map((tweet: Tweet) => tweet.id))
-    return newTweets.map((tweet: Tweet | TwitterAPITweet) => ('metrics' in tweet ? tweet : convertToTweet(tweet)))
-      .filter((tweet: Tweet) => !seenIds.has(tweet.id))
-  }
-
   // Update the tweet saving logic
   const saveTweetsToDb = async (tweetsToSave: Tweet[]) => {
     try {
@@ -1127,41 +1160,63 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
   useEffect(() => {
     if (!profile.name || !loading) return;
 
-    // Only create EventSource when actively scraping
-    const eventSource = new EventSource('/api/scrape');
+    console.log('Initializing SSE connection for:', profile.name);
+    const eventSource = new EventSource(`/api/scrape?username=${encodeURIComponent(profile.name)}`, {
+      withCredentials: true // Add credentials to ensure auth headers are sent
+    });
 
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        handleEventData(data);
+        console.log('SSE received data:', {
+          type: data.type,
+          phase: data.phase,
+          tweetCount: data.tweets?.length,
+          progress: data.progress,
+          error: data.error,
+          username: data.username
+        });
+        
+        if (data.username === profile.name) {
+          handleEventData(data);
+        } else {
+          console.warn('Received data for different user:', data.username);
+        }
       } catch (error) {
         console.error('Error parsing event data:', error);
         cleanupState({ isError: true, error: 'Failed to parse server response' });
       }
     };
 
-    eventSource.onerror = () => {
-      cleanupState({ isError: true, error: 'Connection error' });
+    eventSource.onerror = (error) => {
+      // Check if the error is due to connection close
+      if (eventSource.readyState === EventSource.CLOSED) {
+        console.log('SSE connection closed normally');
+        return;
+      }
+
+      console.error('SSE connection error:', {
+        readyState: eventSource.readyState,
+        error: error,
+        url: eventSource.url
+      });
+
+      // Only show error if we're still loading and not a normal close
+      if (loading && eventSource.readyState !== EventSource.CLOSED) {
+        cleanupState({ isError: true, error: 'Connection error - please try again' });
+      }
       eventSource.close();
     };
 
-    // Cleanup function to close the connection when component unmounts or scraping stops
+    eventSource.onopen = () => {
+      console.log('SSE connection opened successfully');
+    };
+
     return () => {
+      console.log('Cleaning up SSE connection');
       eventSource.close();
     };
-  }, [
-    profile.name,
-    loading, // Add loading state as dependency
-    setAccumulatedTweets,
-    onTweetsUpdate,
-    setScanProgress,
-    setLoading,
-    setShowComplete,
-    setShowAnalysisPrompt,
-    setScrapingStartTime,
-    setAbortController,
-    setError
-  ]); // Include all state setters used in handleEventData
+  }, [profile.name, loading]);
 
   return (
     <>

@@ -95,6 +95,13 @@ export default function Home() {
     // Always treat as a function update since we're streaming
     const newTweets = typeof updater === 'function' ? updater(tweets) : updater
     
+    // Skip update if tweets are the same
+    if (newTweets === tweets || 
+        (newTweets.length === tweets.length && 
+         newTweets.every((t, i) => t.id === tweets[i].id))) {
+      return;
+    }
+    
     // Log the update for debugging
     console.log('Tweet update:', {
       type: typeof updater === 'function' ? 'function' : 'direct',

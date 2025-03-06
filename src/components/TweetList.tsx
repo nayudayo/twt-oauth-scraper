@@ -27,6 +27,7 @@ export function TweetList({
   tweets: parentTweets = []
 }: TweetListProps) {
   const [displayedCount, setDisplayedCount] = useState(0);
+  const [localTweets, setLocalTweets] = useState<Tweet[]>([]);
 
   // Get tweets with our custom hook for non-scraping state
   const {
@@ -37,17 +38,36 @@ export function TweetList({
     includeReplies
   });
 
+  // Update local tweets when parent tweets change
+  useEffect(() => {
+    if (parentTweets.length > 0) {
+      setLocalTweets(parentTweets);
+    }
+  }, [parentTweets]);
+
   // Update displayed count based on scraping status or fetched tweets
   useEffect(() => {
     if (isScrapingActive && scrapingProgress) {
       setDisplayedCount(scrapingProgress.count);
+    } else if (!isScrapingActive && localTweets.length > 0) {
+      setDisplayedCount(localTweets.length);
     } else if (!isScrapingActive && fetchedTweets.length > 0) {
       setDisplayedCount(fetchedTweets.length);
     }
-  }, [isScrapingActive, scrapingProgress, fetchedTweets.length]);
+  }, [isScrapingActive, scrapingProgress, localTweets.length, fetchedTweets.length]);
 
-  // Determine which tweets to display
-  const tweetsToDisplay = isScrapingActive ? parentTweets : fetchedTweets;
+  // Determine which tweets to display and deduplicate them
+  const tweetsToDisplay = (() => {
+    // Use local tweets if available, otherwise fall back to fetched tweets
+    const tweets = localTweets.length > 0 ? localTweets : fetchedTweets;
+    const uniqueTweets = new Map();
+    tweets.forEach(tweet => {
+      if (!uniqueTweets.has(tweet.id)) {
+        uniqueTweets.set(tweet.id, tweet);
+      }
+    });
+    return Array.from(uniqueTweets.values());
+  })();
 
   return (
     <div
@@ -114,14 +134,14 @@ export function TweetList({
           </div>
         ) : (
           <>
-            {tweetsToDisplay.map((tweet) => (
+            {tweetsToDisplay.map((tweet, index) => (
               <div
-                key={tweet.id}
-                className="p-3 bg-black/40 rounded border border-red-500/20 hover:bg-red-500/5 
-                         transition-colors duration-200 cursor-pointer group"
+                key={`${tweet.id}-${tweet.createdAt}`}
+                className={`p-3 bg-black/40 rounded border border-red-500/20 hover:bg-red-500/5 
+                         transition-colors duration-200 cursor-pointer group ${isScrapingActive ? 'opacity-50' : ''}`}
               >
                 <div className="text-xs text-red-500/60 mb-2 font-mono">
-                  {new Date(tweet.createdAt).toLocaleString()}
+                  Tweet #{tweetsToDisplay.length - index}
                 </div>
                 <p className="text-red-500/90 text-sm ancient-text">{tweet.text}</p>
                 {tweet.isReply && (
