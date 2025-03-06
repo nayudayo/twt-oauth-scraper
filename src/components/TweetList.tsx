@@ -141,7 +141,7 @@ export function TweetList({
                          transition-colors duration-200 cursor-pointer group ${isScrapingActive ? 'opacity-50' : ''}`}
               >
                 <div className="text-xs text-red-500/60 mb-2 font-mono">
-                  Tweet #{tweetsToDisplay.length - index}
+                  Tweet #{index + 1}
                 </div>
                 <p className="text-red-500/90 text-sm ancient-text">{tweet.text}</p>
                 {tweet.isReply && (
