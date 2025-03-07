@@ -390,10 +390,24 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
         }
         
         if (cachedData.interests) {
-          const interestWeights = cachedData.interests.reduce((acc: Record<string, number>, interest: string) => ({
-            ...acc,
-            [interest]: tuning.interestWeights[interest] ?? 50 // Keep existing weight or use default
-          }), {});
+          // Initialize weights based on expertise levels in the interest strings
+          const interestWeights = cachedData.interests.reduce((acc: Record<string, number>, interest: string) => {
+            const [interestName, expertiseLevel] = interest.split(':').map(s => s.trim());
+            let weight = 50; // Default to medium
+            
+            if (expertiseLevel) {
+              const level = expertiseLevel.toLowerCase();
+              if (level.includes('advanced') || level.includes('high') || level.includes('strong')) {
+                weight = 75;
+              } else if (level.includes('intermediate') || level.includes('moderate')) {
+                weight = 50;
+              } else if (level.includes('basic') || level.includes('low')) {
+                weight = 25;
+              }
+            }
+            
+            return { ...acc, [interestName]: weight };
+          }, {});
           
           setTuning(prev => ({
             ...prev,
@@ -433,10 +447,24 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
         [trait.name]: Math.round(trait.score * 10)
       }), {});
 
-      const newInterestWeights = newAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => ({
-        ...acc,
-        [interest]: tuning.interestWeights[interest] ?? 50 // Keep existing weight or use default
-      }), {});
+      // Initialize weights based on expertise levels in the interest strings
+      const newInterestWeights = newAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => {
+        const [interestName, expertiseLevel] = interest.split(':').map(s => s.trim());
+        let weight = 50; // Default to medium
+        
+        if (expertiseLevel) {
+          const level = expertiseLevel.toLowerCase();
+          if (level.includes('advanced') || level.includes('high') || level.includes('strong')) {
+            weight = 75;
+          } else if (level.includes('intermediate') || level.includes('moderate')) {
+            weight = 50;
+          } else if (level.includes('basic') || level.includes('low')) {
+            weight = 25;
+          }
+        }
+        
+        return { ...acc, [interestName]: weight };
+      }, {});
 
       setTuning(prev => ({
         ...prev,
@@ -1005,13 +1033,13 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           // Extract interests and their weights based on expertise levels
           const interestWeights = cachedAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => {
             // Get expertise level if present
-            const expertiseLevel = interest.split(':')[1]?.trim();
+            const [interestName, expertiseLevel] = interest.split(':').map(s => s.trim());
             
             // Set weight based on expertise level text
             let weight = 50; // Default to medium if no clear match
             if (expertiseLevel) {
               const level = expertiseLevel.toLowerCase();
-              if (level.includes('advanced') || level.includes('high')) {
+              if (level.includes('advanced') || level.includes('high') || level.includes('strong')) {
                 weight = 75;
               } else if (level.includes('intermediate') || level.includes('moderate')) {
                 weight = 50;
@@ -1020,7 +1048,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
               }
             }
             
-            return { ...acc, [interest]: weight };
+            return { ...acc, [interestName]: weight };
           }, {});
 
           setTuning(prev => ({
@@ -1479,25 +1507,26 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box" />
                     <span className="glow-text">Interests & Topics</span>
                   </h4>
-                  <div className="space-y-3 bg-black/20 rounded-lg p-4">
+                  <div className="space-y-3">
                     {analysis.interests.map((interest: string, index: number) => {
+                      const [interestName] = interest.split(':').map(s => s.trim());
                       return (
-                        <div key={`interest-${index}-${interest}`} className="space-y-2 hover-glow">
-                          <div className="flex justify-between items-center text-red-400/90">
+                        <div key={`interest-${index}-${interestName}`} className="space-y-1">
+                          <div className="flex justify-between items-center font-bold text-xs text-red-400/70">
                             <div className="flex-1">
-                              <span className={`text-[14px] tracking-wide ${tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}`}>
-                                {interest ? interest.replace(/[*-]/g, '') : interest}
+                              <span className={tuning.interestWeights[interestName] === 0 ? 'line-through opacity-50' : ''}>
+                                {interestName}
                                 <button
-                                  onClick={() => handleInterestWeight(interest, 0)}
-                                  className="ml-2 text-red-500 hover:text-red-500/70 transition-colors duration-200"
+                                  onClick={() => handleInterestWeight(interestName, 0)}
+                                  className="ml-2 text-red-500 hover:text-red-500/70"
                                   title="Disable interest"
                                 >
                                   ×
                                 </button>
                               </span>
                             </div>
-                            <div className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
-                              {getWeightLabel(tuning.interestWeights[interest] || 0)}
+                            <div className="w-20 text-right">
+                              {getWeightLabel(tuning.interestWeights[interestName] || 0)}
                             </div>
                           </div>
                           <input
@@ -1505,10 +1534,10 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                             min="0"
                             max="100"
                             step="25"
-                            value={Math.round((tuning.interestWeights[interest] || 0) / 25) * 25}
-                            onChange={(e) => handleInterestWeight(interest, parseInt(e.target.value))}
-                            className={`w-full accent-red-500/50 bg-red-500/10 rounded h-1.5 ${
-                              tuning.interestWeights[interest] === 0 ? 'opacity-50' : ''
+                            value={Math.round((tuning.interestWeights[interestName] || 0) / 25) * 25}
+                            onChange={(e) => handleInterestWeight(interestName, parseInt(e.target.value))}
+                            className={`w-full accent-red-500/50 bg-red-500/10 rounded h-1 ${
+                              tuning.interestWeights[interestName] === 0 ? 'opacity-50' : ''
                             }`}
                           />
                         </div>
@@ -1824,19 +1853,22 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     <span className="ancient-text text-base">Interests</span>
                   </h4>
                   <div className="flex flex-wrap gap-2.5">
-                    {analysis.interests.map((interest: string) => (
-                      <span 
-                        key={interest ? interest.replace(/[*-]/g, '') : interest}
-                        className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
-                      >
-                        <span>{interest.split(':')[0].trim()}</span>
-                        {interest.includes(':') && (
-                          <span className="text-red-500/60 ml-2">
-                            {interest.split(':')[1].trim()}
-                          </span>
-                        )}
-                      </span>
-                    ))}
+                    {analysis.interests.map((interest: string) => {
+                      const [interestName, expertiseLevel] = interest.split(':').map(s => s.trim());
+                      return (
+                        <span 
+                          key={interestName}
+                          className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
+                        >
+                          <span>{interestName}</span>
+                          {expertiseLevel && (
+                            <span className="text-red-500/60 ml-2">
+                              {expertiseLevel}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -2118,14 +2150,15 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                   </h4>
                   <div className="space-y-3">
                     {analysis.interests.map((interest: string, index: number) => {
+                      const [interestName] = interest.split(':').map(s => s.trim());
                       return (
-                        <div key={`interest-${index}-${interest}`} className="space-y-1">
+                        <div key={`interest-${index}-${interestName}`} className="space-y-1">
                           <div className="flex justify-between items-center font-bold text-xs text-red-400/70">
                             <div className="flex-1">
-                              <span className={tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}>
-                                {interest ? interest.replace(/[*-]/g, '') : interest}
+                              <span className={tuning.interestWeights[interestName] === 0 ? 'line-through opacity-50' : ''}>
+                                {interestName}
                                 <button
-                                  onClick={() => handleInterestWeight(interest, 0)}
+                                  onClick={() => handleInterestWeight(interestName, 0)}
                                   className="ml-2 text-red-500 hover:text-red-500/70"
                                   title="Disable interest"
                                 >
@@ -2134,7 +2167,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                               </span>
                             </div>
                             <div className="w-20 text-right">
-                              {getWeightLabel(tuning.interestWeights[interest] || 0)}
+                              {getWeightLabel(tuning.interestWeights[interestName] || 0)}
                             </div>
                           </div>
                           <input
@@ -2142,10 +2175,10 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                             min="0"
                             max="100"
                             step="25"
-                            value={Math.round((tuning.interestWeights[interest] || 0) / 25) * 25}
-                            onChange={(e) => handleInterestWeight(interest, parseInt(e.target.value))}
+                            value={Math.round((tuning.interestWeights[interestName] || 0) / 25) * 25}
+                            onChange={(e) => handleInterestWeight(interestName, parseInt(e.target.value))}
                             className={`w-full accent-red-500/50 bg-red-500/10 rounded h-1 ${
-                              tuning.interestWeights[interest] === 0 ? 'opacity-50' : ''
+                              tuning.interestWeights[interestName] === 0 ? 'opacity-50' : ''
                             }`}
                           />
                         </div>
@@ -2515,14 +2548,22 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                       <span className="ancient-text text-base">Interests</span>
                     </h4>
                     <div className="flex flex-wrap gap-2.5 font-bold">
-                      {analysis.interests.map((interest: string) => (
-                        <span 
-                          key={interest ? interest.replace(/[*]/g, '') : interest}
-                          className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
-                        >
-                          {interest ? interest.replace(/[*]/g, '') : interest}
-                        </span>
-                      ))}
+                      {analysis.interests.map((interest: string) => {
+                        const [interestName, expertiseLevel] = interest.split(':').map(s => s.trim());
+                        return (
+                          <span 
+                            key={interestName}
+                            className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
+                          >
+                            <span>{interestName}</span>
+                            {expertiseLevel && (
+                              <span className="text-red-500/60 ml-2">
+                                {expertiseLevel}
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
 

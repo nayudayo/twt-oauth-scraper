@@ -865,37 +865,43 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
         for (const line of lines) {
           const trimmedLine = line.trim()
           
-          // Stop processing if we hit a new section header (indicated by ###)
-          if (trimmedLine.startsWith('###')) {
-            break;
-          }
-          
+          // Skip section headers and empty lines
           if (!trimmedLine || 
               trimmedLine.toLowerCase().includes('primary interests') ||
               trimmedLine.toLowerCase().includes('interests & expertise')) {
             continue
           }
           
-          // Check for bullet points
-          if (trimmedLine.startsWith('-') || trimmedLine.startsWith('*') || trimmedLine.startsWith('•')) {
-            let interest = trimmedLine.replace(/^[-•*]\s*/, '').replace(/\*\*/g, '')
-            
-            // Extract expertise level if present
-            const expertiseMatch = interest.match(/:\s*(.*?(?:expertise|interest|engagement|advanced|intermediate|basic))/i)
-            if (expertiseMatch) {
-              // Keep the expertise level as part of the interest
-              interest = interest.trim()
-            }
-            
-            if (interest) {
-              interestLines.push(interest)
+          // Check for bullet points and extract interest with expertise
+          if (trimmedLine.startsWith('-')) {
+            // Match pattern: "- **Interest**: Description" or "- Interest: Description"
+            const match = trimmedLine.match(/^-\s*\*?\*?([^*:]+)\*?\*?(?::\s*(.+))?/)
+            if (match) {
+              const [, interest, description] = match
+              const interestName = interest.trim()
+              
+              // If there's a description, extract expertise level if present
+              if (description) {
+                const expertiseMatch = description.match(/(?:strong|high|moderate|basic|advanced)\s+(?:interest|expertise)/i)
+                if (expertiseMatch) {
+                  interestLines.push(`${interestName}: ${expertiseMatch[0]}`)
+                } else {
+                  // Just add the interest name if no clear expertise level
+                  interestLines.push(interestName)
+                }
+              } else {
+                interestLines.push(interestName)
+              }
             }
           }
         }
         
-        analysis.interests = interestLines.filter(Boolean)
+        // Clean up and filter interests
+        analysis.interests = interestLines
+          .filter(interest => interest.length > 0)
+          .map(interest => interest.replace(/\*\*/g, '').trim()) // Remove any remaining markdown
         
-        // Provide default interests only if none were found
+        // Only use fallback if no interests were found
         if (analysis.interests.length === 0) {
           analysis.interests = ['General topics']
         }
@@ -953,7 +959,6 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
                section.toLowerCase().includes('themes')) {
         const lines = section.split('\n')
         const themeLines: string[] = []
-        let currentTheme = ''
         
         for (const line of lines) {
           const trimmedLine = line.trim()
@@ -961,46 +966,36 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
           if (!trimmedLine || 
               trimmedLine.toLowerCase().includes('topics and themes:') ||
               trimmedLine.toLowerCase() === 'topics and themes' ||
-              trimmedLine.toLowerCase() === 'key themes') {
+              trimmedLine.toLowerCase() === 'key themes' ||
+              trimmedLine.toLowerCase().includes('these themes interconnect')) {
             continue
           }
           
           // Check for numbered items or bullet points
-          const isNumberedItem = /^\d+\.\s/.test(trimmedLine)
+          const isNumberedItem = /^\d+\.\s+\*\*([^*]+)\*\*/.test(trimmedLine)
           const isBulletPoint = /^[-•*]\s/.test(trimmedLine)
           
-          if (isNumberedItem || isBulletPoint) {
-            // If we have a previous theme, add it
-            if (currentTheme) {
-              themeLines.push(currentTheme)
+          if (isNumberedItem) {
+            // Extract the theme from markdown format: "1. **Theme Name** - Description"
+            const match = trimmedLine.match(/^\d+\.\s+\*\*([^*]+)\*\*\s*-\s*(.+)/)
+            if (match) {
+              const [, theme, description] = match
+              themeLines.push(`${theme.trim()} - ${description.trim()}`)
             }
-            // Keep the number for themes but remove markdown
-            currentTheme = isNumberedItem ? 
-              trimmedLine.replace(/\*\*/g, '').trim() :
-              trimmedLine.replace(/^[-•*]\s*/, '').replace(/\*\*/g, '').trim()
-          } else if (!trimmedLine.toLowerCase().includes('these themes interconnect')) {
-            // Append to current theme if it's not the interconnection text
-            if (currentTheme) {
-              currentTheme += ' ' + trimmedLine
-            } else {
-              currentTheme = trimmedLine
+          } else if (isBulletPoint) {
+            const cleanedLine = trimmedLine
+              .replace(/^[-•*]\s*/, '')  // Remove bullet point
+              .replace(/\*\*/g, '')      // Remove markdown
+              .trim()
+            if (cleanedLine) {
+              themeLines.push(cleanedLine)
             }
           }
         }
         
-        // Add the last theme if exists
-        if (currentTheme) {
-          themeLines.push(currentTheme)
-        }
-        
         // Clean up and filter themes
         analysis.topicsAndThemes = themeLines
-          .map(theme => theme.trim())
-          .filter(theme => {
-            // Filter out interconnection text and empty themes
-            return theme.length > 0 && 
-                   !theme.toLowerCase().includes('these themes interconnect')
-          })
+          .filter(theme => theme.length > 0)
         
         // Only use fallback if no themes were found
         if (analysis.topicsAndThemes.length === 0) {
