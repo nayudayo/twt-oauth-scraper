@@ -221,8 +221,8 @@ class ModelUnavailableError extends OpenAIError {
 const FALLBACK_CONFIG = {
   maxRetries: 3,
   fallbackModel: 'gpt-4o-mini',
-  minTokens: 1000,
-  maxTokens: 2500,
+  minTokens: 2000,
+  maxTokens: 3500,
   defaultTemperature: 0.85,
   styleVariationStep: 0.1,
   maxStyleVariation: 0.3,
