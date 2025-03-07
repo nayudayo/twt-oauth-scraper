@@ -1368,7 +1368,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
             <div className="flex flex-col gap-2">
               <button
                 onClick={loading ? handleCancelScraping : handleScrape}
-                className={`w-full px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text flex items-center justify-center gap-2 ${!loading && !analysis ? 'pulse-action' : ''}`}
+                className={`w-full font-medium px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/30 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text flex items-center justify-center gap-2 ${!loading && !analysis ? 'pulse-action' : ''}`}
               >
                 {loading && <Spinner size="sm" />}
                 {loading ? 'ABORT SEQUENCE' : 'EXECUTE DATA EXTRACTION'}
@@ -1376,7 +1376,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
               {analysis && !isAnalyzing && (
                 <button
                   onClick={handleUpdateAnalysis}
-                  className="w-full px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text"
+                  className="w-full font-medium px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/30 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text"
                 >
                   UPDATE ANALYSIS
                 </button>
@@ -1384,14 +1384,14 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
               {accumulatedTweets.length > 0 && (
                 <button
                   onClick={handleClearData}
-                  className="w-full px-3 py-2 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs ancient-text"
+                  className="w-full font-medium px-3 py-2 border border-red-500/30 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs ancient-text"
                 >
                   CLEAR DATA
                 </button>
               )}
               <button
                 onClick={onClose}
-                className="w-full px-3 py-2 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs ancient-text"
+                className="w-full font-medium px-3 py-2 border border-red-500/30 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs ancient-text"
               >
                 TERMINATE SESSION
               </button>
@@ -1433,7 +1433,9 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                       return (
                         <div key={`trait-${index}-${trait.name}`} className="space-y-2 hover-glow">
                           <div className="flex justify-between items-center">
-                            <span className="text-red-400/90 text-[14px] tracking-wide capitalize">{trait.name}</span>
+                            <span className="text-red-400/90 text-[14px] tracking-wide capitalize font-bold">
+                              {trait.name ? trait.name.replace(/[*-]/g, '') : trait.name}
+                            </span>
                             <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
                               {getTraitLabel(tuning.traitModifiers[trait.name])}
                             </span>
@@ -1448,7 +1450,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                             className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
                           />
                           <div className="text-[14px] leading-relaxed text-red-300/80 pl-2 border-l border-red-500/10">
-                            {trait.explanation}
+                            {trait.explanation ? trait.explanation.replace(/[*]/g, '') : trait.explanation}
                           </div>
                         </div>
                       );
@@ -1469,10 +1471,10 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                           <div className="flex justify-between items-center text-red-400/90">
                             <div className="flex-1">
                               <span className={`text-[14px] tracking-wide ${tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}`}>
-                                {interest.replace(/\*\*/g, '')}
+                                {interest ? interest.replace(/[*-]/g, '') : interest}
                                 <button
                                   onClick={() => handleInterestWeight(interest, 0)}
-                                  className="ml-2 text-red-500/50 hover:text-red-500/70 transition-colors duration-200"
+                                  className="ml-2 text-red-500 hover:text-red-500/70 transition-colors duration-200"
                                   title="Disable interest"
                                 >
                                   ×
@@ -1504,7 +1506,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                         <div className="flex justify-between items-center text-xs text-red-400/70">
                           <div className="flex-1">
                             <span className={tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}>
-                              {interest.replace(/\*\*/g, '')}
+                              {interest ? interest.replace(/[*-]/g, '') : interest}
                               <button
                                 onClick={() => handleRemoveCustomInterest(interest)}
                                 className="ml-2 text-red-500/50 hover:text-red-500/70"
@@ -1712,7 +1714,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
             ) : (
                 <div className="space-y-4">
                 {/* Summary Section */}
-                <div className="bg-black/20 text-justify rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                <div className="bg-black/20 text-left rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
                     <span className="ancient-text text-base">Summary</span>
@@ -1732,7 +1734,9 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     {analysis.traits.map((trait: { name: string; score: number; explanation: string }, index: number) => (
                       <div key={`trait-${index}-${trait.name}`} className="hover-glow">
                         <div className="flex justify-between mb-2 items-center">
-                          <span className="text-red-400/90 font-medium tracking-wide text-[15px] capitalize">{trait.name}</span>
+                          <span className="text-red-400/90 tracking-wide text-[15px] capitalize font-bold">
+                            {trait.name ? trait.name.replace(/[*-]/g, '') : trait.name}
+                          </span>
                           <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">{trait.score}/10</span>
                         </div>
                         <div className="h-1.5 bg-red-500/10 rounded-full overflow-hidden glow-box mb-3">
@@ -1807,10 +1811,10 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                   <div className="flex flex-wrap gap-2.5">
                     {analysis.interests.map((interest: string) => (
                       <span 
-                        key={interest}
+                        key={interest ? interest.replace(/[*-]/g, '') : interest}
                         className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
                       >
-                        {interest.replace(/\*\*/g, '')}
+                        {interest ? interest.replace(/[*-]/g, '') : interest}
                       </span>
                     ))}
                   </div>
@@ -1827,7 +1831,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                       <li key={i} className="flex items-center gap-3 text-red-300/90 hover-text-glow group">
                         <div className="w-1.5 h-1.5 rounded-full bg-red-500/30 group-hover:bg-red-500/50 transition-colors duration-200"></div>
                         <span className="text-[14px] leading-relaxed tracking-wide">
-                          {topic.replace(/\*\*/g, '')}
+                          {topic ? topic.replace(/[*-]/g, '') : topic}
                         </span>
                       </li>
                     ))}
@@ -1876,7 +1880,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-4 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[50vh] sm:max-h-[45vh] md:max-h-[40vh] relative touch-action-pan-y">
             <div className="space-y-2 w-full">
               {accumulatedTweets.length === 0 ? (
-                <div className="text-red-500/50 italic glow-text">
+                <div className="text-red-500/50 italic glow-text text-center">
                   {'>'} {loading ? 'Fetching data...' : 'Awaiting data collection initialization...'}
                 </div>
               ) : (
@@ -2003,14 +2007,14 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
             <div className="flex flex-col gap-2">
               <button
                 onClick={loading ? handleCancelScraping : handleScrape}
-                className={`w-full px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text ${!loading && !analysis ? 'pulse-action' : ''}`}
+                className={`w-full px-3 py-2 font-medium bg-red-500/5 text-red-500/90 border border-red-500/30 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text ${!loading && !analysis ? 'pulse-action' : ''}`}
               >
                 {loading ? 'ABORT SEQUENCE' : 'EXECUTE DATA EXTRACTION'}
               </button>
                 {analysis && !isAnalyzing && (
                   <button
                     onClick={handleUpdateAnalysis}
-                    className="w-full px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text"
+                    className="w-full font-medium px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/30 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text"
                   >
                     UPDATE ANALYSIS
                   </button>
@@ -2018,14 +2022,14 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
               {accumulatedTweets.length > 0 && (
                 <button
                   onClick={handleClearData}
-                  className="w-full px-3 py-2 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs ancient-text"
+                  className="w-full font-medium px-3 py-2 border border-red-500/30 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs ancient-text"
                 >
                   CLEAR DATA
                 </button>
               )}
               <button
                 onClick={onClose}
-                className="w-full px-3 py-2 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs ancient-text"
+                className="w-full font-medium px-3 py-2 border border-red-500/30 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs ancient-text"
               >
                 TERMINATE SESSION
               </button>
@@ -2055,9 +2059,11 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     {analysis.traits.map((trait: { name: string; score: number; explanation: string }, index: number) => {
                       return (
                         <div key={`trait-${index}-${trait.name}`} className="space-y-2 hover-glow">
-                          <div className="flex justify-between text-xs text-red-400/70">
-                            <span className="hover-text-glow capitalize">{trait.name}</span>
-                            <span className="hover-text-glow">
+                          <div className="flex justify-between items-center">
+                            <span className="text-red-400/90 text-[14px] tracking-wide capitalize font-bold">
+                              {trait.name ? trait.name.replace(/[*-]/g, '') : trait.name}
+                            </span>
+                            <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
                               {getTraitLabel(tuning.traitModifiers[trait.name])}
                             </span>
                           </div>
@@ -2068,11 +2074,11 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                             step="25"
                             value={tuning.traitModifiers[trait.name]}
                             onChange={(e) => handleTraitAdjustment(trait.name, parseInt(e.target.value))}
-                            className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
+                            className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
                           />
-                          <p className="text-xs text-red-400/50 mt-1 hover-text-glow">
-                            {trait.explanation}
-                          </p>
+                          <div className="text-[14px] leading-relaxed text-red-300/80 pl-2 border-l border-red-500/10">
+                            {trait.explanation ? trait.explanation.replace(/[*]/g, '') : trait.explanation}
+                          </div>
                         </div>
                       );
                     })}
@@ -2089,13 +2095,13 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     {analysis.interests.map((interest: string, index: number) => {
                       return (
                         <div key={`interest-${index}-${interest}`} className="space-y-1">
-                          <div className="flex justify-between items-center text-xs text-red-400/70">
+                          <div className="flex justify-between items-center font-bold text-xs text-red-400/70">
                             <div className="flex-1">
                               <span className={tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}>
-                                {interest.replace(/\*\*/g, '')}
+                                {interest ? interest.replace(/[*-]/g, '') : interest}
                                 <button
                                   onClick={() => handleInterestWeight(interest, 0)}
-                                  className="ml-2 text-red-500/50 hover:text-red-500/70"
+                                  className="ml-2 text-red-500 hover:text-red-500/70"
                                   title="Disable interest"
                                 >
                                   ×
@@ -2127,7 +2133,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                         <div className="flex justify-between items-center text-xs text-red-400/70">
                           <div className="flex-1">
                             <span className={tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}>
-                              {interest.replace(/\*\*/g, '')}
+                              {interest ? interest.replace(/[*-]/g, '') : interest}
                               <button
                                 onClick={() => handleRemoveCustomInterest(interest)}
                                 className="ml-2 text-red-500/50 hover:text-red-500/70"
@@ -2163,12 +2169,12 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                           value={newInterest}
                           onChange={(e) => setNewInterest(e.target.value)}
                           placeholder="Add custom interest..."
-                          className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow"
+                          className="flex-1 bg-black/20 text-red-400/90 border border-red-500/50 rounded px-3 py-1.5 text-sm placeholder:text-red-500/50 focus:outline-none focus:border-red-500/40 hover-glow"
                         />
                         <button
                           type="submit"
                           disabled={!newInterest.trim()}
-                          className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow"
+                          className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/50 rounded hover:bg-red-500/10 hover:border-red-500/50 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow"
                         >
                           Add
                         </button>
@@ -2185,7 +2191,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                   </h4>
                   <div className="space-y-3">
                     <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/70">
+                      <div className="flex justify-between text-xs text-red-400/80">
                         <span className="hover-text-glow">Formality</span>
                         <span className="hover-text-glow">
                           {tuning.communicationStyle.formality === 0 ? 'None' :
@@ -2207,7 +2213,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     </div>
 
                     <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/70">
+                      <div className="flex justify-between text-xs text-red-400/80">
                         <span className="hover-text-glow">Technical Level</span>
                         <span className="hover-text-glow">
                           {tuning.communicationStyle.technicalLevel === 0 ? 'None' :
@@ -2229,7 +2235,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     </div>
 
                     <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/70">
+                      <div className="flex justify-between text-xs text-red-400/80">
                         <span className="hover-text-glow">Enthusiasm</span>
                         <span className="hover-text-glow">
                           {tuning.communicationStyle.enthusiasm === 0 ? 'None' :
@@ -2251,7 +2257,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     </div>
 
                     <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/70">
+                      <div className="flex justify-between text-xs text-red-400/80">
                         <span className="hover-text-glow">Emoji Usage</span>
                         <span className="hover-text-glow">
                           {tuning.communicationStyle.emojiUsage === 0 ? 'None' :
@@ -2331,7 +2337,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
             {/* Tweet List */}
             {accumulatedTweets.length === 0 ? (
               <div className="flex-1 flex items-center justify-center">
-                <div className="text-red-500/50 italic glow-text">
+                <div className="text-red-500/50 italic text-center glow-text">
                   {'>'} {loading ? 'Fetching data...' : 'Awaiting data collection initialization...'}
                 </div>
               </div>
@@ -2389,7 +2395,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
               ) : (
                 <div className="space-y-4">
                   {/* Summary Section */}
-                  <div className="bg-black/20 text-justify rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                  <div className="bg-black/20 text-left rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                     <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
                       <span className="ancient-text">Summary</span>
@@ -2409,7 +2415,9 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                       {analysis.traits.map((trait: { name: string; score: number; explanation: string }, index: number) => (
                         <div key={`trait-${index}-${trait.name}`} className="hover-glow">
                           <div className="flex justify-between mb-2 items-center">
-                            <span className="text-red-400/90 font-medium tracking-wide text-[15px] capitalize">{trait.name}</span>
+                            <span className="text-red-400/90 font-medium tracking-wide text-[15px] capitalize">
+                              {trait.name ? trait.name.replace(/[*-]/g, '') : trait.name}
+                            </span>
                             <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">{trait.score}/10</span>
                           </div>
                           <div className="h-1.5 bg-red-500/10 rounded-full overflow-hidden glow-box mb-3">
@@ -2481,13 +2489,13 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
                       <span className="ancient-text text-base">Interests</span>
                     </h4>
-                    <div className="flex flex-wrap gap-2.5">
+                    <div className="flex flex-wrap gap-2.5 font-bold">
                       {analysis.interests.map((interest: string) => (
                         <span 
-                          key={interest}
+                          key={interest ? interest.replace(/[*]/g, '') : interest}
                           className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
                         >
-                          {interest.replace(/\*\*/g, '')}
+                          {interest ? interest.replace(/[*]/g, '') : interest}
                         </span>
                       ))}
                     </div>
@@ -2503,8 +2511,8 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                       {analysis.topicsAndThemes.map((topic: string, i: number) => (
                         <li key={i} className="flex items-center gap-3 text-red-300/90 hover-text-glow group">
                           <div className="w-1.5 h-1.5 rounded-full bg-red-500/30 group-hover:bg-red-500/50 transition-colors duration-200"></div>
-                          <span className="text-[14px] leading-relaxed tracking-wide">
-                            {topic.replace(/\*\*/g, '')}
+                          <span className="text-[14px] leading-relaxed tracking-wide font-bold">
+                            {topic ? topic.replace(/[*-]/g, '') : topic}
                           </span>
                         </li>
                       ))}
