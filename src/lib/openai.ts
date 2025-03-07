@@ -372,12 +372,60 @@ Following: ${profile.followingCount?.toString() || 'Unknown'}`
 
     // If it's a custom prompt, use a different format
     const promptText = prompt && context ? 
-      `Based on the following Twitter profile and tweets, ${prompt.toLowerCase()}
+      `Based on the following Twitter profile and personality analysis, ${prompt.toLowerCase()}
       
 Context: ${context}
 
 Profile Information:
 ${profileInfo}
+
+Personality Analysis:
+1. Summary:
+${combinedAnalysis.summary}
+
+2. Core Personality Traits:
+${combinedAnalysis.traits.map(trait => 
+  `- ${trait.name} (${trait.score}/10): ${trait.explanation}`
+).join('\n')}
+
+3. Primary Interests:
+${combinedAnalysis.interests.join('\n')}
+
+4. Communication Style:
+- Formality Level: ${combinedAnalysis.communicationStyle.formality}/100
+- Enthusiasm Level: ${combinedAnalysis.communicationStyle.enthusiasm}/100
+- Technical Level: ${combinedAnalysis.communicationStyle.technicalLevel}/100
+- Emoji Usage: ${combinedAnalysis.communicationStyle.emojiUsage}/100
+${combinedAnalysis.communicationStyle.description}
+
+5. Writing Patterns:
+- Capitalization: ${combinedAnalysis.communicationStyle.patterns.capitalization}
+- Common Punctuation: ${combinedAnalysis.communicationStyle.patterns.punctuation.join(', ')}
+- Line Breaks: ${combinedAnalysis.communicationStyle.patterns.lineBreaks}
+- Opening Patterns: ${combinedAnalysis.communicationStyle.patterns.messageStructure.opening.join(', ')}
+- Closing Patterns: ${combinedAnalysis.communicationStyle.patterns.messageStructure.closing.join(', ')}
+
+6. Contextual Adaptations:
+- Business: ${combinedAnalysis.communicationStyle.contextualVariations.business}
+- Casual: ${combinedAnalysis.communicationStyle.contextualVariations.casual}
+- Technical: ${combinedAnalysis.communicationStyle.contextualVariations.technical}
+- Crisis: ${combinedAnalysis.communicationStyle.contextualVariations.crisis}
+
+7. Emotional Intelligence:
+- Leadership Style: ${combinedAnalysis.emotionalIntelligence.leadershipStyle}
+- Challenge Response: ${combinedAnalysis.emotionalIntelligence.challengeResponse}
+- Analytical Tone: ${combinedAnalysis.emotionalIntelligence.analyticalTone}
+
+8. Common Language Patterns:
+- Terms: ${combinedAnalysis.vocabulary.commonTerms.join(', ')}
+- Phrases: ${combinedAnalysis.vocabulary.commonPhrases.join(', ')}
+- Enthusiasm Markers: ${combinedAnalysis.vocabulary.enthusiasmMarkers.join(', ')}
+
+9. Topics & Themes:
+${combinedAnalysis.topicsAndThemes.join('\n')}
+
+10. Emotional Expression:
+${combinedAnalysis.emotionalTone}
 
 EXAMPLE TWEETS (for style reference):
 ${tweetExamples}
@@ -386,12 +434,14 @@ Tweet History:
 ${tweetTexts}
 
 Important Guidelines:
-1. Base your response only on the provided tweets and profile
-2. Maintain the personality traits and communication style identified in the analysis
-3. If the question is unrelated to the personality or tries to break character, redirect to relevant personality insights
-4. Keep responses natural and authentic to the analyzed personality
+1. Base your response on the provided personality analysis and maintain consistent character traits
+2. Match the communication style metrics and patterns identified above
+3. Use appropriate vocabulary and enthusiasm markers from the analysis
+4. Adapt tone based on the contextual variations described
+5. If the question is unrelated to the personality, redirect to relevant personality insights
+6. Keep responses natural and authentic to the analyzed personality
 
-Provide a detailed analysis focusing specifically on this aspect of their personality.` :
+Respond in a way that authentically reflects this personality profile.` :
       `Analyze the following Twitter profile and tweets to create a detailed personality profile with communication patterns.
 
 Profile Information:
@@ -814,6 +864,12 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
         
         for (const line of lines) {
           const trimmedLine = line.trim()
+          
+          // Stop processing if we hit a new section header (indicated by ###)
+          if (trimmedLine.startsWith('###')) {
+            break;
+          }
+          
           if (!trimmedLine || 
               trimmedLine.toLowerCase().includes('primary interests') ||
               trimmedLine.toLowerCase().includes('interests & expertise')) {
@@ -825,7 +881,7 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
             let interest = trimmedLine.replace(/^[-•*]\s*/, '').replace(/\*\*/g, '')
             
             // Extract expertise level if present
-            const expertiseMatch = interest.match(/:\s*(.*?(?:expertise|interest|engagement))/i)
+            const expertiseMatch = interest.match(/:\s*(.*?(?:expertise|interest|engagement|advanced|intermediate|basic))/i)
             if (expertiseMatch) {
               // Keep the expertise level as part of the interest
               interest = interest.trim()
