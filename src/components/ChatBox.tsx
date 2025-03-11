@@ -33,7 +33,7 @@ interface PersonalityTuning {
 }
 
 interface ScanProgress {
-  phase: 'posts' | 'replies' | 'complete'
+  phase: 'posts' | 'replies' | 'complete' | 'ready'
   count: number
   message?: string
 }
@@ -921,50 +921,9 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     const loadExistingTweets = async () => {
       if (!profile.name || isLoadingTweets) return;
       
-      setIsLoadingTweets(true);
-      try {
-        console.log('Loading tweets for:', profile.name);
-        const response = await fetch(`/api/tweets/${profile.name}/all`, {
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch existing tweets');
-        }
-        
-        const existingTweets = await response.json();
-        console.log('Loaded tweets from database:', existingTweets?.length || 0);
-        
-        if (Array.isArray(existingTweets)) {
-          const validTweets = existingTweets.filter((t: unknown): t is Tweet => Boolean(t));
-          console.log('Valid tweets found:', validTweets.length);
-          
-          setAccumulatedTweets(validTweets);
-          onTweetsUpdate(validTweets);
-          
-          if (validTweets.length > 0) {
-            setScanProgress({
-              phase: 'complete',
-              count: validTweets.length,
-              message: `${validTweets.length} tweets loaded from database`
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Error loading existing tweets:', error);
-        setError(error instanceof Error ? error.message : 'Failed to load existing tweets');
-      } finally {
-        setIsLoadingTweets(false);
-      }
-    };
-
-    // Load existing tweets and handle initial tweets
-    const initializeTweets = async () => {
+      // If we have initial tweets, use those instead of fetching
       if (initialTweets?.length > 0) {
-        console.log('Initializing with provided tweets:', initialTweets.length);
+        console.log('Using provided initial tweets:', initialTweets.length);
         setAccumulatedTweets(initialTweets);
         onTweetsUpdate(initialTweets);
         setScanProgress({
@@ -972,13 +931,82 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           count: initialTweets.length,
           message: `${initialTweets.length} tweets loaded`
         });
-      } else {
-        await loadExistingTweets();
+        return;
       }
+      
+      const MAX_RETRIES = 3;
+      const INITIAL_DELAY = 2000; // 2 seconds
+      let retryCount = 0;
+      
+      const attemptLoad = async (delay: number): Promise<void> => {
+        try {
+          setIsLoadingTweets(true);
+          console.log(`Loading tweets for: ${profile.name} (Attempt ${retryCount + 1}/${MAX_RETRIES})`);
+          
+          const response = await fetch(`/api/tweets/${profile.name}/all`, {
+            cache: 'no-store',
+            headers: {
+              'Cache-Control': 'no-cache'
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error('Failed to fetch existing tweets');
+          }
+          
+          const existingTweets = await response.json();
+          console.log('Loaded tweets from database:', existingTweets?.length || 0);
+          
+          if (Array.isArray(existingTweets)) {
+            const validTweets = existingTweets.filter((t: unknown): t is Tweet => Boolean(t));
+            console.log('Valid tweets found:', validTweets.length);
+            
+            if (validTweets.length > 0) {
+              setAccumulatedTweets(validTweets);
+              onTweetsUpdate(validTweets);
+              setScanProgress({
+                phase: 'complete',
+                count: validTweets.length,
+                message: `${validTweets.length} tweets loaded from database`
+              });
+            } else if (retryCount < MAX_RETRIES) {
+              retryCount++;
+              const nextDelay = delay * 2; // Exponential backoff
+              console.log(`No tweets found, retrying in ${nextDelay/1000}s...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              await attemptLoad(nextDelay);
+            } else {
+              console.log('No tweets found after maximum retries');
+              setScanProgress({
+                phase: 'ready',
+                count: 0,
+                message: 'No tweets found - ready to start scanning'
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Error loading existing tweets:', error);
+          if (retryCount < MAX_RETRIES) {
+            retryCount++;
+            const nextDelay = delay * 2; // Exponential backoff
+            console.log(`Error occurred, retrying in ${nextDelay/1000}s...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            await attemptLoad(nextDelay);
+          } else {
+            setError(error instanceof Error ? error.message : 'Failed to load existing tweets');
+          }
+        } finally {
+          if (retryCount >= MAX_RETRIES) {
+            setIsLoadingTweets(false);
+          }
+        }
+      };
+
+      await attemptLoad(INITIAL_DELAY);
     };
 
-    initializeTweets();
-  }, [profile.name, initialTweets, onTweetsUpdate, isLoadingTweets]);
+    loadExistingTweets();
+  }, [profile.name, isLoadingTweets, onTweetsUpdate, initialTweets]);
 
   // Handle text input with Shift+Enter
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

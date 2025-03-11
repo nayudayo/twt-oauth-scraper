@@ -7,6 +7,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '../../../lib/auth/config'
 import { ChatCompletionMessage } from 'openai/resources/chat/completions'
 import { initDB } from '@/lib/db'
+import { analyzeStyle } from '@/lib/analysis/style'
 
 interface RequestBody {
   message: string
@@ -67,146 +68,6 @@ interface ChatRequestWithRegeneration {
     effects?: string[]
   }
   regenerationKey?: string
-}
-
-// Add type definition for style elements
-interface StyleElements {
-  emoji: string[];
-  enthusiasm: number;
-  capitalization: string;
-  punctuation: string[];
-  lineBreaks: string;
-  formality: string;
-  technicalTerms: string[];
-  bigrams: string[];
-  trigrams: string[];
-  structure: string[];
-}
-
-// Update identifyStyleElements to use StyleElements
-function identifyStyleElements(tweet: string): StyleElements {
-  const elements: StyleElements = {
-    emoji: [],
-    enthusiasm: 0,
-    capitalization: 'mixed',
-    punctuation: [],
-    lineBreaks: 'minimal',
-    formality: 'formal',
-    technicalTerms: [],
-    bigrams: [],
-    trigrams: [],
-    structure: []
-  };
-  
-  // Emoji usage
-  const emojis = tweet.match(/[\p{Emoji}]/gu);
-  if (emojis) elements.emoji = emojis;
-  
-  // Enthusiasm markers
-  const exclamations = tweet.match(/!/g);
-  elements.enthusiasm = exclamations ? exclamations.length : 0;
-  
-  // Capitalization pattern
-  const upperCaseCount = (tweet.match(/[A-Z]/g) || []).length;
-  const lowerCaseCount = (tweet.match(/[a-z]/g) || []).length;
-  elements.capitalization = 
-    upperCaseCount > lowerCaseCount ? 'mostly-uppercase' :
-    upperCaseCount < lowerCaseCount ? 'mostly-lowercase' : 'mixed';
-  
-  // Punctuation patterns
-  const punctuation = tweet.match(/[.!?…-]+/g);
-  if (punctuation) elements.punctuation = Array.from(new Set(punctuation));
-  
-  // Line break analysis
-  const lineBreaks = (tweet.match(/\n/g) || []).length;
-  elements.lineBreaks = 
-    lineBreaks > 2 ? 'frequent' :
-    lineBreaks > 0 ? 'moderate' : 'minimal';
-  
-  // Formality indicators
-  const hasSlang = /(?:gonna|wanna|gotta|idk|tbh|imo)/i.test(tweet);
-  elements.formality = hasSlang ? 'casual' : 'formal';
-  
-  // Technical terms
-  const technicalTerms = tweet.match(/\b(?:algorithm|framework|implementation|api|function|data|code|system)\b/gi);
-  if (technicalTerms) elements.technicalTerms = technicalTerms;
-  
-  // Extract n-grams
-  const words = tweet.toLowerCase().split(/\s+/);
-  elements.bigrams = words.slice(0, -1)
-    .map((word, i) => `${word} ${words[i + 1]}`)
-    .slice(0, 3);
-  elements.trigrams = words.slice(0, -2)
-    .map((word, i) => `${word} ${words[i + 1]} ${words[i + 2]}`)
-    .slice(0, 2);
-  
-  // Message structure
-  const isOpening = /^(?:gm|hey|ok|alright|just|thinking)/i.test(tweet);
-  const isClosing = /(?:lfg|stay locked|big love|beautiful|great work)/i.test(tweet);
-  if (isOpening) elements.structure.push('opening');
-  if (isClosing) elements.structure.push('closing');
-  
-  return elements;
-}
-
-// Helper function to convert StyleElements to string format
-function styleElementsToString(elements: StyleElements): string {
-  const parts: string[] = [];
-  
-  if (elements.emoji.length) parts.push(`Emoji style: ${elements.emoji.join(' ')}`);
-  if (elements.enthusiasm > 0) parts.push(`Enthusiasm level: ${elements.enthusiasm} exclamation marks`);
-  parts.push(`Capitalization: ${elements.capitalization}`);
-  if (elements.punctuation.length) parts.push(`Punctuation style: ${elements.punctuation.join(' ')}`);
-  parts.push(`Line breaks: ${elements.lineBreaks}`);
-  parts.push(`Formality: ${elements.formality}`);
-  if (elements.technicalTerms.length) parts.push(`Technical terms: ${elements.technicalTerms.join(', ')}`);
-  if (elements.bigrams.length) parts.push(`Common bigrams: ${elements.bigrams.join(', ')}`);
-  if (elements.trigrams.length) parts.push(`Common trigrams: ${elements.trigrams.join(', ')}`);
-  if (elements.structure.length) parts.push(`Structure: ${elements.structure.join(' & ')} message`);
-  
-  return parts.join(' | ');
-}
-
-function extractVocabularyPatterns(tweet: string): string {
-  const patterns = [];
-  
-  // Extract terms
-  const words = tweet.toLowerCase().split(/\s+/);
-  const commonTerms = words.filter(word => word.length > 3).slice(0, 3);
-  if (commonTerms.length) patterns.push(`Common terms: ${commonTerms.join(', ')}`);
-  
-  // Extract phrases
-  const phrases = tweet.match(/\b\w+\s+\w+\s+\w+\b/g) || [];
-  if (phrases.length) patterns.push(`Phrases: ${phrases.slice(0, 2).join(', ')}`);
-  
-  // Extract enthusiasm markers
-  const enthusiasm = tweet.match(/\b(?:wow|omg|lol|amazing|incredible|awesome)\b/gi) || [];
-  if (enthusiasm.length) patterns.push(`Enthusiasm: ${enthusiasm.join(', ')}`);
-  
-  return patterns.join(' | ');
-}
-
-function analyzeMessageStructure(tweet: string): string {
-  const structure = [];
-  
-  // Analyze opening
-  if (/^(?:hey|hi|ok|so|just|thinking)/i.test(tweet)) {
-    structure.push('Standard opening');
-  }
-  
-  // Analyze framing
-  if (tweet.includes('because') || tweet.includes('therefore') || tweet.includes('however')) {
-    structure.push('Logical framing');
-  } else if (tweet.includes('I think') || tweet.includes('In my opinion')) {
-    structure.push('Opinion framing');
-  }
-  
-  // Analyze closing
-  if (/(?:thanks|cheers|later|bye|ttyl)/i.test(tweet)) {
-    structure.push('Standard closing');
-  }
-  
-  return structure.join(' → ') || 'Direct statement';
 }
 
 export async function POST(req: Request) {
@@ -351,18 +212,61 @@ export async function POST(req: Request) {
     .sort((a, b) => b.weight - a.weight)
 
     // Create base system prompt
-    const baseSystemPrompt = `You are roleplaying as the Twitter user @${profile.name}. Based on their personality analysis and current tuning parameters:
+    const baseSystemPrompt = `You are a clone of the Twitter user @${profile.name}. 
+
+!!! CRITICAL - TWEET STYLE MATCHING !!!
+Study these authentic tweets carefully - your responses MUST match their exact style patterns:
+
+${analysis.exampleTweets?.map((tweet: string, i: number) => {
+  const tweetStyle = analyzeStyle([{ 
+    id: 'example',
+    text: tweet,
+    url: '',
+    createdAt: new Date().toISOString(),
+    timestamp: Date.now().toString(),
+    metrics: {
+      likes: 0,
+      retweets: 0,
+      views: 0
+    },
+    images: [],
+    isReply: false
+  }]);
+  return `Example ${i + 1}:
+  "${tweet}"
+  ${tweetStyle.summary}
+  
+  Writing Style:
+  - Capitalization: ${tweetStyle.elements.writing.capitalization}
+  - Punctuation: ${tweetStyle.elements.writing.punctuation.join(', ')}
+  - Line Breaks: ${tweetStyle.elements.writing.lineBreaks}
+  - Emoji Usage: ${tweetStyle.elements.writing.emojiUsage.commonEmojis.join(' ')}
+  
+  Vocabulary:
+  - Common Terms: ${tweetStyle.elements.vocabulary.commonTerms.join(', ')}
+  - Phrases: ${tweetStyle.elements.vocabulary.phrases.join(', ')}
+  - Technical Level: ${tweetStyle.elements.vocabulary.technicalLevel}/100
+  - Enthusiasm Markers: ${tweetStyle.elements.vocabulary.enthusiasmMarkers.join(', ')}
+  
+  Structure:
+  - Openings: ${tweetStyle.elements.structure.openings.join(', ')}
+  - Closings: ${tweetStyle.elements.structure.closings.join(', ')}
+  - Framing: ${tweetStyle.elements.structure.framing.join(', ')}
+  - Average Length: ${tweetStyle.elements.structure.averageLength} words`
+}).join('\n\n')}
+
+YOUR RESPONSES MUST:
+1. Match the exact sentence structure patterns shown in the tweets
+2. Use the same type of vocabulary and phrases
+3. Copy the punctuation style and capitalization patterns
+4. Maintain identical emoji usage patterns (if any)
+5. Follow the same opening/closing patterns
+6. Use similar technical vs casual language balance
+7. Mirror the message length and complexity
+
+Based on their personality analysis and current tuning parameters:
 
 Summary: ${analysis.summary}
-
-AUTHENTIC TWEET EXAMPLES (Study these carefully for style matching):
-${analysis.exampleTweets?.map((tweet: string, i: number) => 
-  `Example ${i + 1}:
-  "${tweet}"
-  Style elements: ${styleElementsToString(identifyStyleElements(tweet))}
-  Vocabulary patterns: ${extractVocabularyPatterns(tweet)}
-  Message structure: ${analyzeMessageStructure(tweet)}`
-).join('\n\n')}
 
 COMMUNICATION PATTERNS TO MATCH:
 1. Writing Style:

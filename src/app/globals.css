@@ -2,9 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Import Share Tech Mono font */
+/* Import fonts */
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
 /* Base styles */
 :root {
@@ -344,7 +345,6 @@ body {
 }
 
 .ancient-text {
-  font-family: 'Share Tech Mono', monospace;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   text-shadow: 
@@ -427,5 +427,32 @@ pre.ascii-logo {
   margin: 0;
   padding: 0;
   max-width: 100%;
+}
+
+/* Button idle animation */
+@keyframes buttonIdle {
+  0%, 100% {
+    box-shadow: 0 0 10px var(--glow-color),
+                inset 0 0 10px var(--glow-color),
+                0 0 20px rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.3);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 20px var(--glow-color),
+                inset 0 0 20px var(--glow-color),
+                0 0 40px rgba(239, 68, 68, 0.4);
+    border-color: rgba(239, 68, 68, 0.6);
+    transform: scale(1.02);
+  }
+}
+
+.button-idle {
+  animation: buttonIdle 2s ease-in-out infinite;
+}
+
+/* Font classes */
+.font-press-start {
+  font-family: 'Press Start 2P', cursive;
 }
 

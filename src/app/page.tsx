@@ -5,6 +5,7 @@ import { signIn, signOut, useSession } from 'next-auth/react'
 import ChatBox from '@/components/ChatBox'
 import { TerminalModal } from '@/components/TerminalModal'
 import { AccessCodeModal } from '@/components/AccessCodeModal'
+import FlowField from '@/components/FlowField'
 import { Tweet } from '@/types/scraper'
 
 export default function Home() {
@@ -14,6 +15,17 @@ export default function Home() {
   const [showContent, setShowContent] = useState(false)
   const [accessVerified, setAccessVerified] = useState(false)
   const [isCheckingAccess, setIsCheckingAccess] = useState(true)
+  const [showHeroContent, setShowHeroContent] = useState(false)
+
+  // Effect for hero content fade-in
+  useEffect(() => {
+    if (!session) {
+      const timer = setTimeout(() => {
+        setShowHeroContent(true);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [session]);
 
   // Check access code status when session is available
   useEffect(() => {
@@ -158,13 +170,32 @@ export default function Home() {
   if (!session) {
     return (
       <main className="min-h-screen bg-gradient-to-br from-black via-red-950/20 to-black text-red-500 font-mono flex">
-        <div className="flex-1 flex items-center justify-center">
-          <button
-            onClick={() => signIn('twitter')}
-            className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow"
-          >
-            ESTABLISH CONNECTION
-          </button>
+        <div className="flex-1 flex flex-col items-center justify-center relative">
+          {/* FlowField container - made bigger and positioned absolutely */}
+          <div className="fixed inset-0 w-screen h-screen overflow-hidden">
+            <div className="w-full h-full flex items-center justify-center">
+              <div className="min-w-[100vw] min-h-[100vh] flex items-center justify-center">
+                <FlowField 
+                  imageSrc="/b.png" 
+                  width={2000}
+                  height={2000}
+                />
+              </div>
+            </div>
+          </div>
+          
+          {/* Content container with hero text and button */}
+          <div className={`relative z-10 flex flex-col items-center gap-8 transition-opacity duration-1000 ${showHeroContent ? 'opacity-100' : 'opacity-0'}`}>
+            <h1 className="text-4xl md:text-6xl font-press-start title-glow">
+              Push The Button
+            </h1>
+            <button
+              onClick={() => signIn('twitter')}
+              className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow button-idle font-press-start"
+            >
+              ESTABLISH CONNECTION
+            </button>
+          </div>
         </div>
       </main>
     )
