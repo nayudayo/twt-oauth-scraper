@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { initDB } from '@/lib/db';
 import { TweetDB } from '@/lib/db/tweets';
-import { getRedis } from '@/lib/redis';
 import { RateLimiter } from '@/lib/rate-limiter';
 
 // Cache TTL in seconds
@@ -45,23 +44,6 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Try to get from cache first
-    const redis = await getRedis();
-    const cacheKey = `tweets:${username}:${cursor || 'latest'}:${limit || 'default'}:${includeReplies}`;
-    const cachedData = await redis.get(cacheKey);
-
-    if (cachedData) {
-      return NextResponse.json(JSON.parse(cachedData), {
-        headers: {
-          'X-Cache': 'HIT',
-          'Cache-Control': `public, max-age=${CACHE_TTL}`,
-          'X-RateLimit-Limit': RATE_LIMIT.max.toString(),
-          'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
-          'X-RateLimit-Reset': rateLimitResult.reset.toString()
-        }
-      });
-    }
-
     // Get fresh data from database
     const db = await initDB();
     const user = await db.getUserByUsername(username);
@@ -80,13 +62,6 @@ export async function GET(req: NextRequest) {
       limit: limit ? parseInt(limit) : undefined,
       includeReplies
     });
-
-    // Cache the response
-    await redis.setex(
-      cacheKey,
-      CACHE_TTL,
-      JSON.stringify(tweets)
-    );
 
     return NextResponse.json(tweets, {
       headers: {

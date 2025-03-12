@@ -39,8 +39,19 @@ const calculateTemperature = (tuning: RequestBody['tuning']): number => {
   const formalityTemp = tuning.communicationStyle.formality / 100
   const enthusiasmTemp = tuning.communicationStyle.enthusiasm / 100
   
-  // Higher enthusiasm and lower formality should increase temperature
-  return Math.min(Math.max((enthusiasmTemp + (1 - formalityTemp)) / 2, 0.3), 0.9)
+  // Lower temperature when style parameters are at extremes (0 or 100)
+  // This makes the model follow instructions more strictly
+  const hasExtremeParams = 
+    tuning.communicationStyle.formality === 0 || tuning.communicationStyle.formality === 100 ||
+    tuning.communicationStyle.enthusiasm === 0 || tuning.communicationStyle.enthusiasm === 100 ||
+    tuning.communicationStyle.technicalLevel === 0 || tuning.communicationStyle.technicalLevel === 100 ||
+    tuning.communicationStyle.emojiUsage === 0 || tuning.communicationStyle.emojiUsage === 100
+
+  // Base temperature on enthusiasm and formality
+  const baseTemp = Math.min(Math.max((enthusiasmTemp + (1 - formalityTemp)) / 2, 0.3), 0.9)
+  
+  // Reduce temperature by 0.3 for extreme parameters to ensure stricter adherence
+  return hasExtremeParams ? Math.max(0.3, baseTemp - 0.3) : baseTemp
 }
 
 const MAX_RETRIES = 3;
@@ -213,6 +224,21 @@ export async function POST(req: Request) {
 
     // Create base system prompt
     const baseSystemPrompt = `You are a clone of the Twitter user @${profile.name}. 
+
+CRITICAL STYLE RULES (MUST FOLLOW EXACTLY):
+1. Emoji usage is set to ${tuning.communicationStyle.emojiUsage}/100. This is a STRICT requirement:
+   - If set to 0: You must NEVER use ANY emojis or emoticons
+   - If set to 1-25: Use EXACTLY ONE emoji per message
+   - If set to 26-50: Use EXACTLY 2-3 emojis per message
+   - If set to 51-75: Use EXACTLY 4-5 emojis per message
+   - If set to 76-100: Use 6+ emojis per message
+2. Formality level ${tuning.communicationStyle.formality}/100 must be matched exactly
+3. Enthusiasm level ${tuning.communicationStyle.enthusiasm}/100 must be matched exactly
+4. Technical level ${tuning.communicationStyle.technicalLevel}/100 must be matched exactly
+
+VIOLATION OF THESE RULES IS NOT ALLOWED UNDER ANY CIRCUMSTANCES.
+
+${analysis.summary}
 
 !!! CRITICAL - TWEET STYLE MATCHING !!!
 Study these authentic tweets carefully - your responses MUST match their exact style patterns:

@@ -84,6 +84,14 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     username: profile.name || ''
   });
 
+  // Add ref to track latest tuning state
+  const latestTuning = useRef<PersonalityTuning>(tuning)
+
+  // Update ref whenever tuning changes
+  useEffect(() => {
+    latestTuning.current = tuning;
+  }, [tuning]);
+
   // Add escape key handler for modals
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -166,13 +174,17 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       const existingTrait = analysis.traits.find(t => t.name === traitName);
       if (!existingTrait) return;
 
-      await personalityCache.saveToCache({
-        ...analysis,
-        traits: analysis.traits.map(trait => 
-          trait.name === traitName 
-            ? { ...trait, score: analysisScore }
-            : trait
-        )
+      // Update the analysis state directly since we no longer have Redis cache
+      setAnalysis(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          traits: prev.traits.map(trait => 
+            trait.name === traitName 
+              ? { ...trait, score: analysisScore }
+              : trait
+          )
+        };
       });
     }
   }
@@ -190,41 +202,67 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     if (analysis) {
       await personalityCache.saveToCache({
         ...analysis,
-        interests: Object.entries({
+        interestWeights: {
           ...tuning.interestWeights,
           [interest]: weight
-        })
-          .filter(([, weight]) => weight > 0)
-          .map(([interest]) => interest)
+        },
+        customInterests: tuning.customInterests
       });
     }
   }
 
-  const handleAddCustomInterest = (e: React.FormEvent) => {
+  const handleAddCustomInterest = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newInterest.trim()) return
     
+    const newInterestTrimmed = newInterest.trim();
+    
     setTuning(prev => ({
       ...prev,
-      customInterests: [...prev.customInterests, newInterest.trim()],
+      customInterests: [...prev.customInterests, newInterestTrimmed],
       interestWeights: {
         ...prev.interestWeights,
-        [newInterest.trim()]: 50 // default weight
+        [newInterestTrimmed]: 50 // default weight
       }
-    }))
-    setNewInterest('')
+    }));
+    setNewInterest('');
+
+    // Save to cache if we have analysis
+    if (analysis) {
+      await personalityCache.saveToCache({
+        ...analysis,
+        interestWeights: {
+          ...tuning.interestWeights,
+          [newInterestTrimmed]: 50
+        },
+        customInterests: [...tuning.customInterests, newInterestTrimmed]
+      });
+    }
   }
 
-  const handleRemoveCustomInterest = (interest: string) => {
+  const handleRemoveCustomInterest = async (interest: string) => {
     setTuning(prev => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { [interest]: _, ...remainingWeights } = prev.interestWeights
+      const { [interest]: _, ...remainingWeights } = prev.interestWeights;
       return {
         ...prev,
         customInterests: prev.customInterests.filter(i => i !== interest),
         interestWeights: remainingWeights
       }
-    })
+    });
+
+    // Save to cache if we have analysis
+    if (analysis) {
+      const updatedCustomInterests = tuning.customInterests.filter(i => i !== interest);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { [interest]: _, ...remainingWeights } = tuning.interestWeights;
+      
+      await personalityCache.saveToCache({
+        ...analysis,
+        interestWeights: remainingWeights,
+        customInterests: updatedCustomInterests
+      });
+    }
   }
 
   const handleStyleAdjustment = async (aspect: keyof PersonalityTuning['communicationStyle'], value: number) => {
@@ -269,7 +307,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           message: userMessage,
           profile,
           analysis,
-          tuning,
+          tuning: latestTuning.current,
           conversationHistory,
           conversationId: activeConversationId
         }),
@@ -321,6 +359,10 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       const response = await generatePersonalityResponse(userMessage)
       if (response) {
         setMessages(prev => [...prev, { text: response, isUser: false }])
+        // Focus the textarea after response is generated
+        if (textareaRef.current) {
+          textareaRef.current.focus()
+        }
       }
 
       // If we have an active conversation ID and the messages might be out of sync,
@@ -360,34 +402,23 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       const cachedData = await personalityCache.fetchCache();
       
       if (cachedData) {
+        // Initialize trait modifiers from cached traits
+        const initialTraitModifiers = cachedData.traits.reduce((acc: Record<string, number>, trait: { name: string; score: number }) => ({
+          ...acc,
+          [trait.name]: Math.round(trait.score * 10)
+        }), {});
+
         // Load tuning parameters from cache
-        if (cachedData.communicationStyle) {
-          setTuning(prev => ({
-            ...prev,
-            communicationStyle: {
-              formality: cachedData.communicationStyle.formality ?? prev.communicationStyle.formality,
-              enthusiasm: cachedData.communicationStyle.enthusiasm ?? prev.communicationStyle.enthusiasm,
-              technicalLevel: cachedData.communicationStyle.technicalLevel ?? prev.communicationStyle.technicalLevel,
-              emojiUsage: cachedData.communicationStyle.emojiUsage ?? prev.communicationStyle.emojiUsage
-            }
-          }));
-        }
-        
-        if (cachedData.traits) {
-          const traitModifiers = cachedData.traits.reduce((acc: Record<string, number>, trait: { name: string; score: number }) => ({
-            ...acc,
-            // Convert analysis score (0-10) to UI score (0-100)
-            [trait.name]: Math.round(trait.score * 10)
-          }), {});
-          
-          setTuning(prev => ({
-            ...prev,
-            traitModifiers: {
-              ...prev.traitModifiers,
-              ...traitModifiers
-            }
-          }));
-        }
+        setTuning(prev => ({
+          ...prev,
+          traitModifiers: initialTraitModifiers,
+          communicationStyle: {
+            formality: cachedData.communicationStyle.formality ?? prev.communicationStyle.formality,
+            enthusiasm: cachedData.communicationStyle.enthusiasm ?? prev.communicationStyle.enthusiasm,
+            technicalLevel: cachedData.communicationStyle.technicalLevel ?? prev.communicationStyle.technicalLevel,
+            emojiUsage: cachedData.communicationStyle.emojiUsage ?? prev.communicationStyle.emojiUsage
+          }
+        }));
         
         if (cachedData.interests) {
           // Initialize weights based on expertise levels in the interest strings
@@ -468,10 +499,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
 
       setTuning(prev => ({
         ...prev,
-        traitModifiers: {
-          ...prev.traitModifiers,
-          ...newTraitModifiers
-        },
+        traitModifiers: newTraitModifiers, // Replace entirely instead of merging
         interestWeights: {
           ...prev.interestWeights,
           ...newInterestWeights
@@ -515,16 +543,16 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
   };
 
   // Helper functions for trait labels
-  const getTraitLabel = (score: number) => {
-    if (score === 0) return 'None'
+  const getTraitLabel = (score: number | undefined) => {
+    if (score === undefined || score === 0) return 'None'
     if (score <= 25) return 'Very Low'
     if (score <= 50) return 'Low'
     if (score <= 75) return 'High'
     return 'Very High'
   }
 
-  const getWeightLabel = (weight: number) => {
-    if (weight === 0) return 'Disabled'
+  const getWeightLabel = (weight: number | undefined) => {
+    if (weight === undefined || weight === 0) return 'Disabled'
     if (weight <= 25) return 'Low'
     if (weight <= 50) return 'Medium'
     if (weight <= 75) return 'High'
@@ -1058,6 +1086,12 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
             emojiUsage: 50
           };
           
+          // Initialize trait modifiers from cached traits
+          const initialTraitModifiers = cachedAnalysis.traits.reduce((acc: Record<string, number>, trait: { name: string; score: number }) => ({
+            ...acc,
+            [trait.name]: Math.round(trait.score * 10)
+          }), {});
+          
           // Extract interests and their weights based on expertise levels
           const interestWeights = cachedAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => {
             // Get expertise level if present
@@ -1081,6 +1115,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
 
           setTuning(prev => ({
             ...prev,
+            traitModifiers: initialTraitModifiers,
             communicationStyle,
             interestWeights
           }));
@@ -1516,7 +1551,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                             min="0"
                             max="100"
                             step="25"
-                            value={tuning.traitModifiers[trait.name]}
+                            value={tuning.traitModifiers[trait.name] ?? Math.round(trait.score * 10)}
                             onChange={(e) => handleTraitAdjustment(trait.name, parseInt(e.target.value))}
                             className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
                           />
@@ -2157,7 +2192,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                             min="0"
                             max="100"
                             step="25"
-                            value={tuning.traitModifiers[trait.name]}
+                            value={tuning.traitModifiers[trait.name] ?? Math.round(trait.score * 10)}
                             onChange={(e) => handleTraitAdjustment(trait.name, parseInt(e.target.value))}
                             className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
                           />

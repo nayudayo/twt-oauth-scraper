@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/config';
 import { initDB } from '@/lib/db';
-import { PersonalityCacheError } from '@/types/cache';
-import { getRedis } from '@/lib/redis';
 
-const CACHE_TTL = 5 * 60; // 5 minutes
+const CACHE_TTL = 7 * 24 * 60 * 60; // 7 days
 
 // Helper to generate API response metadata
 function generateResponseMetadata() {
@@ -58,25 +56,6 @@ export async function GET(
       );
     }
 
-    // Try Redis cache first
-    const redis = await getRedis();
-    const cacheKey = `personality:${username}:cache`;
-    const cachedData = await redis.get(cacheKey);
-
-    if (cachedData) {
-      const parsed = JSON.parse(cachedData);
-      return NextResponse.json({
-        success: true,
-        data: parsed,
-        metadata: generateResponseMetadata()
-      } as CacheResponse, {
-        headers: {
-          'Cache-Control': `public, max-age=${CACHE_TTL}`,
-          'X-Cache': 'HIT'
-        }
-      });
-    }
-
     // Initialize database
     const db = await initDB();
 
@@ -106,17 +85,13 @@ export async function GET(
       );
     }
 
-    // Store in Redis for future requests
-    await redis.setex(cacheKey, CACHE_TTL, JSON.stringify(cache.analysisData));
-
     return NextResponse.json({
       success: true,
       data: cache.analysisData,
       metadata: generateResponseMetadata()
     } as CacheResponse, {
       headers: {
-        'Cache-Control': `public, max-age=${CACHE_TTL}`,
-        'X-Cache': 'MISS'
+        'Cache-Control': `public, max-age=${CACHE_TTL}`
       }
     });
 
@@ -198,11 +173,6 @@ export async function POST(
     // Save to database
     await db.personality.savePersonalityCache(user.id, analysisData, version);
 
-    // Update Redis cache
-    const redis = await getRedis();
-    const cacheKey = `personality:${username}:cache`;
-    await redis.setex(cacheKey, CACHE_TTL, JSON.stringify(analysisData));
-
     return NextResponse.json({
       success: true,
       metadata: generateResponseMetadata()
@@ -210,18 +180,6 @@ export async function POST(
 
   } catch (error) {
     console.error('Error saving personality cache:', error);
-
-    if (error instanceof PersonalityCacheError) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: error.message,
-          metadata: generateResponseMetadata()
-        } as CacheResponse,
-        { status: error.status }
-      );
-    }
-
     return NextResponse.json(
       {
         success: false,
@@ -284,11 +242,6 @@ export async function DELETE(
 
     // Invalidate database cache
     await db.personality.invalidateCache(user.id);
-
-    // Remove Redis cache
-    const redis = await getRedis();
-    const cacheKey = `personality:${username}:cache`;
-    await redis.del(cacheKey);
 
     return NextResponse.json({
       success: true,

@@ -1,5 +1,3 @@
-import { getRedis } from './redis';
-
 export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
@@ -10,6 +8,7 @@ export class RateLimiter {
   private readonly namespace: string;
   private readonly maxRequests: number;
   private readonly windowMs: number;
+  private readonly requests: Map<string, number[]>;
 
   constructor(
     namespace: string,
@@ -19,43 +18,38 @@ export class RateLimiter {
     this.namespace = namespace;
     this.maxRequests = maxRequests;
     this.windowMs = windowMs;
+    this.requests = new Map();
   }
 
   private getKey(identifier: string): string {
-    return `ratelimit:${this.namespace}:${identifier}`;
+    return `${this.namespace}:${identifier}`;
   }
 
   async checkLimit(identifier: string): Promise<RateLimitResult> {
-    const redis = await getRedis();
     const key = this.getKey(identifier);
     const now = Date.now();
     const windowStart = now - this.windowMs;
 
-    // Clean up old requests and add new one using Redis sorted set
-    const multi = redis.multi();
+    // Get or initialize request timestamps array
+    let timestamps = this.requests.get(key) || [];
     
-    // Remove old entries
-    multi.zremrangebyscore(key, 0, windowStart);
+    // Remove old timestamps
+    timestamps = timestamps.filter(time => time > windowStart);
     
-    // Add current request
-    multi.zadd(key, now, now.toString());
+    // Add current request timestamp
+    timestamps.push(now);
     
-    // Get count of requests in window
-    multi.zcard(key);
-    
-    // Set expiry on the key
-    multi.expire(key, Math.ceil(this.windowMs / 1000));
+    // Update the map
+    this.requests.set(key, timestamps);
 
-    const results = await multi.exec();
-    if (!results) {
-      throw new Error('Failed to execute rate limit check');
-    }
-
-    const requestCount = results[2][1] as number;
+    const requestCount = timestamps.length;
     const allowed = requestCount <= this.maxRequests;
     const remaining = Math.max(0, this.maxRequests - requestCount);
-    const oldestRequest = allowed ? now : await this.getOldestRequest(key);
-    const reset = Math.ceil((oldestRequest + this.windowMs) / 1000);
+    
+    // If not allowed, reset time is when the oldest request expires
+    // If allowed, reset time is when the current request expires
+    const resetTimestamp = allowed ? now : timestamps[0];
+    const reset = Math.ceil((resetTimestamp + this.windowMs) / 1000);
 
     return {
       allowed,
@@ -64,9 +58,18 @@ export class RateLimiter {
     };
   }
 
-  private async getOldestRequest(key: string): Promise<number> {
-    const redis = await getRedis();
-    const oldest = await redis.zrange(key, 0, 0);
-    return oldest.length ? parseInt(oldest[0]) : Date.now();
+  // Cleanup method to prevent memory leaks
+  cleanup(): void {
+    const now = Date.now();
+    const windowStart = now - this.windowMs;
+
+    for (const [key, timestamps] of this.requests.entries()) {
+      const validTimestamps = timestamps.filter(time => time > windowStart);
+      if (validTimestamps.length === 0) {
+        this.requests.delete(key);
+      } else {
+        this.requests.set(key, validTimestamps);
+      }
+    }
   }
 } 
