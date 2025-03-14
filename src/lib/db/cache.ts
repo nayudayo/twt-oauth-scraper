@@ -73,10 +73,10 @@ export class PersonalityCacheDB {
         // Apply trait modifiers to the scores
         finalData = {
           ...analysisData,
-          // Apply trait modifiers to trait scores
+          // Apply trait modifiers using boolean values
           traits: analysisData.traits.map(trait => ({
             ...trait,
-            score: Math.max(0, Math.min(10, trait.score + (traitModifiers[trait.name] || 0)))
+            score: Boolean(traitModifiers[trait.name]) ? 1 : 0  // Use 1 for true, 0 for false
           })),
           // Preserve tuning parameters
           traitModifiers,
@@ -85,18 +85,10 @@ export class PersonalityCacheDB {
           communicationStyle: {
             ...analysisData.communicationStyle,
             // Preserve communication style values if they exist
-            formality: typeof existingData.communicationStyle?.formality === 'number' 
-              ? existingData.communicationStyle.formality 
-              : analysisData.communicationStyle.formality,
-            enthusiasm: typeof existingData.communicationStyle?.enthusiasm === 'number'
-              ? existingData.communicationStyle.enthusiasm
-              : analysisData.communicationStyle.enthusiasm,
-            technicalLevel: typeof existingData.communicationStyle?.technicalLevel === 'number'
-              ? existingData.communicationStyle.technicalLevel
-              : analysisData.communicationStyle.technicalLevel,
-            emojiUsage: typeof existingData.communicationStyle?.emojiUsage === 'number'
-              ? existingData.communicationStyle.emojiUsage
-              : analysisData.communicationStyle.emojiUsage,
+            formality: existingData.communicationStyle?.formality || analysisData.communicationStyle.formality,
+            enthusiasm: existingData.communicationStyle?.enthusiasm || analysisData.communicationStyle.enthusiasm,
+            technicalLevel: existingData.communicationStyle?.technicalLevel || analysisData.communicationStyle.technicalLevel,
+            emojiUsage: existingData.communicationStyle?.emojiUsage || analysisData.communicationStyle.emojiUsage,
             description: analysisData.communicationStyle.description
           }
         };
@@ -174,17 +166,17 @@ export class PersonalityCacheDB {
     current: Record<string, unknown>,
     updated: Record<string, unknown>
   ): boolean {
-    // Compare trait scores
+    // Compare trait states
     const currentTraits = (current.traits as Array<{ name: string; score: number }>) || [];
     const updatedTraits = (updated.traits as Array<{ name: string; score: number }>) || [];
 
-    // Check for 20% or more difference in any trait score
+    // Check for any changes in trait states (enabled/disabled)
     for (const currentTrait of currentTraits) {
       const updatedTrait = updatedTraits.find(t => t.name === currentTrait.name);
       if (!updatedTrait) continue;
 
-      const difference = Math.abs(currentTrait.score - updatedTrait.score);
-      if (difference >= 2) { // 20% of max score (10)
+      // Compare boolean states (1 = true, 0 = false)
+      if (Boolean(currentTrait.score) !== Boolean(updatedTrait.score)) {
         return true;
       }
     }

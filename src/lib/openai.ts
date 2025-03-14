@@ -1,6 +1,8 @@
 import OpenAI from 'openai'
 import { Tweet, OpenAITwitterProfile } from '../types/scraper'
 
+export type CommunicationLevel = 'low' | 'medium' | 'high';
+
 export interface PersonalityAnalysis {
   summary: string
   traits: {
@@ -12,10 +14,10 @@ export interface PersonalityAnalysis {
   }[]
   interests: string[]
   communicationStyle: {
-    formality: number
-    enthusiasm: number
-    technicalLevel: number
-    emojiUsage: number
+    formality: CommunicationLevel
+    enthusiasm: CommunicationLevel
+    technicalLevel: CommunicationLevel
+    emojiUsage: CommunicationLevel
     description: string
     patterns: {
       capitalization: 'mostly-lowercase' | 'mostly-uppercase' | 'mixed' | 'standard'
@@ -33,6 +35,11 @@ export interface PersonalityAnalysis {
       technical: string
       crisis: string
     }
+  }
+  thoughtProcess: {
+    initialApproach: string  // How they initially process and respond to information
+    processingStyle: string  // Their analytical and problem-solving approach
+    expressionStyle: string  // How they formulate and express their thoughts
   }
   vocabulary: {
     commonTerms: string[]
@@ -221,7 +228,7 @@ class ModelUnavailableError extends OpenAIError {
 const FALLBACK_CONFIG = {
   maxRetries: 3,
   fallbackModel: 'gpt-4o-mini',
-  minTokens: 2000,
+  minTokens: 2500,
   maxTokens: 3500,
   defaultTemperature: 0.85,
   styleVariationStep: 0.1,
@@ -258,29 +265,39 @@ function selectRepresentativeTweets(tweets: Tweet[], analysis: PersonalityAnalys
     
     // Check for trait expressions
     analysis.traits.forEach(trait => {
-      const traitRegex = new RegExp(trait.name, 'i');
-      if (traitRegex.test(tweet.text)) {
-        score += trait.score;
+      if (trait.name) { // Add null check
+        const traitRegex = new RegExp(trait.name, 'i');
+        if (traitRegex.test(tweet.text)) {
+          score += 1; // Just add 1 for each matching trait
+        }
       }
     });
 
     // Check communication style
     const style = analysis.communicationStyle;
     const hasEmojis = /[\p{Emoji}]/gu.test(tweet.text);
-    if ((style.emojiUsage > 70 && hasEmojis) || (style.emojiUsage < 30 && !hasEmojis)) {
-      score += 2;
+    
+    // Match emoji usage level
+    if ((style.emojiUsage === 'high' && hasEmojis) || 
+        (style.emojiUsage === 'low' && !hasEmojis) ||
+        (style.emojiUsage === 'medium' && hasEmojis && (tweet.text.match(/[\p{Emoji}]/gu)?.length ?? 0) <= 2)) {
+      score += 1;
     }
 
+    // Match enthusiasm level
     const exclamationCount = (tweet.text.match(/!/g) || []).length;
-    if ((style.enthusiasm > 70 && exclamationCount > 1) || 
-        (style.enthusiasm < 30 && exclamationCount === 0)) {
-      score += 2;
+    if ((style.enthusiasm === 'high' && exclamationCount > 2) || 
+        (style.enthusiasm === 'low' && exclamationCount === 0) ||
+        (style.enthusiasm === 'medium' && exclamationCount <= 2)) {
+      score += 1;
     }
 
     // Check for interests
     analysis.interests.forEach(interest => {
-      if (tweet.text.toLowerCase().includes(interest.toLowerCase())) {
-        score += 1;
+      if (interest) { // Add null check
+        if (tweet.text.toLowerCase().includes(interest.toLowerCase())) {
+          score += 1;
+        }
       }
     });
 
@@ -363,10 +380,10 @@ export async function analyzePersonality(
       traits: [],
       interests: [],
       communicationStyle: {
-        formality: 50,
-        enthusiasm: 50,
-        technicalLevel: 50,
-        emojiUsage: 50,
+        formality: 'medium',
+        enthusiasm: 'medium',
+        technicalLevel: 'medium',
+        emojiUsage: 'medium',
         description: '',
         patterns: {
           capitalization: 'mixed',
@@ -402,7 +419,12 @@ export async function analyzePersonality(
         supportivePatterns: []
       },
       topicsAndThemes: [],
-      emotionalTone: ''
+      emotionalTone: '',
+      thoughtProcess: {
+        initialApproach: '',
+        processingStyle: '',
+        expressionStyle: ''
+      }
     }
 
     // Analyze each chunk
@@ -440,10 +462,10 @@ ${combinedAnalysis.traits.map(trait =>
 ${combinedAnalysis.interests.join('\n')}
 
 4. Communication Style:
-- Formality Level: ${combinedAnalysis.communicationStyle.formality}/100
-- Enthusiasm Level: ${combinedAnalysis.communicationStyle.enthusiasm}/100
-- Technical Level: ${combinedAnalysis.communicationStyle.technicalLevel}/100
-- Emoji Usage: ${combinedAnalysis.communicationStyle.emojiUsage}/100
+- Formality Level: ${combinedAnalysis.communicationStyle.formality}
+- Enthusiasm Level: ${combinedAnalysis.communicationStyle.enthusiasm}
+- Technical Level: ${combinedAnalysis.communicationStyle.technicalLevel}
+- Emoji Usage: ${combinedAnalysis.communicationStyle.emojiUsage}
 ${combinedAnalysis.communicationStyle.description}
 
 5. Writing Patterns:
@@ -698,10 +720,10 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
           }],
           interests: ['General topics'],
           communicationStyle: {
-            formality: 50,
-            enthusiasm: 50,
-            technicalLevel: 50,
-            emojiUsage: 50,
+            formality: 'low',
+            enthusiasm: 'low',
+            technicalLevel: 'low',
+            emojiUsage: 'low',
             description: 'Default communication style due to analysis failure after multiple attempts',
             patterns: {
               capitalization: 'mixed',
@@ -737,7 +759,12 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
             supportivePatterns: []
           },
           topicsAndThemes: ['General themes'],
-          emotionalTone: 'Neutral'
+          emotionalTone: 'Neutral',
+          thoughtProcess: {
+            initialApproach: 'Standard analytical approach',
+            processingStyle: 'Methodical and structured',
+            expressionStyle: 'Balanced consideration'
+          }
         };
       }
     }
@@ -768,10 +795,10 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
       }],
       interests: ['General topics'],
       communicationStyle: {
-        formality: 50,
-        enthusiasm: 50,
-        technicalLevel: 50,
-        emojiUsage: 50,
+        formality: 'low',
+        enthusiasm: 'low',
+        technicalLevel: 'low',
+        emojiUsage: 'low',
         description: 'Default communication style due to analysis failure after multiple attempts',
         patterns: {
           capitalization: 'mixed',
@@ -807,7 +834,12 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
         supportivePatterns: []
       },
       topicsAndThemes: ['General themes'],
-      emotionalTone: 'Neutral'
+      emotionalTone: 'Neutral',
+      thoughtProcess: {
+        initialApproach: 'Standard analytical approach',
+        processingStyle: 'Methodical and structured',
+        expressionStyle: 'Balanced consideration'
+      }
     };
   }
 }
@@ -818,10 +850,10 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
     traits: [],
     interests: [],
     communicationStyle: {
-      formality: 50,
-      enthusiasm: 50,
-      technicalLevel: 50,
-      emojiUsage: 50,
+      formality: 'medium',
+      enthusiasm: 'medium',
+      technicalLevel: 'medium',
+      emojiUsage: 'medium',
       description: '',
       patterns: {
         capitalization: 'mixed',
@@ -857,7 +889,12 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
       supportivePatterns: []
     },
     topicsAndThemes: [],
-    emotionalTone: ''
+    emotionalTone: '',
+    thoughtProcess: {
+      initialApproach: '',
+      processingStyle: '',
+      expressionStyle: ''
+    }
   }
 
   try {
@@ -889,19 +926,17 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
             const match = line.match(pattern)
             if (match) {
               const [, name, score, explanation] = match
-              const parsedScore = parseInt(score)
+              // Convert numeric score to boolean - consider scores 7 and above as "active"
+              const isEnabled = parseInt(score) >= 7
               
-              // Validate score range
-              if (parsedScore >= 0 && parsedScore <= 10) {
-                analysis.traits.push({
-                  name: name.trim(),
-                  score: parsedScore,
-                  explanation: explanation.trim()
-                })
-                matched = true
-                foundTraits = true
-                break
-              }
+              analysis.traits.push({
+                name: name.trim(),
+                score: isEnabled ? 1 : 0,  // Use 1 for true, 0 for false
+                explanation: explanation.trim()
+              })
+              matched = true
+              foundTraits = true
+              break
             }
           }
 
@@ -915,7 +950,12 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
                   const name = words.slice(0, i).join(' ').replace(/[*:-]/g, '').trim()
                   const explanation = words.slice(i + 1).join(' ').replace(/^[-:]\s*/, '').trim()
                   if (name && explanation) {
-                    analysis.traits.push({ name, score, explanation })
+                    const isEnabled = score >= 7
+                    analysis.traits.push({ 
+                      name, 
+                      score: isEnabled ? 1 : 0,  // Use 1 for true, 0 for false
+                      explanation 
+                    })
                     foundTraits = true
                   }
                 }
@@ -974,7 +1014,6 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
         }
       }
       else if (section.includes('Communication Style Analysis') || section.includes('Communication Style')) {
-        // First get the numerical scores
         const styleLines = section.split('\n').slice(1)
         const descriptionParts = []
         let foundMetrics = false
@@ -983,32 +1022,36 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
           if (line.includes('Formality:')) {
             const match = line.match(/Formality:\s*(\d+)/)
             if (match) {
-              analysis.communicationStyle.formality = parseInt(match[1])
-              descriptionParts.push(`Formality level: ${match[1]}/100`)
+              const value = parseInt(match[1])
+              analysis.communicationStyle.formality = value >= 50 ? 'high' : value < 50 ? 'low' : 'medium'
+              descriptionParts.push(`Formality level: ${analysis.communicationStyle.formality}`)
               foundMetrics = true
             }
           }
           else if (line.includes('Enthusiasm:')) {
             const match = line.match(/Enthusiasm:\s*(\d+)/)
             if (match) {
-              analysis.communicationStyle.enthusiasm = parseInt(match[1])
-              descriptionParts.push(`Enthusiasm level: ${match[1]}/100`)
+              const value = parseInt(match[1])
+              analysis.communicationStyle.enthusiasm = value >= 50 ? 'high' : value < 50 ? 'low' : 'medium'
+              descriptionParts.push(`Enthusiasm level: ${analysis.communicationStyle.enthusiasm}`)
               foundMetrics = true
             }
           }
           else if (line.includes('Technical Level:')) {
             const match = line.match(/Technical Level:\s*(\d+)/)
             if (match) {
-              analysis.communicationStyle.technicalLevel = parseInt(match[1])
-              descriptionParts.push(`Technical level: ${match[1]}/100`)
+              const value = parseInt(match[1])
+              analysis.communicationStyle.technicalLevel = value >= 50 ? 'high' : value < 50 ? 'low' : 'medium'
+              descriptionParts.push(`Technical level: ${analysis.communicationStyle.technicalLevel}`)
               foundMetrics = true
             }
           }
           else if (line.includes('Emoji Usage:')) {
             const match = line.match(/Emoji Usage:\s*(\d+)/)
             if (match) {
-              analysis.communicationStyle.emojiUsage = parseInt(match[1])
-              descriptionParts.push(`Emoji usage: ${match[1]}/100`)
+              const value = parseInt(match[1])
+              analysis.communicationStyle.emojiUsage = value >= 50 ? 'high' : value < 50 ? 'low' : 'medium'
+              descriptionParts.push(`Emoji usage: ${analysis.communicationStyle.emojiUsage}`)
               foundMetrics = true
             }
           }
@@ -1325,10 +1368,10 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
       }],
       interests: ['General topics'],
       communicationStyle: {
-        formality: 50,
-        enthusiasm: 50,
-        technicalLevel: 50,
-        emojiUsage: 50,
+        formality: 'low',
+        enthusiasm: 'low',
+        technicalLevel: 'low',
+        emojiUsage: 'low',
         description: 'Default communication style due to parsing error',
         patterns: {
           capitalization: 'mixed',
@@ -1364,7 +1407,12 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
         supportivePatterns: []
       },
       topicsAndThemes: ['General themes'],
-      emotionalTone: 'Neutral emotional expression'
+      emotionalTone: 'Neutral emotional expression',
+      thoughtProcess: {
+        initialApproach: 'Standard analytical approach',
+        processingStyle: 'Methodical and structured',
+        expressionStyle: 'Balanced consideration'
+      }
     }
   }
 

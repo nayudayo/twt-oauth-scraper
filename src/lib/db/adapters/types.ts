@@ -1,5 +1,6 @@
 import { DatabaseOperations } from './operations';
 import { PoolClient } from 'pg';
+import { CommunicationLevel } from '../../../lib/openai';
 
 // User Types
 export interface DBUser {
@@ -66,10 +67,10 @@ export interface DBPersonalityAnalysis {
   }>;
   interests: string[];
   communication_style: {
-    formality: number;
-    enthusiasm: number;
-    technicalLevel: number;
-    emojiUsage: number;
+    formality: CommunicationLevel;
+    enthusiasm: CommunicationLevel;
+    technicalLevel: CommunicationLevel;
+    emojiUsage: CommunicationLevel;
   };
   analyzed_at: Date;
 }

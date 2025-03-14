@@ -1,3 +1,5 @@
+import { CommunicationLevel } from '../lib/openai';
+
 export interface TwitterProfile {
   name: string | null
   bio: string | null
@@ -53,10 +55,10 @@ export interface PersonalityAnalysis {
   }>
   interests: string[]
   communicationStyle: {
-    formality: number
-    enthusiasm: number
-    technicalLevel: number
-    emojiUsage: number
+    formality: CommunicationLevel
+    enthusiasm: CommunicationLevel
+    technicalLevel: CommunicationLevel
+    emojiUsage: CommunicationLevel
     description: string
   }
   topicsAndThemes: string[]

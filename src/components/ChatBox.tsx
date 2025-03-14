@@ -12,6 +12,10 @@ import { usePersonalityCache } from '@/hooks/usePersonalityCache';
 import { CacheStatusIndicator } from './CacheStatusIndicator';
 import { TweetList } from './TweetList';
 import { useQueryClient } from '@tanstack/react-query';
+import { ToggleButton } from './ToggleButton';
+import { CycleButton } from './CycleButton';
+import { CommunicationLevel } from '@/lib/openai';
+import React, { CSSProperties } from 'react';
 
 interface ChatBoxProps {
   tweets: Tweet[]
@@ -25,10 +29,10 @@ interface PersonalityTuning {
   interestWeights: { [key: string]: number } // interest -> weight (0 to 100)
   customInterests: string[]
   communicationStyle: {
-    formality: number      // 0-100
-    enthusiasm: number     // 0-100
-    technicalLevel: number // 0-100
-    emojiUsage: number     // 0-100
+    formality: CommunicationLevel
+    enthusiasm: CommunicationLevel
+    technicalLevel: CommunicationLevel
+    emojiUsage: CommunicationLevel
   }
 }
 
@@ -57,10 +61,10 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     interestWeights: {},
     customInterests: [],
     communicationStyle: {
-      formality: 50,
-      enthusiasm: 50,
-      technicalLevel: 50,
-      emojiUsage: 50
+      formality: 'medium',
+      enthusiasm: 'medium',
+      technicalLevel: 'medium',
+      emojiUsage: 'medium'
     }
   })
   const [newInterest, setNewInterest] = useState('')
@@ -78,6 +82,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
   const [isLoadingInitialData, setIsLoadingInitialData] = useState(false);
   const [isLoadingTweets, setIsLoadingTweets] = useState(false);
   const [accumulatedTweets, setAccumulatedTweets] = useState<Tweet[]>([])
+  const [showProfile, setShowProfile] = useState(true)
 
   // Add cache hook
   const personalityCache = usePersonalityCache({
@@ -156,9 +161,10 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     };
   }, [isAnalyzing, loading, analysisStartTime, scrapingStartTime]);
 
-  const handleTraitAdjustment = async (traitName: string, score: number) => {
-    // Convert UI score (0-100) to analysis score (0-10)
-    const analysisScore = Math.round((score / 100) * 10);
+  const handleTraitAdjustment = async (traitName: string, enabled: boolean) => {
+    // Convert boolean to score (true = 100, false = 0)
+    const score = enabled ? 100 : 0;
+    const analysisScore = enabled ? 10 : 0;
     
     setTuning(prev => ({
       ...prev,
@@ -168,13 +174,10 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       }
     }));
 
-    // Save updated tuning to cache if we have analysis
     if (analysis) {
-      // Find existing trait to preserve explanation
       const existingTrait = analysis.traits.find(t => t.name === traitName);
       if (!existingTrait) return;
 
-      // Update the analysis state directly since we no longer have Redis cache
       setAnalysis(prev => {
         if (!prev) return prev;
         return {
@@ -189,7 +192,9 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     }
   }
 
-  const handleInterestWeight = async (interest: string, weight: number) => {
+  const handleInterestWeight = async (interest: string, enabled: boolean) => {
+    const weight = enabled ? 100 : 0;
+    
     setTuning(prev => ({
       ...prev,
       interestWeights: {
@@ -198,7 +203,6 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       }
     }));
 
-    // Save updated interests to cache if we have analysis
     if (analysis) {
       await personalityCache.saveToCache({
         ...analysis,
@@ -240,32 +244,8 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     }
   }
 
-  const handleRemoveCustomInterest = async (interest: string) => {
-    setTuning(prev => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { [interest]: _, ...remainingWeights } = prev.interestWeights;
-      return {
-        ...prev,
-        customInterests: prev.customInterests.filter(i => i !== interest),
-        interestWeights: remainingWeights
-      }
-    });
-
-    // Save to cache if we have analysis
-    if (analysis) {
-      const updatedCustomInterests = tuning.customInterests.filter(i => i !== interest);
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { [interest]: _, ...remainingWeights } = tuning.interestWeights;
-      
-      await personalityCache.saveToCache({
-        ...analysis,
-        interestWeights: remainingWeights,
-        customInterests: updatedCustomInterests
-      });
-    }
-  }
-
-  const handleStyleAdjustment = async (aspect: keyof PersonalityTuning['communicationStyle'], value: number) => {
+  const handleStyleAdjustment = async (aspect: keyof PersonalityTuning['communicationStyle'], value: CommunicationLevel) => {
+    // Update tuning state
     setTuning(prev => ({
       ...prev,
       communicationStyle: {
@@ -274,8 +254,20 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       }
     }));
 
-    // Save updated communication style to cache if we have analysis
     if (analysis) {
+      // Update analysis state immediately
+      setAnalysis(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          communicationStyle: {
+            ...prev.communicationStyle,
+            [aspect]: value
+          }
+        };
+      });
+
+      // Save to cache with updated values
       await personalityCache.saveToCache({
         ...analysis,
         communicationStyle: {
@@ -284,7 +276,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
         }
       });
     }
-  }
+  };
 
   const generatePersonalityResponse = async (userMessage: string) => {
     setIsChatLoading(true) // Use chat-specific loading state
@@ -530,6 +522,12 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           enthusiasm: newAnalysis.communicationStyle.enthusiasm,
           technicalLevel: newAnalysis.communicationStyle.technicalLevel,
           emojiUsage: newAnalysis.communicationStyle.emojiUsage
+        },
+        thoughtProcess: {
+          ...newAnalysis.thoughtProcess,
+          initialApproach: newAnalysis.thoughtProcess.initialApproach,
+          processingStyle: newAnalysis.thoughtProcess.processingStyle,
+          expressionStyle: newAnalysis.thoughtProcess.expressionStyle
         }
       });
 
@@ -541,23 +539,6 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       setAnalysisStartTime(null);
     }
   };
-
-  // Helper functions for trait labels
-  const getTraitLabel = (score: number | undefined) => {
-    if (score === undefined || score === 0) return 'None'
-    if (score <= 25) return 'Very Low'
-    if (score <= 50) return 'Low'
-    if (score <= 75) return 'High'
-    return 'Very High'
-  }
-
-  const getWeightLabel = (weight: number | undefined) => {
-    if (weight === undefined || weight === 0) return 'Disabled'
-    if (weight <= 25) return 'Low'
-    if (weight <= 50) return 'Medium'
-    if (weight <= 75) return 'High'
-    return 'Very High'
-  }
 
   // Add handlers for terminal session
   const handleScrape = async () => {
@@ -1078,46 +1059,35 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
         const cachedAnalysis = await personalityCache.fetchCache();
         if (cachedAnalysis) {
           setAnalysis(cachedAnalysis);
+          
           // Initialize tuning from cache
-          const communicationStyle = cachedAnalysis.communicationStyle || {
-            formality: 50,
-            enthusiasm: 50,
-            technicalLevel: 50,
-            emojiUsage: 50
-          };
-          
-          // Initialize trait modifiers from cached traits
-          const initialTraitModifiers = cachedAnalysis.traits.reduce((acc: Record<string, number>, trait: { name: string; score: number }) => ({
-            ...acc,
-            [trait.name]: Math.round(trait.score * 10)
-          }), {});
-          
-          // Extract interests and their weights based on expertise levels
-          const interestWeights = cachedAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => {
-            // Get expertise level if present
-            const [interestName, expertiseLevel] = interest.split(':').map(s => s.trim());
-            
-            // Set weight based on expertise level text
-            let weight = 50; // Default to medium if no clear match
-            if (expertiseLevel) {
-              const level = expertiseLevel.toLowerCase();
-              if (level.includes('advanced') || level.includes('high') || level.includes('strong')) {
-                weight = 75;
-              } else if (level.includes('intermediate') || level.includes('moderate')) {
-                weight = 50;
-              } else if (level.includes('basic') || level.includes('low')) {
-                weight = 25;
-              }
-            }
-            
-            return { ...acc, [interestName]: weight };
-          }, {});
-
           setTuning(prev => ({
             ...prev,
-            traitModifiers: initialTraitModifiers,
-            communicationStyle,
-            interestWeights
+            traitModifiers: cachedAnalysis.traits.reduce((acc: Record<string, number>, trait: { name: string; score: number }) => ({
+              ...acc,
+              [trait.name]: Math.round(trait.score * 10)
+            }), {}),
+            communicationStyle: {
+              formality: cachedAnalysis.communicationStyle.formality,
+              enthusiasm: cachedAnalysis.communicationStyle.enthusiasm,
+              technicalLevel: cachedAnalysis.communicationStyle.technicalLevel,
+              emojiUsage: cachedAnalysis.communicationStyle.emojiUsage
+            },
+            interestWeights: cachedAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => {
+              const [interestName, expertiseLevel] = interest.split(':').map(s => s.trim());
+              let weight = 50; // Default to medium if no clear match
+              if (expertiseLevel) {
+                const level = expertiseLevel.toLowerCase();
+                if (level.includes('advanced') || level.includes('high') || level.includes('strong')) {
+                  weight = 75;
+                } else if (level.includes('intermediate') || level.includes('moderate')) {
+                  weight = 50;
+                } else if (level.includes('basic') || level.includes('low')) {
+                  weight = 25;
+                }
+              }
+              return { ...acc, [interestName]: weight };
+            }, {})
           }));
         }
 
@@ -1158,7 +1128,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     };
 
     loadInitialData();
-  }, [profile.name]); // Remove personalityCache from dependencies
+  }, [profile.name]);
 
   // Remove the old separate loading effects
   // ... existing code ...
@@ -1324,6 +1294,38 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     };
   }, [profile.name, loading]);
 
+  const handleRemoveCustomInterest = async (interest: string) => {
+    setTuning(prev => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { [interest]: _, ...remainingWeights } = prev.interestWeights;
+      return {
+        ...prev,
+        customInterests: prev.customInterests.filter(i => i !== interest),
+        interestWeights: remainingWeights
+      }
+    });
+
+    // Save to cache if we have analysis
+    if (analysis) {
+      const updatedCustomInterests = tuning.customInterests.filter(i => i !== interest);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { [interest]: _, ...remainingWeights } = tuning.interestWeights;
+      
+      await personalityCache.saveToCache({
+        ...analysis,
+        interestWeights: remainingWeights,
+        customInterests: updatedCustomInterests
+      });
+    }
+  }
+
+  // Add scroll handler to hide profile when scrolled past it
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const scrollTop = e.currentTarget.scrollTop;
+    const threshold = 200; // Adjust this value based on your profile section height
+    setShowProfile(scrollTop < threshold);
+  }, []);
+
   return (
     <>
       {/* Main Container - Mobile First Layout */}
@@ -1348,39 +1350,44 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
             </div>
 
             {/* Chat Messages Container */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-3 md:p-4 space-y-2 sm:space-y-3 md:space-y-4 backdrop-blur-sm bg-black/20 ancient-scroll">
+            <div 
+              className="flex-1 overflow-y-auto custom-scrollbar backdrop-blur-sm bg-black/20 ancient-scroll min-h-0 relative z-30"
+              onScroll={handleScroll}
+            >
               {!analysis ? (
-                <div className="text-red-500/70 italic text-center glow-text">
+                <div className="text-red-500/70 italic text-center glow-text p-4">
                   Start personality analysis to begin chat interaction
                 </div>
               ) : (
                 <>
-                  {/* Profile Picture Section */}
-                  <div className="flex flex-col items-center gap-3 sm:gap-4 mb-4 sm:mb-6 md:mb-8 p-3 sm:p-4 bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg hover-glow ancient-border">
-                    <div className="w-20 h-20 rounded-full border-2 border-red-500/20 overflow-hidden hover-glow">
-                      {profile.imageUrl ? (
-                        <Image
-                          src={profile.imageUrl}
-                          alt={profile.name || 'Profile'}
-                          className="w-full h-full object-cover"
-                          width={80}
-                          height={80}
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-red-500/5 flex items-center justify-center">
-                          <span className="text-red-500/50 text-2xl">?</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-center">
-                      <h4 className="text-red-500/90 font-bold tracking-wider ancient-text">
-                        {profile.name ? `@${profile.name}` : 'Anonymous User'}
-                      </h4>
-                      {profile.bio && (
-                        <p className="text-red-400/70 text-sm mt-1 hover-text-glow max-w-md">
-                          {profile.bio}
-                        </p>
-                      )}
+                  {/* Sticky Profile Section */}
+                  <div className={`sticky top-0 z-35 p-4 bg-black/40 backdrop-blur-md transition-opacity duration-300 ${showProfile ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                    <div className="flex flex-col items-center gap-4 border border-red-500/10 rounded-lg hover-glow ancient-border p-4">
+                      <div className="w-20 h-20 rounded-full border-2 border-red-500/20 overflow-hidden hover-glow">
+                        {profile.imageUrl ? (
+                          <Image
+                            src={profile.imageUrl}
+                            alt={profile.name || 'Profile'}
+                            className="w-full h-full object-cover"
+                            width={80}
+                            height={80}
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-red-500/5 flex items-center justify-center">
+                            <span className="text-red-500/50 text-2xl">?</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-center">
+                        <h4 className="text-red-500/90 font-bold tracking-wider ancient-text">
+                          {profile.name ? `@${profile.name}` : 'Anonymous User'}
+                        </h4>
+                        {profile.bio && (
+                          <p className="text-red-400/70 text-sm mt-1 hover-text-glow max-w-md">
+                            {profile.bio}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -1538,22 +1545,11 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     {analysis.traits.map((trait: { name: string; score: number; explanation: string }, index: number) => {
                       return (
                         <div key={`trait-${index}-${trait.name}`} className="space-y-2 hover-glow">
-                          <div className="flex justify-between items-center">
-                            <span className="text-red-400/90 text-[14px] tracking-wide capitalize font-bold">
-                              {trait.name ? trait.name.replace(/[*-]/g, '') : trait.name}
-                            </span>
-                            <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
-                              {getTraitLabel(tuning.traitModifiers[trait.name])}
-                            </span>
-                          </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="25"
-                            value={tuning.traitModifiers[trait.name] ?? Math.round(trait.score * 10)}
-                            onChange={(e) => handleTraitAdjustment(trait.name, parseInt(e.target.value))}
-                            className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
+                          <ToggleButton
+                            value={Boolean(tuning.traitModifiers[trait.name] ?? Math.round(trait.score * 10))}
+                            onChange={(enabled) => handleTraitAdjustment(trait.name, enabled)}
+                            label={trait.name}
+                            className="w-full"
                           />
                           <div className="text-[14px] leading-relaxed text-red-300/80 pl-2 border-l border-red-500/10">
                             {trait.explanation ? trait.explanation.replace(/[*]/g, '') : trait.explanation}
@@ -1575,33 +1571,11 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                       const [interestName] = interest.split(':').map(s => s.trim());
                       return (
                         <div key={`interest-${index}-${interestName}`} className="space-y-1">
-                          <div className="flex justify-between items-center font-bold text-xs text-red-400/70">
-                            <div className="flex-1">
-                              <span className={tuning.interestWeights[interestName] === 0 ? 'line-through opacity-50' : ''}>
-                                {interestName}
-                                <button
-                                  onClick={() => handleInterestWeight(interestName, 0)}
-                                  className="ml-2 text-red-500 hover:text-red-500/70"
-                                  title="Disable interest"
-                                >
-                                  ×
-                                </button>
-                              </span>
-                            </div>
-                            <div className="w-20 text-right">
-                              {getWeightLabel(tuning.interestWeights[interestName] || 0)}
-                            </div>
-                          </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="25"
-                            value={Math.round((tuning.interestWeights[interestName] || 0) / 25) * 25}
-                            onChange={(e) => handleInterestWeight(interestName, parseInt(e.target.value))}
-                            className={`w-full accent-red-500/50 bg-red-500/10 rounded h-1 ${
-                              tuning.interestWeights[interestName] === 0 ? 'opacity-50' : ''
-                            }`}
+                          <ToggleButton
+                            value={Boolean(tuning.interestWeights[interestName] || 0)}
+                            onChange={(enabled) => handleInterestWeight(interestName, enabled)}
+                            label={interestName}
+                            className={`w-full ${tuning.interestWeights[interestName] === 0 ? 'opacity-50' : ''}`}
                           />
                         </div>
                       );
@@ -1610,33 +1584,12 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     {/* Custom Interests */}
                     {tuning.customInterests.map((interest: string, index: number) => (
                       <div key={`custom-interest-${index}-${interest}`} className="space-y-1">
-                        <div className="flex justify-between items-center text-xs text-red-400/70">
-                          <div className="flex-1">
-                            <span className={tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}>
-                              {interest ? interest.replace(/[*-]/g, '') : interest}
-                              <button
-                                onClick={() => handleRemoveCustomInterest(interest)}
-                                className="ml-2 text-red-500/50 hover:text-red-500/70"
-                                title="Remove custom interest"
-                              >
-                                ×
-                              </button>
-                            </span>
-                          </div>
-                          <div className="w-20 text-right">
-                            {getWeightLabel(tuning.interestWeights[interest] || 0)}
-                          </div>
-                        </div>
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          step="25"
-                          value={Math.round((tuning.interestWeights[interest] || 0) / 25) * 25}
-                          onChange={(e) => handleInterestWeight(interest, parseInt(e.target.value))}
-                          className={`w-full accent-red-500/50 bg-red-500/10 rounded h-1 ${
-                            tuning.interestWeights[interest] === 0 ? 'opacity-50' : ''
-                          }`}
+                        <ToggleButton
+                          value={Boolean(tuning.interestWeights[interest] || 0)}
+                          onChange={(enabled) => handleInterestWeight(interest, enabled)}
+                          label={interest}
+                          onRemove={() => handleRemoveCustomInterest(interest)}
+                          className={`w-full ${tuning.interestWeights[interest] === 0 ? 'opacity-50' : ''}`}
                         />
                       </div>
                     ))}
@@ -1664,97 +1617,45 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                 </div>
 
                 {/* Communication Style */}
-                <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                    <span className="ancient-text text-base">Communication Style</span>
+                <div className="space-y-4">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+                    <span className="glow-text">Communication Style</span>
                   </h4>
-                  <div className="space-y-4 bg-black/20 rounded-lg p-4">
-                    <div className="space-y-2 hover-glow">
-                      <div className="flex justify-between text-red-400/90">
-                        <span className="text-[14px] tracking-wide">Formality</span>
-                        <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
-                          {tuning.communicationStyle.formality === 0 ? 'Very Casual' :
-                           tuning.communicationStyle.formality <= 25 ? 'Casual' :
-                           tuning.communicationStyle.formality <= 50 ? 'Balanced' :
-                           tuning.communicationStyle.formality <= 75 ? 'Professional' :
-                           'Very Formal'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
+                  <div className="space-y-3">
+                    <div className="space-y-1 hover-glow">
+                      <CycleButton
                         value={tuning.communicationStyle.formality}
-                        onChange={(e) => handleStyleAdjustment('formality', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
+                        onChange={(value) => handleStyleAdjustment('formality', value)}
+                        label="Formality"
+                        className="w-full"
                       />
                     </div>
 
-                    <div className="space-y-2 hover-glow">
-                      <div className="flex justify-between text-red-400/90">
-                        <span className="text-[14px] tracking-wide">Enthusiasm</span>
-                        <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
-                          {tuning.communicationStyle.enthusiasm === 0 ? 'Reserved' :
-                           tuning.communicationStyle.enthusiasm <= 25 ? 'Mild' :
-                           tuning.communicationStyle.enthusiasm <= 50 ? 'Moderate' :
-                           tuning.communicationStyle.enthusiasm <= 75 ? 'High' :
-                           'Very High'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
-                        value={tuning.communicationStyle.enthusiasm}
-                        onChange={(e) => handleStyleAdjustment('enthusiasm', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
-                      />
-                    </div>
-
-                    <div className="space-y-2 hover-glow">
-                      <div className="flex justify-between text-red-400/90">
-                        <span className="text-[14px] tracking-wide">Technical Level</span>
-                        <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
-                          {tuning.communicationStyle.technicalLevel === 0 ? 'Basic' :
-                           tuning.communicationStyle.technicalLevel <= 25 ? 'Simple' :
-                           tuning.communicationStyle.technicalLevel <= 50 ? 'Moderate' :
-                           tuning.communicationStyle.technicalLevel <= 75 ? 'Advanced' :
-                           'Expert'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
+                    <div className="space-y-1 hover-glow">
+                      <CycleButton
                         value={tuning.communicationStyle.technicalLevel}
-                        onChange={(e) => handleStyleAdjustment('technicalLevel', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
+                        onChange={(value) => handleStyleAdjustment('technicalLevel', value)}
+                        label="Technical Level"
+                        className="w-full"
                       />
                     </div>
 
-                    <div className="space-y-2 hover-glow">
-                      <div className="flex justify-between text-red-400/90">
-                        <span className="text-[14px] tracking-wide">Emoji Usage</span>
-                        <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
-                          {tuning.communicationStyle.emojiUsage === 0 ? 'None' :
-                           tuning.communicationStyle.emojiUsage <= 25 ? 'Minimal' :
-                           tuning.communicationStyle.emojiUsage <= 50 ? 'Moderate' :
-                           tuning.communicationStyle.emojiUsage <= 75 ? 'Frequent' :
-                           'Very Frequent'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
+                    <div className="space-y-1 hover-glow">
+                      <CycleButton
+                        value={tuning.communicationStyle.enthusiasm}
+                        onChange={(value) => handleStyleAdjustment('enthusiasm', value)}
+                        label="Enthusiasm"
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div className="space-y-1 hover-glow">
+                      <CycleButton
                         value={tuning.communicationStyle.emojiUsage}
-                        onChange={(e) => handleStyleAdjustment('emojiUsage', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
+                        onChange={(value) => handleStyleAdjustment('emojiUsage', value)}
+                        label="Emoji Usage"
+                        className="w-full"
                       />
                     </div>
                   </div>
@@ -1844,12 +1745,17 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                           <span className="text-red-400/90 tracking-wide text-[15px] capitalize font-bold">
                             {trait.name ? trait.name.replace(/[*-]/g, '') : trait.name}
                           </span>
-                          <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">{trait.score}/10</span>
+                          <span className="text-red-500/80 text-sm">
+                            {trait.score >= 8 ? 'High' : trait.score >= 4 ? 'Medium' : 'Low'}
+                          </span>
                         </div>
                         <div className="h-1.5 bg-red-500/10 rounded-full overflow-hidden glow-box mb-3">
                           <div 
-                            className="h-full bg-red-500/50 rounded-full transition-all duration-500 ease-out"
-                            style={{ width: `${trait.score * 10}%` }}
+                            className={'h-full rounded-full transition-all duration-500 ease-out ' + 
+                              (trait.score >= 8 ? 'bg-red-500/80' : 
+                              trait.score >= 4 ? 'bg-red-500/50' : 
+                              'bg-red-500/30')}
+                            style={{ width: `${trait.score * 10}%` } as CSSProperties}
                           />
                         </div>
                         <div className="text-[14px] leading-relaxed text-red-300/80 prose prose-red prose-invert max-w-none hover-text-glow pl-2 border-l border-red-500/10">
@@ -1873,37 +1779,33 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     <div className="flex items-start gap-3">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
                       <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
-                        {analysis.communicationStyle.formality < 41 ? 'Prefers casual, relaxed communication with natural language patterns' :
-                         analysis.communicationStyle.formality < 61 ? 'Balances casual and professional tones appropriately' :
-                         analysis.communicationStyle.formality < 81 ? 'Maintains professional and structured communication' :
-                         'Employs highly formal and sophisticated language'}
+                        Formality: {analysis.communicationStyle.formality === 'high' ? 'Very formal and professional' : 
+                                   analysis.communicationStyle.formality === 'medium' ? 'Balanced formality' : 
+                                   'Casual and relaxed'}
                       </span>
                     </div>
                     <div className="flex items-start gap-3">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
                       <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
-                        {analysis.communicationStyle.enthusiasm < 41 ? 'Expresses thoughts in a reserved and measured manner' :
-                         analysis.communicationStyle.enthusiasm < 61 ? 'Shows balanced enthusiasm in communications' :
-                         analysis.communicationStyle.enthusiasm < 81 ? 'Demonstrates clear passion and energy in expression' :
-                         'Exhibits intense enthusiasm and excitement in communication'}
+                        Enthusiasm: {analysis.communicationStyle.enthusiasm === 'high' ? 'Very enthusiastic and energetic' :
+                                    analysis.communicationStyle.enthusiasm === 'medium' ? 'Balanced enthusiasm' :
+                                    'Reserved and measured'}
                       </span>
                     </div>
                     <div className="flex items-start gap-3">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
                       <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
-                        {analysis.communicationStyle.technicalLevel < 41 ? 'Uses accessible language with minimal technical terms' :
-                         analysis.communicationStyle.technicalLevel < 61 ? 'Balances technical and general language effectively' :
-                         analysis.communicationStyle.technicalLevel < 81 ? 'Frequently incorporates technical terminology' :
-                         'Employs sophisticated technical discourse consistently'}
+                        Technical Level: {analysis.communicationStyle.technicalLevel === 'high' ? 'Advanced technical language' :
+                                        analysis.communicationStyle.technicalLevel === 'medium' ? 'Mix of technical and simple terms' :
+                                        'Simple, everyday language'}
                       </span>
                     </div>
                     <div className="flex items-start gap-3">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
                       <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
-                        {analysis.communicationStyle.emojiUsage < 41 ? 'Rarely uses emojis or emotional indicators' :
-                         analysis.communicationStyle.emojiUsage < 61 ? 'Moderately incorporates emojis for emphasis' :
-                         analysis.communicationStyle.emojiUsage < 81 ? 'Frequently enhances messages with emojis' :
-                         'Extensively uses emojis to convey emotion and tone'}
+                        Emoji Usage: {analysis.communicationStyle.emojiUsage === 'high' ? 'Frequent emojis (3+)' :
+                                     analysis.communicationStyle.emojiUsage === 'medium' ? 'Occasional emojis (1-2)' :
+                                     'No emojis'}
                       </span>
                     </div>
                   </div>
@@ -1966,6 +1868,46 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                   </h4>
                   <div className="prose prose-red prose-invert max-w-none hover-text-glow prose-p:text-red-300/90 prose-p:leading-relaxed prose-p:text-[15px] bg-black/20 rounded-lg p-4">
                     <ReactMarkdown>{analysis.emotionalTone}</ReactMarkdown>
+                  </div>
+                </div>
+
+                {/* Thought Process Section */}
+                <div className="bg-black/20 text-left rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                    <span className="ancient-text text-base">Response Patterns</span>
+                  </h4>
+                  <div className="space-y-6">
+                    {/* Core Response Patterns */}
+                    <div className="space-y-3 bg-black/20 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
+                        <div className="flex-1">
+                          <span className="text-red-400/90 font-medium">Initial Approach</span>
+                          <p className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow mt-1">
+                            {analysis.thoughtProcess?.initialApproach || 'Balances quick insights with careful consideration'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
+                        <div className="flex-1">
+                          <span className="text-red-400/90 font-medium">Processing Style</span>
+                          <p className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow mt-1">
+                            {analysis.thoughtProcess?.processingStyle || 'Combines analytical thinking with practical insights'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
+                        <div className="flex-1">
+                          <span className="text-red-400/90 font-medium">Expression Style</span>
+                          <p className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow mt-1">
+                            {analysis.thoughtProcess?.expressionStyle || 'Adapts communication style to context while maintaining authenticity'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2179,22 +2121,11 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     {analysis.traits.map((trait: { name: string; score: number; explanation: string }, index: number) => {
                       return (
                         <div key={`trait-${index}-${trait.name}`} className="space-y-2 hover-glow">
-                          <div className="flex justify-between items-center">
-                            <span className="text-red-400/90 text-[14px] tracking-wide capitalize font-bold">
-                              {trait.name ? trait.name.replace(/[*-]/g, '') : trait.name}
-                            </span>
-                            <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">
-                              {getTraitLabel(tuning.traitModifiers[trait.name])}
-                            </span>
-                          </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="25"
-                            value={tuning.traitModifiers[trait.name] ?? Math.round(trait.score * 10)}
-                            onChange={(e) => handleTraitAdjustment(trait.name, parseInt(e.target.value))}
-                            className="w-full accent-red-500/50 bg-red-500/10 rounded h-1.5"
+                          <ToggleButton
+                            value={Boolean(tuning.traitModifiers[trait.name] ?? Math.round(trait.score * 10))}
+                            onChange={(enabled) => handleTraitAdjustment(trait.name, enabled)}
+                            label={trait.name}
+                            className="w-full"
                           />
                           <div className="text-[14px] leading-relaxed text-red-300/80 pl-2 border-l border-red-500/10">
                             {trait.explanation ? trait.explanation.replace(/[*]/g, '') : trait.explanation}
@@ -2216,33 +2147,11 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                       const [interestName] = interest.split(':').map(s => s.trim());
                       return (
                         <div key={`interest-${index}-${interestName}`} className="space-y-1">
-                          <div className="flex justify-between items-center font-bold text-xs text-red-400/70">
-                            <div className="flex-1">
-                              <span className={tuning.interestWeights[interestName] === 0 ? 'line-through opacity-50' : ''}>
-                                {interestName}
-                                <button
-                                  onClick={() => handleInterestWeight(interestName, 0)}
-                                  className="ml-2 text-red-500 hover:text-red-500/70"
-                                  title="Disable interest"
-                                >
-                                  ×
-                                </button>
-                              </span>
-                            </div>
-                            <div className="w-20 text-right">
-                              {getWeightLabel(tuning.interestWeights[interestName] || 0)}
-                            </div>
-                          </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="25"
-                            value={Math.round((tuning.interestWeights[interestName] || 0) / 25) * 25}
-                            onChange={(e) => handleInterestWeight(interestName, parseInt(e.target.value))}
-                            className={`w-full accent-red-500/50 bg-red-500/10 rounded h-1 ${
-                              tuning.interestWeights[interestName] === 0 ? 'opacity-50' : ''
-                            }`}
+                          <ToggleButton
+                            value={Boolean(tuning.interestWeights[interestName] || 0)}
+                            onChange={(enabled) => handleInterestWeight(interestName, enabled)}
+                            label={interestName}
+                            className={`w-full ${tuning.interestWeights[interestName] === 0 ? 'opacity-50' : ''}`}
                           />
                         </div>
                       );
@@ -2251,33 +2160,12 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     {/* Custom Interests */}
                     {tuning.customInterests.map((interest: string, index: number) => (
                       <div key={`custom-interest-${index}-${interest}`} className="space-y-1">
-                        <div className="flex justify-between items-center text-xs text-red-400/70">
-                          <div className="flex-1">
-                            <span className={tuning.interestWeights[interest] === 0 ? 'line-through opacity-50' : ''}>
-                              {interest ? interest.replace(/[*-]/g, '') : interest}
-                              <button
-                                onClick={() => handleRemoveCustomInterest(interest)}
-                                className="ml-2 text-red-500/50 hover:text-red-500/70"
-                                title="Remove custom interest"
-                              >
-                                ×
-                              </button>
-                            </span>
-                          </div>
-                          <div className="w-20 text-right">
-                            {getWeightLabel(tuning.interestWeights[interest] || 0)}
-                          </div>
-                        </div>
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          step="25"
-                          value={Math.round((tuning.interestWeights[interest] || 0) / 25) * 25}
-                          onChange={(e) => handleInterestWeight(interest, parseInt(e.target.value))}
-                          className={`w-full accent-red-500/50 bg-red-500/10 rounded h-1 ${
-                            tuning.interestWeights[interest] === 0 ? 'opacity-50' : ''
-                          }`}
+                        <ToggleButton
+                          value={Boolean(tuning.interestWeights[interest] || 0)}
+                          onChange={(enabled) => handleInterestWeight(interest, enabled)}
+                          label={interest}
+                          onRemove={() => handleRemoveCustomInterest(interest)}
+                          className={`w-full ${tuning.interestWeights[interest] === 0 ? 'opacity-50' : ''}`}
                         />
                       </div>
                     ))}
@@ -2290,12 +2178,12 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                           value={newInterest}
                           onChange={(e) => setNewInterest(e.target.value)}
                           placeholder="Add custom interest..."
-                          className="flex-1 bg-black/20 text-red-400/90 border border-red-500/50 rounded px-3 py-1.5 text-sm placeholder:text-red-500/50 focus:outline-none focus:border-red-500/40 hover-glow"
+                          className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow"
                         />
                         <button
                           type="submit"
                           disabled={!newInterest.trim()}
-                          className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/50 rounded hover:bg-red-500/10 hover:border-red-500/50 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow"
+                          className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow"
                         >
                           Add
                         </button>
@@ -2312,90 +2200,38 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                   </h4>
                   <div className="space-y-3">
                     <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/80">
-                        <span className="hover-text-glow">Formality</span>
-                        <span className="hover-text-glow">
-                          {tuning.communicationStyle.formality === 0 ? 'None' :
-                           tuning.communicationStyle.formality < 41 ? 'Very Casual' :
-                           tuning.communicationStyle.formality < 61 ? 'Casual' :
-                           tuning.communicationStyle.formality < 81 ? 'Professional' :
-                           'Highly Formal'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
+                      <CycleButton
                         value={tuning.communicationStyle.formality}
-                        onChange={(e) => handleStyleAdjustment('formality', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
+                        onChange={(value) => handleStyleAdjustment('formality', value)}
+                        label="Formality"
+                        className="w-full"
                       />
                     </div>
 
                     <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/80">
-                        <span className="hover-text-glow">Technical Level</span>
-                        <span className="hover-text-glow">
-                          {tuning.communicationStyle.technicalLevel === 0 ? 'None' :
-                           tuning.communicationStyle.technicalLevel <= 25 ? 'Basic' :
-                           tuning.communicationStyle.technicalLevel <= 50 ? 'Mixed' :
-                           tuning.communicationStyle.technicalLevel <= 75 ? 'Detailed' :
-                           'Expert'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
+                      <CycleButton
                         value={tuning.communicationStyle.technicalLevel}
-                        onChange={(e) => handleStyleAdjustment('technicalLevel', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
+                        onChange={(value) => handleStyleAdjustment('technicalLevel', value)}
+                        label="Technical Level"
+                        className="w-full"
                       />
                     </div>
 
                     <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/80">
-                        <span className="hover-text-glow">Enthusiasm</span>
-                        <span className="hover-text-glow">
-                          {tuning.communicationStyle.enthusiasm === 0 ? 'None' :
-                           tuning.communicationStyle.enthusiasm <= 25 ? 'Reserved' :
-                           tuning.communicationStyle.enthusiasm <= 50 ? 'Moderate' :
-                           tuning.communicationStyle.enthusiasm <= 75 ? 'High' :
-                           'Very High'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
+                      <CycleButton
                         value={tuning.communicationStyle.enthusiasm}
-                        onChange={(e) => handleStyleAdjustment('enthusiasm', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
+                        onChange={(value) => handleStyleAdjustment('enthusiasm', value)}
+                        label="Enthusiasm"
+                        className="w-full"
                       />
                     </div>
 
                     <div className="space-y-1 hover-glow">
-                      <div className="flex justify-between text-xs text-red-400/80">
-                        <span className="hover-text-glow">Emoji Usage</span>
-                        <span className="hover-text-glow">
-                          {tuning.communicationStyle.emojiUsage === 0 ? 'None' :
-                           tuning.communicationStyle.emojiUsage <= 25 ? 'Minimal' :
-                           tuning.communicationStyle.emojiUsage <= 50 ? 'Moderate' :
-                           tuning.communicationStyle.emojiUsage <= 75 ? 'Frequent' :
-                           'Very Frequent'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="25"
+                      <CycleButton
                         value={tuning.communicationStyle.emojiUsage}
-                        onChange={(e) => handleStyleAdjustment('emojiUsage', parseInt(e.target.value))}
-                        className="w-full accent-red-500/50 bg-red-500/10 rounded h-1"
+                        onChange={(value) => handleStyleAdjustment('emojiUsage', value)}
+                        label="Emoji Usage"
+                        className="w-full"
                       />
                     </div>
                   </div>
@@ -2539,13 +2375,6 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                             <span className="text-red-400/90 font-medium tracking-wide text-[15px] capitalize">
                               {trait.name ? trait.name.replace(/[*-]/g, '') : trait.name}
                             </span>
-                            <span className="text-red-500/80 font-mono text-sm bg-red-500/5 px-2 py-0.5 rounded border border-red-500/10">{trait.score}/10</span>
-                          </div>
-                          <div className="h-1.5 bg-red-500/10 rounded-full overflow-hidden glow-box mb-3">
-                            <div 
-                              className="h-full bg-red-500/50 rounded-full transition-all duration-500 ease-out"
-                              style={{ width: `${trait.score * 10}%` }}
-                            />
                           </div>
                           <div className="text-[14px] leading-relaxed text-red-300/80 prose prose-red prose-invert max-w-none hover-text-glow pl-2 border-l border-red-500/10">
                             <ReactMarkdown>{trait.explanation}</ReactMarkdown>
@@ -2568,37 +2397,33 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                       <div className="flex items-start gap-3">
                         <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
                         <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
-                          {analysis.communicationStyle.formality < 41 ? 'Prefers casual, relaxed communication with natural language patterns' :
-                           analysis.communicationStyle.formality < 61 ? 'Balances casual and professional tones appropriately' :
-                           analysis.communicationStyle.formality < 81 ? 'Maintains professional and structured communication' :
-                           'Employs highly formal and sophisticated language'}
+                          Formality: {analysis.communicationStyle.formality === 'high' ? 'Very formal and professional' : 
+                                     analysis.communicationStyle.formality === 'medium' ? 'Balanced formality' : 
+                                     'Casual and relaxed'}
                         </span>
                       </div>
                       <div className="flex items-start gap-3">
                         <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
                         <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
-                          {analysis.communicationStyle.enthusiasm < 41 ? 'Expresses thoughts in a reserved and measured manner' :
-                           analysis.communicationStyle.enthusiasm < 61 ? 'Shows balanced enthusiasm in communications' :
-                           analysis.communicationStyle.enthusiasm < 81 ? 'Demonstrates clear passion and energy in expression' :
-                           'Exhibits intense enthusiasm and excitement in communication'}
+                          Enthusiasm: {analysis.communicationStyle.enthusiasm === 'high' ? 'Very enthusiastic and energetic' :
+                                      analysis.communicationStyle.enthusiasm === 'medium' ? 'Balanced enthusiasm' :
+                                      'Reserved and measured'}
                         </span>
                       </div>
                       <div className="flex items-start gap-3">
                         <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
                         <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
-                          {analysis.communicationStyle.technicalLevel < 41 ? 'Uses accessible language with minimal technical terms' :
-                           analysis.communicationStyle.technicalLevel < 61 ? 'Balances technical and general language effectively' :
-                           analysis.communicationStyle.technicalLevel < 81 ? 'Frequently incorporates technical terminology' :
-                           'Employs sophisticated technical discourse consistently'}
+                          Technical Level: {analysis.communicationStyle.technicalLevel === 'high' ? 'Advanced technical language' :
+                                          analysis.communicationStyle.technicalLevel === 'medium' ? 'Mix of technical and simple terms' :
+                                          'Simple, everyday language'}
                         </span>
                       </div>
                       <div className="flex items-start gap-3">
                         <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
                         <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
-                          {analysis.communicationStyle.emojiUsage < 41 ? 'Rarely uses emojis or emotional indicators' :
-                           analysis.communicationStyle.emojiUsage < 61 ? 'Moderately incorporates emojis for emphasis' :
-                           analysis.communicationStyle.emojiUsage < 81 ? 'Frequently enhances messages with emojis' :
-                           'Extensively uses emojis to convey emotion and tone'}
+                          Emoji Usage: {analysis.communicationStyle.emojiUsage === 'high' ? 'Frequent emojis (3+)' :
+                                       analysis.communicationStyle.emojiUsage === 'medium' ? 'Occasional emojis (1-2)' :
+                                       'No emojis'}
                         </span>
                       </div>
                     </div>
@@ -2649,13 +2474,53 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                   </div>
 
                   {/* Emotional Tone Section */}
-                  <div className="bg-black/20 text-left rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
+                  <div className="bg-black/20 text-left rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                      <span className="ancient-text">Emotional Tone</span>
+                      <span className="ancient-text text-base">Emotional Tone</span>
                     </h4>
-                    <div className="prose prose-red prose-invert max-w-none hover-text-glow">
+                    <div className="prose prose-red prose-invert max-w-none hover-text-glow prose-p:text-red-300/90 prose-p:leading-relaxed prose-p:text-[15px] bg-black/20 rounded-lg p-4">
                       <ReactMarkdown>{analysis.emotionalTone}</ReactMarkdown>
+                    </div>
+                  </div>
+
+                  {/* Thought Process Section */}
+                  <div className="bg-black/20 text-left rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                      <span className="ancient-text text-base">Response Patterns</span>
+                    </h4>
+                    <div className="space-y-6">
+                      {/* Core Response Patterns */}
+                      <div className="space-y-3 bg-black/20 rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
+                          <div className="flex-1">
+                            <span className="text-red-400/90 font-medium">Initial Approach</span>
+                            <p className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow mt-1">
+                              {analysis.thoughtProcess?.initialApproach || 'Balances quick insights with careful consideration'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
+                          <div className="flex-1">
+                            <span className="text-red-400/90 font-medium">Processing Style</span>
+                            <p className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow mt-1">
+                              {analysis.thoughtProcess?.processingStyle || 'Combines analytical thinking with practical insights'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
+                          <div className="flex-1">
+                            <span className="text-red-400/90 font-medium">Expression Style</span>
+                            <p className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow mt-1">
+                              {analysis.thoughtProcess?.expressionStyle || 'Adapts communication style to context while maintaining authenticity'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2691,7 +2556,10 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
               </div>
 
               {/* Chat Messages Container */}
-              <div className="flex-1 overflow-y-auto custom-scrollbar backdrop-blur-sm bg-black/20 ancient-scroll min-h-0 relative z-30">
+              <div 
+                className="flex-1 overflow-y-auto custom-scrollbar backdrop-blur-sm bg-black/20 ancient-scroll min-h-0 relative z-30"
+                onScroll={handleScroll}
+              >
                 {!analysis ? (
                   <div className="text-red-500/70 italic text-center glow-text p-4">
                     Start personality analysis to begin chat interaction
@@ -2699,7 +2567,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                 ) : (
                   <>
                     {/* Sticky Profile Section */}
-                    <div className="sticky top-0 z-35 p-4 bg-black/40 backdrop-blur-md">
+                    <div className={`sticky top-0 z-35 p-4 bg-black/40 backdrop-blur-md transition-opacity duration-300 ${showProfile ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                       <div className="flex flex-col items-center gap-4 border border-red-500/10 rounded-lg hover-glow ancient-border p-4">
                         <div className="w-20 h-20 rounded-full border-2 border-red-500/20 overflow-hidden hover-glow">
                           {profile.imageUrl ? (

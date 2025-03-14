@@ -3,6 +3,7 @@ import { Tweet, TwitterProfile } from '@/types/scraper'
 import { OpenAIQueueManager } from '@/lib/queue/openai-queue'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth/config'
+import { CommunicationLevel, PersonalityAnalysis } from '@/lib/openai'
 
 export async function POST(req: Request) {
   try {
@@ -51,7 +52,19 @@ export async function POST(req: Request) {
           context: context || undefined
         },
         session.username,
-        resolve,
+        (result) => {
+          // Convert numeric values to boolean if needed
+          if (result && typeof result === 'object' && 'communicationStyle' in result) {
+            const style = (result as PersonalityAnalysis).communicationStyle;
+            if (style) {
+              style.formality = style.formality as CommunicationLevel;
+              style.enthusiasm = style.enthusiasm as CommunicationLevel;
+              style.technicalLevel = style.technicalLevel as CommunicationLevel;
+              style.emojiUsage = style.emojiUsage as CommunicationLevel;
+            }
+          }
+          resolve(result);
+        },
         reject
       )
     }).catch(error => {

@@ -99,12 +99,16 @@ export function usePersonalityCache({ username }: UsePersonalityCacheProps) {
         customInterests: state.data?.customInterests !== undefined ? state.data.customInterests : [],
         communicationStyle: {
           ...analysisData.communicationStyle,
-          // Preserve existing numeric values if they exist, otherwise use new values
           formality: state.data?.communicationStyle?.formality ?? analysisData.communicationStyle.formality,
           enthusiasm: state.data?.communicationStyle?.enthusiasm ?? analysisData.communicationStyle.enthusiasm,
           technicalLevel: state.data?.communicationStyle?.technicalLevel ?? analysisData.communicationStyle.technicalLevel,
           emojiUsage: state.data?.communicationStyle?.emojiUsage ?? analysisData.communicationStyle.emojiUsage,
           description: analysisData.communicationStyle.description
+        },
+        thoughtProcess: {
+          initialApproach: state.data?.thoughtProcess?.initialApproach ?? analysisData.thoughtProcess.initialApproach,
+          processingStyle: state.data?.thoughtProcess?.processingStyle ?? analysisData.thoughtProcess.processingStyle,
+          expressionStyle: state.data?.thoughtProcess?.expressionStyle ?? analysisData.thoughtProcess.expressionStyle
         }
       };
 
