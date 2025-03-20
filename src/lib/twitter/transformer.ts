@@ -50,8 +50,10 @@ export class TwitterDataTransformer {
       timestamp: timestamp,
       metrics: {
         views: apiTweet.viewCount || 0,
-        likes: 0,  // Not available in new API
-        retweets: 0  // Not available in new API
+        likes: apiTweet.likeCount || 0,
+        retweets: apiTweet.retweetCount || 0,
+        replies: apiTweet.replyCount || 0,
+        quotes: apiTweet.quoteCount || 0
       },
       images: [], // Will be populated if we add media support
       isReply: apiTweet.isReply || false
@@ -105,6 +107,11 @@ export class TwitterDataTransformer {
     created_at: Date;
     url: string;
     is_reply: boolean;
+    view_count: number;
+    retweet_count: number;
+    reply_count: number;
+    like_count: number;
+    quote_count: number;
     metadata: Record<string, unknown>;
     created_in_db: Date;
   } {
@@ -139,8 +146,12 @@ export class TwitterDataTransformer {
       created_at: createdAt,
       url: apiTweet.url,
       is_reply: apiTweet.isReply || false,
+      view_count: apiTweet.viewCount || 0,
+      retweet_count: apiTweet.retweetCount || 0,
+      reply_count: apiTweet.replyCount || 0,
+      like_count: apiTweet.likeCount || 0,
+      quote_count: apiTweet.quoteCount || 0,
       metadata: {
-        viewCount: apiTweet.viewCount || 0,
         conversationId: apiTweet.conversationId,
         inReplyToId: apiTweet.inReplyToId,
         inReplyToUserId: apiTweet.inReplyToUserId,
@@ -163,6 +174,11 @@ export class TwitterDataTransformer {
     created_at: Date;
     url: string;
     is_reply: boolean;
+    view_count: number;
+    retweet_count: number;
+    reply_count: number;
+    like_count: number;
+    quote_count: number;
     metadata: Record<string, unknown>;
     created_in_db: Date;
   }> {

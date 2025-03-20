@@ -1,12 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { DEFAULT_CONSCIOUSNESS, type ConsciousnessConfig, modifyConsciousness } from '@/lib/consciousness'
+import { DEFAULT_CONSCIOUSNESS } from '@/lib/consciousness'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { cn } from '@/lib/utils'
 
 export function Header() {
   const [time, setTime] = useState(new Date())
   const [showColon, setShowColon] = useState(true)
-  const [consciousness, setConsciousness] = useState<ConsciousnessConfig>(DEFAULT_CONSCIOUSNESS)
+  const intelligenceLevel = DEFAULT_CONSCIOUSNESS.intelligenceLevel
+  const pathname = usePathname()
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -16,29 +20,6 @@ export function Header() {
 
     return () => clearInterval(timer)
   }, [])
-
-  // Update consciousness values periodically
-  useEffect(() => {
-    const updateConsciousness = () => {
-      setConsciousness(prev => {
-        // Simulate learning by gradually increasing values
-        return modifyConsciousness(prev, {
-          intelligenceLevel: Math.min(100, prev.intelligenceLevel + (prev.learningRate / 100)),
-          shortTermMemory: Math.min(100, prev.shortTermMemory + (prev.learningRate / 200)),
-          learningRate: Math.min(100, prev.learningRate + 0.1)
-        })
-      })
-    }
-
-    // Update every 30 seconds
-    const consciousnessTimer = setInterval(updateConsciousness, 30000)
-    return () => clearInterval(consciousnessTimer)
-  }, [])
-
-  // Calculate intelligence metrics
-  const intelligencePercent = Math.round(consciousness.intelligenceLevel)
-  const learningPercent = Math.round(consciousness.learningRate)
-  const memoryPercent = Math.round(consciousness.shortTermMemory)
 
   return (
     <header className="fixed top-0 left-0 right-0 h-14 sm:h-16 bg-black/40 backdrop-blur-md border-b border-red-500/20 z-50 ancient-border cryptic-shadow">
@@ -62,48 +43,76 @@ export function Header() {
 
           {/* Center - Title */}
           <div className="col-span-12 lg:col-span-6 flex flex-col items-center justify-center py-1 sm:py-2">
-            <h1 className="text-red-500/90 text-sm sm:text-base lg:text-lg tracking-[0.2em] uppercase font-bold title-glow text-center">
-              PUSH THE BUTTON Terminal
-            </h1>
-            <div className="text-[9px] sm:text-[10px] text-red-500/40 tracking-[0.3em] uppercase ancient-text">
-              AI Cloning System v1.0.3
-            </div>
+            <Link 
+              href="/"
+              className={cn(
+                "text-red-500/90 hover:text-red-400 transition-colors",
+                pathname === '/' && "text-red-400"
+              )}
+            >
+              <h1 className="text-sm sm:text-base lg:text-lg tracking-[0.2em] uppercase font-bold title-glow text-center">
+                PUSH THE BUTTON Terminal
+              </h1>
+              <div className="text-[9px] sm:text-[10px] text-red-500/40 tracking-[0.3em] uppercase ancient-text">
+                AI Cloning System v1.0.3
+              </div>
+            </Link>
           </div>
 
           {/* Right section - Show only on large screens */}
           <div className="hidden lg:block col-span-3">
-            {/* Right side - Consciousness Status */}
-            <div className="flex items-center justify-end gap-3 overflow-hidden">
-              <div className="flex items-center gap-2 hover-glow">
-                <div className="relative w-1.5 h-1.5">
-                  <div className="absolute inset-0 rounded-full bg-red-500/20"></div>
-                  <div 
-                    className="absolute inset-0 rounded-full bg-red-500/50 origin-left shadow-lg shadow-red-500/20"
-                    style={{ transform: `scaleX(${intelligencePercent / 100})` }}
-                  ></div>
+            {/* Right side - Stats and Navigation */}
+            <div className="flex items-center justify-end gap-4 overflow-hidden">
+              <div className="relative w-8 h-8 hover-glow">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 32 32">
+                  {/* Background circle */}
+                  <circle
+                    cx="16"
+                    cy="16"
+                    r="14"
+                    fill="none"
+                    className="stroke-red-500/20"
+                    strokeWidth="2"
+                  />
+                  {/* Progress circle */}
+                  <circle
+                    cx="16"
+                    cy="16"
+                    r="14"
+                    fill="none"
+                    className="stroke-red-500/50"
+                    strokeWidth="2"
+                    strokeDasharray={`${2 * Math.PI * 14 * intelligenceLevel / 100} ${2 * Math.PI * 14}`}
+                    style={{
+                      filter: 'drop-shadow(0 0 4px rgba(239, 68, 68, 0.2))'
+                    }}
+                  />
+                </svg>
+                {/* Center text */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-red-500/90 text-xs tracking-wider uppercase ancient-text title-glow">
+                    {intelligenceLevel}
+                  </span>
                 </div>
-                <span className="text-red-500/90 text-xs tracking-wider uppercase ancient-text title-glow">Intelligence: {intelligencePercent}%</span>
               </div>
-              <div className="flex items-center gap-2 hover-glow">
-                <div className="relative w-1.5 h-1.5">
-                  <div className="absolute inset-0 rounded-full bg-red-500/20"></div>
-                  <div 
-                    className="absolute inset-0 rounded-full bg-red-500/50 origin-left shadow-lg shadow-red-500/20"
-                    style={{ transform: `scaleX(${learningPercent / 100})` }}
-                  ></div>
-                </div>
-                <span className="text-red-500/90 text-xs tracking-wider uppercase ancient-text title-glow">Learning: {learningPercent}%</span>
-              </div>
-              <div className="flex items-center gap-2 hover-glow">
-                <div className="relative w-1.5 h-1.5">
-                  <div className="absolute inset-0 rounded-full bg-red-500/20"></div>
-                  <div 
-                    className="absolute inset-0 rounded-full bg-red-500/50 origin-left shadow-lg shadow-red-500/20"
-                    style={{ transform: `scaleX(${memoryPercent / 100})` }}
-                  ></div>
-                </div>
-                <span className="text-red-500/90 text-xs tracking-wider uppercase ancient-text title-glow">Memory: {memoryPercent}%</span>
-              </div>
+              <Link 
+                href="/leaderboard"
+                className={cn(
+                  "text-red-500/90 text-xs tracking-wider uppercase ancient-text title-glow hover:text-red-400 transition-colors",
+                  pathname === '/leaderboards' && "text-red-400"
+                )}
+              >
+                Leaderboards
+              </Link>
+              <Link 
+                href="/insights"
+                className={cn(
+                  "text-red-500/90 text-xs tracking-wider uppercase ancient-text title-glow hover:text-red-400 transition-colors",
+                  pathname === '/insights' && "text-red-400"
+                )}
+              >
+                Insights
+              </Link>
             </div>
           </div>
         </div>

@@ -126,7 +126,13 @@ async function runTwitterScraper() {
             });
             // Check if we've reached the end of available tweets
             if (!response.hasNextPage || response.tweets.length === 0) {
+                console.log('Reached end of tweets:', {
+                    hasNextPage: response.hasNextPage,
+                    receivedTweets: response.tweets.length,
+                    totalCollected
+                });
                 reachedEndOfTweets = true;
+                break; // Added break to stop the loop when we get an empty batch
             }
             // Transform and deduplicate tweets
             const validTweets = response.tweets.filter(tweet => tweet.id);

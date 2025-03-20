@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import { Tweet, OpenAITwitterProfile } from '../types/scraper'
+import { Tweet, OpenAITwitterProfile, PersonalityTuning } from '../types/scraper'
 
 export type CommunicationLevel = 'low' | 'medium' | 'high';
 
@@ -13,6 +13,20 @@ export interface PersonalityAnalysis {
     relatedTraits?: string[]
   }[]
   interests: string[]
+  socialBehaviorMetrics: {
+    oversharer: number    // 0-100
+    replyGuy: number      // 0-100
+    viralChaser: number   // 0-100
+    threadMaker: number   // 0-100
+    retweeter: number     // 0-100
+    hotTaker: number      // 0-100
+    joker: number         // 0-100
+    debater: number       // 0-100
+    doomPoster: number    // 0-100
+    earlyAdopter: number  // 0-100
+    knowledgeDropper: number // 0-100
+    hypeBeast: number     // 0-100
+  }
   communicationStyle: {
     formality: CommunicationLevel
     enthusiasm: CommunicationLevel
@@ -228,8 +242,8 @@ class ModelUnavailableError extends OpenAIError {
 const FALLBACK_CONFIG = {
   maxRetries: 3,
   fallbackModel: 'gpt-4o-mini',
-  minTokens: 2500,
-  maxTokens: 3500,
+  minTokens: 3500,
+  maxTokens: 4500,
   defaultTemperature: 0.85,
   styleVariationStep: 0.1,
   maxStyleVariation: 0.3,
@@ -361,7 +375,8 @@ export async function analyzePersonality(
   prompt?: string,
   context?: string,
   regenerationKey?: string,
-  retryCount: number = 0
+  retryCount: number = 0,
+  currentTuning?: PersonalityTuning
 ): Promise<PersonalityAnalysis | { response: string }> {
   const MAX_ANALYSIS_RETRIES = 3;
   
@@ -379,11 +394,25 @@ export async function analyzePersonality(
       summary: '',
       traits: [],
       interests: [],
+      socialBehaviorMetrics: {
+        oversharer: 0,
+        replyGuy: 0,
+        viralChaser: 0,
+        threadMaker: 0,
+        retweeter: 0,
+        hotTaker: 0,
+        joker: 0,
+        debater: 0,
+        doomPoster: 0,
+        earlyAdopter: 0,
+        knowledgeDropper: 0,
+        hypeBeast: 0
+      },
       communicationStyle: {
-        formality: 'medium',
-        enthusiasm: 'medium',
-        technicalLevel: 'medium',
-        emojiUsage: 'medium',
+        formality: currentTuning?.communicationStyle?.formality ?? 'medium',
+        enthusiasm: currentTuning?.communicationStyle?.enthusiasm ?? 'medium',
+        technicalLevel: currentTuning?.communicationStyle?.technicalLevel ?? 'medium',
+        emojiUsage: currentTuning?.communicationStyle?.emojiUsage ?? 'medium',
         description: '',
         patterns: {
           capitalization: 'mixed',
@@ -534,7 +563,33 @@ Include related traits and detailed examples for each.
 - Note expertise level in each area
 - Include evidence from tweets
 
-4. Communication Style Analysis:
+4. Social Behavior Metrics (Score 0-100):
+Analyze and score the following behaviors based on tweet patterns:
+
+a) Content Sharing Patterns:
+- Oversharer: How much personal information they share
+- Reply Guy: Frequency of engaging in others' conversations
+- Viral Chaser: Tendency to create content for engagement
+- Thread Maker: Propensity for creating long-form content
+- Retweeter: Balance between original and shared content
+
+b) Interaction Style:
+- Hot Takes: Frequency of controversial opinions
+- Joker: Use of humor and playful content
+- Debater: Tendency to engage in arguments
+- Doom Poster: Frequency of negative/pessimistic content
+
+c) Platform Behavior:
+- Early Adopter: Quick to try new features/trends
+- Knowledge Dropper: Frequency of sharing expertise
+- Hype Beast: Level of enthusiasm in content
+
+For each metric, provide:
+- Score (0-100)
+- Brief explanation with examples
+- Impact on overall communication style
+
+5. Communication Style Analysis:
 A. Core Metrics (0-100):
 - Formality: [casual to formal]
 - Enthusiasm: [reserved to energetic]
@@ -557,7 +612,7 @@ Describe their style adaptation in:
 - Technical discussions
 - Crisis situations
 
-5. Vocabulary Analysis:
+6. Vocabulary Analysis:
 - Common Terms: List frequently used words
 - Common Phrases: List characteristic expressions
 - Enthusiasm Markers: Words/phrases showing excitement
@@ -566,18 +621,18 @@ Describe their style adaptation in:
   * Common bigrams (2-word patterns)
   * Common trigrams (3-word patterns)
 
-6. Emotional Intelligence:
+7. Emotional Intelligence:
 - Leadership Style: How they guide/influence others
 - Challenge Response: How they handle disagreements
 - Analytical Tone: Their approach to complex topics
 - Supportive Patterns: How they encourage/support others
 
-7. Topics and Themes:
+8. Topics and Themes:
 - List 3-4 primary recurring themes
 - Note how these themes interconnect
 - Include evidence from tweets
 
-8. Emotional Expression:
+9. Emotional Expression:
 Describe their emotional communication style, including:
 - Tone consistency
 - Emotional range
@@ -719,6 +774,20 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
             explanation: 'Default trait due to analysis failure after multiple attempts'
           }],
           interests: ['General topics'],
+          socialBehaviorMetrics: {
+            oversharer: 0,
+            replyGuy: 0,
+            viralChaser: 0,
+            threadMaker: 0,
+            retweeter: 0,
+            hotTaker: 0,
+            joker: 0,
+            debater: 0,
+            doomPoster: 0,
+            earlyAdopter: 0,
+            knowledgeDropper: 0,
+            hypeBeast: 0
+          },
           communicationStyle: {
             formality: 'low',
             enthusiasm: 'low',
@@ -794,6 +863,20 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
         explanation: 'Default trait due to analysis failure after multiple attempts'
       }],
       interests: ['General topics'],
+      socialBehaviorMetrics: {
+        oversharer: 0,
+        replyGuy: 0,
+        viralChaser: 0,
+        threadMaker: 0,
+        retweeter: 0,
+        hotTaker: 0,
+        joker: 0,
+        debater: 0,
+        doomPoster: 0,
+        earlyAdopter: 0,
+        knowledgeDropper: 0,
+        hypeBeast: 0
+      },
       communicationStyle: {
         formality: 'low',
         enthusiasm: 'low',
@@ -849,6 +932,20 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
     summary: '',
     traits: [],
     interests: [],
+    socialBehaviorMetrics: {
+      oversharer: 0,
+      replyGuy: 0,
+      viralChaser: 0,
+      threadMaker: 0,
+      retweeter: 0,
+      hotTaker: 0,
+      joker: 0,
+      debater: 0,
+      doomPoster: 0,
+      earlyAdopter: 0,
+      knowledgeDropper: 0,
+      hypeBeast: 0
+    },
     communicationStyle: {
       formality: 'medium',
       enthusiasm: 'medium',
@@ -1285,6 +1382,65 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
           }
         }
       }
+      else if (section.toLowerCase().includes('social behavior metrics') || 
+               section.toLowerCase().includes('behavior patterns')) {
+        const lines = section.split('\n')
+        
+        for (const line of lines) {
+          const trimmedLine = line.trim()
+          if (!trimmedLine) continue
+
+          // Check for metric headers
+          if (trimmedLine.toLowerCase().includes('oversharer:')) {
+            const score = extractScore(trimmedLine)
+            if (score !== null) analysis.socialBehaviorMetrics.oversharer = score
+          }
+          else if (trimmedLine.toLowerCase().includes('reply guy:')) {
+            const score = extractScore(trimmedLine)
+            if (score !== null) analysis.socialBehaviorMetrics.replyGuy = score
+          }
+          else if (trimmedLine.toLowerCase().includes('viral chaser:')) {
+            const score = extractScore(trimmedLine)
+            if (score !== null) analysis.socialBehaviorMetrics.viralChaser = score
+          }
+          else if (trimmedLine.toLowerCase().includes('thread maker:')) {
+            const score = extractScore(trimmedLine)
+            if (score !== null) analysis.socialBehaviorMetrics.threadMaker = score
+          }
+          else if (trimmedLine.toLowerCase().includes('retweeter:')) {
+            const score = extractScore(trimmedLine)
+            if (score !== null) analysis.socialBehaviorMetrics.retweeter = score
+          }
+          else if (trimmedLine.toLowerCase().includes('hot take')) {
+            const score = extractScore(trimmedLine)
+            if (score !== null) analysis.socialBehaviorMetrics.hotTaker = score
+          }
+          else if (trimmedLine.toLowerCase().includes('joker:')) {
+            const score = extractScore(trimmedLine)
+            if (score !== null) analysis.socialBehaviorMetrics.joker = score
+          }
+          else if (trimmedLine.toLowerCase().includes('debater:')) {
+            const score = extractScore(trimmedLine)
+            if (score !== null) analysis.socialBehaviorMetrics.debater = score
+          }
+          else if (trimmedLine.toLowerCase().includes('doom poster:')) {
+            const score = extractScore(trimmedLine)
+            if (score !== null) analysis.socialBehaviorMetrics.doomPoster = score
+          }
+          else if (trimmedLine.toLowerCase().includes('early adopter:')) {
+            const score = extractScore(trimmedLine)
+            if (score !== null) analysis.socialBehaviorMetrics.earlyAdopter = score
+          }
+          else if (trimmedLine.toLowerCase().includes('knowledge dropper:')) {
+            const score = extractScore(trimmedLine)
+            if (score !== null) analysis.socialBehaviorMetrics.knowledgeDropper = score
+          }
+          else if (trimmedLine.toLowerCase().includes('hype beast:')) {
+            const score = extractScore(trimmedLine)
+            if (score !== null) analysis.socialBehaviorMetrics.hypeBeast = score
+          }
+        }
+      }
     }
 
     // Validate and set defaults for new fields
@@ -1367,6 +1523,20 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
         explanation: 'Default trait due to parsing error'
       }],
       interests: ['General topics'],
+      socialBehaviorMetrics: {
+        oversharer: 0,
+        replyGuy: 0,
+        viralChaser: 0,
+        threadMaker: 0,
+        retweeter: 0,
+        hotTaker: 0,
+        joker: 0,
+        debater: 0,
+        doomPoster: 0,
+        earlyAdopter: 0,
+        knowledgeDropper: 0,
+        hypeBeast: 0
+      },
       communicationStyle: {
         formality: 'low',
         enthusiasm: 'low',
@@ -1452,4 +1622,16 @@ function assessResponseQuality(
 
   // Ensure score is between 0 and 1
   return Math.max(0, Math.min(1, score));
+}
+
+function extractScore(line: string): number | null {
+  // Try to find a number between 0-100 in the line
+  const matches = line.match(/(\d+)(?:\/100|\s*points?|\s*%)?/)
+  if (matches && matches[1]) {
+    const score = parseInt(matches[1])
+    if (score >= 0 && score <= 100) {
+      return score
+    }
+  }
+  return null
 } 

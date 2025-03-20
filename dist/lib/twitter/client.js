@@ -146,18 +146,18 @@ class TwitterAPIClient {
             throw new Error('Either userId or userName must be provided');
         }
         const queryParams = new URLSearchParams();
-        if (params.userId)
+        if (params.userId) {
             queryParams.set('userId', params.userId);
-        if (params.userName)
-            queryParams.set('userName', params.userName);
-        if (params.includeReplies !== undefined)
+        }
+        if (params.userName) {
+            queryParams.set('userName', encodeURIComponent(params.userName));
+        }
+        if (params.includeReplies !== undefined) {
             queryParams.set('includeReplies', params.includeReplies.toString());
+        }
         if (params.cursor) {
-            console.log('Using pagination cursor:', params.cursor);
             queryParams.set('cursor', params.cursor);
         }
-        // Debug log the final URL
-        console.log('Requesting tweets with URL:', `${this.baseUrl}/user/last_tweets?${queryParams.toString()}`);
         return this.retryWithBackoff(async () => {
             var _a, _b, _c, _d, _e;
             const response = await this.fetch(`/user/last_tweets?${queryParams.toString()}`);
@@ -169,15 +169,13 @@ class TwitterAPIClient {
                 firstTweetId: (_c = (_b = response.data.tweets) === null || _b === void 0 ? void 0 : _b[0]) === null || _c === void 0 ? void 0 : _c.id,
                 lastTweetId: (_e = (_d = response.data.tweets) === null || _d === void 0 ? void 0 : _d[response.data.tweets.length - 1]) === null || _e === void 0 ? void 0 : _e.id
             });
-            // Debug log the response
-            console.log('Raw API Response:', JSON.stringify(response, null, 2).substring(0, 500) + '...');
             // Transform the response to match our expected format
             const tweets = (response.data.tweets || []).map(tweet => {
                 // Parse and format the date properly
                 let createdAt;
                 try {
                     // Try to parse the date and format it consistently
-                    const date = new Date(tweet.timestamp); // Use timestamp instead of created_at
+                    const date = new Date(tweet.timestamp);
                     if (isNaN(date.getTime())) {
                         // If invalid date, use current time as fallback
                         createdAt = new Date().toISOString();
@@ -191,16 +189,26 @@ class TwitterAPIClient {
                     console.error('Error parsing tweet date:', error);
                     createdAt = new Date().toISOString();
                 }
+                // Log the metrics for debugging
+                console.log('Tweet metrics:', {
+                    id: tweet.id,
+                    viewCount: tweet.viewCount,
+                    retweetCount: tweet.retweetCount,
+                    replyCount: tweet.replyCount,
+                    likeCount: tweet.likeCount,
+                    quoteCount: tweet.quoteCount
+                });
                 return {
                     id: tweet.id,
                     text: tweet.text,
                     createdAt,
                     url: tweet.url,
                     isReply: tweet.is_reply,
-                    viewCount: tweet.view_count,
-                    conversationId: tweet.conversation_id,
-                    inReplyToUserId: tweet.in_reply_to_user_id,
-                    entities: tweet.entities
+                    viewCount: tweet.viewCount,
+                    retweetCount: tweet.retweetCount,
+                    replyCount: tweet.replyCount,
+                    likeCount: tweet.likeCount,
+                    quoteCount: tweet.quoteCount
                 };
             });
             // Log transformed tweets summary
@@ -208,11 +216,14 @@ class TwitterAPIClient {
                 count: tweets.length,
                 firstTweet: tweets[0] ? {
                     id: tweets[0].id,
-                    createdAt: tweets[0].createdAt
-                } : null,
-                lastTweet: tweets[tweets.length - 1] ? {
-                    id: tweets[tweets.length - 1].id,
-                    createdAt: tweets[tweets.length - 1].createdAt
+                    createdAt: tweets[0].createdAt,
+                    metrics: {
+                        viewCount: tweets[0].viewCount,
+                        retweetCount: tweets[0].retweetCount,
+                        replyCount: tweets[0].replyCount,
+                        likeCount: tweets[0].likeCount,
+                        quoteCount: tweets[0].quoteCount
+                    }
                 } : null
             });
             // Only continue pagination if we actually received tweets

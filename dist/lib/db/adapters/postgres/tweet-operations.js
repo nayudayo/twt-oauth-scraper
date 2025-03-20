@@ -34,19 +34,35 @@ class PostgresTweetOperations {
                     tweet.created_at,
                     tweet.url || null,
                     tweet.is_reply,
+                    tweet.view_count,
+                    tweet.retweet_count,
+                    tweet.reply_count,
+                    tweet.like_count,
+                    tweet.quote_count,
                     tweet.metadata || {}
                 ]));
                 await client.query(`
           INSERT INTO tweets (
-            id, user_id, text, created_at, url, is_reply, metadata
+            id, user_id, text, created_at, url, is_reply, 
+            view_count, retweet_count, reply_count, like_count, quote_count,
+            metadata
           )
-          SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::timestamp[], 
-                              $5::text[], $6::boolean[], $7::jsonb[])
+          SELECT * FROM UNNEST(
+            $1::text[], $2::text[], $3::text[], $4::timestamp[], 
+            $5::text[], $6::boolean[], 
+            $7::integer[], $8::integer[], $9::integer[], $10::integer[], $11::integer[],
+            $12::jsonb[]
+          )
           ON CONFLICT (id) DO UPDATE SET
             text = EXCLUDED.text,
             url = EXCLUDED.url,
             is_reply = EXCLUDED.is_reply,
-            metadata = tweets.metadata || EXCLUDED.metadata
+            view_count = EXCLUDED.view_count,
+            retweet_count = EXCLUDED.retweet_count,
+            reply_count = EXCLUDED.reply_count,
+            like_count = EXCLUDED.like_count,
+            quote_count = EXCLUDED.quote_count,
+            metadata = EXCLUDED.metadata
         `, [
                     values.map(v => v[0]),
                     values.map(v => v[1]),
@@ -54,7 +70,12 @@ class PostgresTweetOperations {
                     values.map(v => v[3]),
                     values.map(v => v[4]),
                     values.map(v => v[5]),
-                    values.map(v => v[6])
+                    values.map(v => v[6]),
+                    values.map(v => v[7]),
+                    values.map(v => v[8]),
+                    values.map(v => v[9]),
+                    values.map(v => v[10]),
+                    values.map(v => v[11])
                 ]);
             }
             await client.query('COMMIT');
@@ -74,19 +95,31 @@ class PostgresTweetOperations {
         const client = await this.pool.connect();
         try {
             await client.query(`INSERT INTO tweets (
-          id, user_id, text, created_at, url, is_reply, metadata
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          id, user_id, text, created_at, url, is_reply,
+          view_count, retweet_count, reply_count, like_count, quote_count,
+          metadata
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         ON CONFLICT (id) DO UPDATE SET
           text = EXCLUDED.text,
           url = EXCLUDED.url,
           is_reply = EXCLUDED.is_reply,
-          metadata = tweets.metadata || EXCLUDED.metadata`, [
+          view_count = EXCLUDED.view_count,
+          retweet_count = EXCLUDED.retweet_count,
+          reply_count = EXCLUDED.reply_count,
+          like_count = EXCLUDED.like_count,
+          quote_count = EXCLUDED.quote_count,
+          metadata = EXCLUDED.metadata`, [
                 tweet.id,
                 tweet.user_id,
                 tweet.text,
                 tweet.created_at,
                 tweet.url || null,
                 tweet.is_reply,
+                tweet.view_count,
+                tweet.retweet_count,
+                tweet.reply_count,
+                tweet.like_count,
+                tweet.quote_count,
                 tweet.metadata || {}
             ]);
         }

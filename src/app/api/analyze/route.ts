@@ -4,6 +4,7 @@ import { OpenAIQueueManager } from '@/lib/queue/openai-queue'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth/config'
 import { CommunicationLevel, PersonalityAnalysis } from '@/lib/openai'
+import { PersonalityTuning } from '@/types/scraper'
 
 export async function POST(req: Request) {
   try {
@@ -16,11 +17,12 @@ export async function POST(req: Request) {
       )
     }
 
-    const { tweets, profile, prompt, context } = await req.json() as { 
+    const { tweets, profile, prompt, context, currentTuning } = await req.json() as { 
       tweets: Tweet[]
       profile: TwitterProfile
       prompt?: string
       context?: string
+      currentTuning?: PersonalityTuning
     }
     
     // Validate input data
@@ -49,14 +51,21 @@ export async function POST(req: Request) {
           tweets,
           profile,
           prompt: prompt || undefined,
-          context: context || undefined
+          context: context || undefined,
+          currentTuning // Pass through current tuning
         },
         session.username,
         (result) => {
           // Convert numeric values to boolean if needed
           if (result && typeof result === 'object' && 'communicationStyle' in result) {
             const style = (result as PersonalityAnalysis).communicationStyle;
-            if (style) {
+            if (style && currentTuning) {
+              // Preserve existing communication style values if they exist
+              style.formality = currentTuning.communicationStyle.formality;
+              style.enthusiasm = currentTuning.communicationStyle.enthusiasm;
+              style.technicalLevel = currentTuning.communicationStyle.technicalLevel;
+              style.emojiUsage = currentTuning.communicationStyle.emojiUsage;
+            } else {
               style.formality = style.formality as CommunicationLevel;
               style.enthusiasm = style.enthusiasm as CommunicationLevel;
               style.technicalLevel = style.technicalLevel as CommunicationLevel;

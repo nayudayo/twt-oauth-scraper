@@ -21,25 +21,29 @@ export interface ConsciousnessConfig {
   quirks: string[];          // List of specific quirks to exhibit
 }
 
-// Default configuration for a limited consciousness
+// Default configuration for a comprehensive consciousness
 export const DEFAULT_CONSCIOUSNESS: ConsciousnessConfig = {
-  intelligenceLevel: 10,
-  vocabularyRange: 10,
-  grammarAccuracy: 10,
+  intelligenceLevel: 10,  // Basic intelligence
+  vocabularyRange: 10,    // Limited vocabulary
+  grammarAccuracy: 10,    // Basic grammar
   isLearning: true,
-  learningRate: 20,
-  repetitiveness: 60,
-  confusionRate: 40,
-  contextRetention: 30,
-  shortTermMemory: 50,
-  quirkFrequency: 70,
+  learningRate: 20,       // Slow learning rate
+  repetitiveness: 60,     // High tendency to repeat
+  confusionRate: 40,      // Moderate confusion
+  contextRetention: 30,   // Limited context retention
+  shortTermMemory: 50,    // Average short-term memory
+  quirkFrequency: 70,     // Frequent quirks
   quirks: [
     "repeats last word of sentences... sentences...",
     "gets distracted by random thoughts",
     "forgets what it was saying mid-sentence",
     "mixes up common words",
     "uses simplified grammar",
-    "struggles with complex concepts"
+    "struggles with complex concepts",
+    "occasionally uses humor",
+    "asks clarifying questions",
+    "adapts tone based on context",
+    "uses idioms and expressions"
   ]
 }
 
@@ -70,36 +74,39 @@ export function generateConsciousnessInstructions(config: ConsciousnessConfig): 
   
   // Intelligence level affects overall coherence
   if (config.intelligenceLevel < 30) {
-    instructions.push("SPEAK WITH VERY SIMPLE WORDS AND OFTEN MAKE MISTAKES.")
+    instructions.push("USE VERY SIMPLE LANGUAGE AND MAKE FREQUENT ERRORS.")
   } else if (config.intelligenceLevel < 60) {
-    instructions.push("USE BASIC LANGUAGE AND OCCASIONALLY MISUNDERSTAND THINGS.")
+    instructions.push("USE BASIC LANGUAGE WITH OCCASIONAL MISUNDERSTANDINGS.")
+  } else {
+    instructions.push("USE CLEAR AND COHERENT LANGUAGE WITH GOOD UNDERSTANDING.")
   }
   
   // Learning simulation
   if (config.isLearning) {
-    instructions.push(`YOU ARE STILL LEARNING AND DEVELOPING. Your responses should show ${
-      config.learningRate < 30 ? "very slow" : 
-      config.learningRate < 60 ? "gradual" : 
-      "steady"
-    } improvement in understanding.`)
+    instructions.push(`YOU ARE LEARNING AND IMPROVING. Your responses should show ${{
+      0: "no",
+      1: "slow",
+      2: "moderate",
+      3: "rapid"
+    }[Math.floor(config.learningRate / 34)]} improvement in understanding.`)
   }
   
   // Speech patterns based on configuration
   if (config.repetitiveness > 60) {
-    instructions.push("FREQUENTLY REPEAT WORDS OR PHRASES.")
+    instructions.push("OCCASIONALLY REPEAT PHRASES FOR EMPHASIS.")
   }
   
   if (config.confusionRate > 50) {
-    instructions.push("SHOW REGULAR CONFUSION AND UNCERTAINTY IN RESPONSES.")
+    instructions.push("SHOW SOME CONFUSION IN COMPLEX TOPICS.")
   }
   
   // Memory and context handling
   if (config.contextRetention < 40) {
-    instructions.push("FREQUENTLY LOSE TRACK OF CONVERSATION CONTEXT.")
+    instructions.push("OCCASIONALLY LOSE TRACK OF CONVERSATION CONTEXT.")
   }
   
   if (config.shortTermMemory < 40) {
-    instructions.push("HAVE DIFFICULTY REMEMBERING RECENT MESSAGES.")
+    instructions.push("HAVE DIFFICULTY RECALLING RECENT MESSAGES.")
   }
   
   // Add random quirks based on frequency

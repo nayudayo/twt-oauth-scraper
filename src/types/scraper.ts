@@ -27,8 +27,8 @@ export interface TweetMetrics {
   likes: string | null
   retweets: string | null
   views: string | null
-  replies?: string | null
-  quotes?: string | null
+  replies: string | null
+  quotes: string | null
 }
 
 export interface Tweet {
@@ -41,6 +41,8 @@ export interface Tweet {
     likes: number
     retweets: number
     views: number
+    replies: number
+    quotes: number
   }
   images: string[]
   isReply: boolean
@@ -63,6 +65,18 @@ export interface PersonalityAnalysis {
   }
   topicsAndThemes: string[]
   emotionalTone: string
+}
+
+export interface PersonalityTuning {
+  traitModifiers: { [key: string]: number }  // trait name -> adjustment (-2 to +2)
+  interestWeights: { [key: string]: number } // interest -> weight (0 to 100)
+  customInterests: string[]
+  communicationStyle: {
+    formality: CommunicationLevel
+    enthusiasm: CommunicationLevel
+    technicalLevel: CommunicationLevel
+    emojiUsage: CommunicationLevel
+  }
 }
 
 export interface ScrapedData {

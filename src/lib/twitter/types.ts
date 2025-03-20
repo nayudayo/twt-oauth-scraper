@@ -1,8 +1,9 @@
+// Tweet Types
 export interface TwitterAPITweet {
   id: string;
   text: string;
   /** Twitter date format: "Day Mon DD HH:mm:ss +0000 YYYY" (e.g. "Mon Dec 23 11:27:55 +0000 2024") */
-  createdAt: string;
+  createdAt?: string;
   /** ISO format timestamp (legacy field, may not be present) */
   timestamp?: string;
   url: string;
@@ -15,9 +16,13 @@ export interface TwitterAPITweet {
   
   // Metrics
   viewCount: number;
+  retweetCount: number;
+  replyCount: number;
+  likeCount: number;
+  quoteCount: number;
 
   // Rich content
-  entities: {
+  entities?: {
     hashtags: Array<{ text: string; indices: number[] }>;
     urls: Array<{
       display_url: string;
@@ -77,4 +82,33 @@ export interface WorkerMessage {
   type?: 'progress' | 'warning' | 'error' | 'complete';
   error?: string;
   reset?: Date;
+}
+
+export interface TweetEntity {
+  hashtags: Array<{ text: string; indices: number[] }>;
+  urls: Array<{
+    display_url: string;
+    expanded_url: string;
+    url: string;
+    indices: number[];
+  }>;
+  user_mentions: Array<{
+    id_str: string;
+    name: string;
+    screen_name: string;
+    indices: number[];
+  }>;
+}
+
+export interface TweetResponse {
+  id: string;
+  text: string;
+  timestamp: string;
+  url: string;
+  is_reply: boolean;
+  viewCount: number;
+  retweetCount: number;
+  replyCount: number;
+  likeCount: number;
+  quoteCount: number;
 } 

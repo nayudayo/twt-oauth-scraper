@@ -1,4 +1,4 @@
-import type { TwitterAPITweet, TwitterAPIProfile } from './types';
+import type { TwitterAPITweet, TwitterAPIProfile, TweetResponse } from './types';
 import { Session } from 'next-auth';
 import { TwitterAPIMonitor } from './monitoring';
 
@@ -219,56 +219,28 @@ export class TwitterAPIClient {
     }
 
     const queryParams = new URLSearchParams();
-    
-    if (params.userId) queryParams.set('userId', params.userId);
-    if (params.userName) queryParams.set('userName', params.userName);
-    if (params.includeReplies !== undefined) queryParams.set('includeReplies', params.includeReplies.toString());
+    if (params.userId) {
+      queryParams.set('userId', params.userId);
+    }
+    if (params.userName) {
+      queryParams.set('userName', encodeURIComponent(params.userName));
+    }
+    if (params.includeReplies !== undefined) {
+      queryParams.set('includeReplies', params.includeReplies.toString());
+    }
     if (params.cursor) {
-      console.log('Using pagination cursor:', params.cursor);
       queryParams.set('cursor', params.cursor);
     }
 
-    // Debug log the final URL
-    console.log('Requesting tweets with URL:', `${this.baseUrl}/user/last_tweets?${queryParams.toString()}`);
-
     return this.retryWithBackoff(
       async () => {
-        // Define the tweet type to avoid repetition
-        type TweetData = {
-          id: string;
-          text: string;
-          timestamp: string;  // Changed from created_at to timestamp
-          url: string;
-          is_reply: boolean;
-          conversation_id?: string;
-          in_reply_to_id?: string;
-          in_reply_to_user_id?: string;
-          in_reply_to_username?: string;
-          view_count: number;
-          entities: {
-            hashtags: Array<{ text: string; indices: number[] }>;
-            urls: Array<{
-              display_url: string;
-              expanded_url: string;
-              url: string;
-              indices: number[];
-            }>;
-            user_mentions: Array<{
-              id_str: string;
-              name: string;
-              screen_name: string;
-              indices: number[];
-            }>;
-          };
-        };
-
         const response = await this.fetch<{
           status: string;
           code: number;
           msg: string;
           data: {
-            pin_tweet: TweetData | null;
-            tweets: TweetData[];
+            pin_tweet: TweetResponse | null;
+            tweets: TweetResponse[];
           };
           has_next_page: boolean;
           next_cursor?: string;
@@ -283,16 +255,13 @@ export class TwitterAPIClient {
           lastTweetId: response.data.tweets?.[response.data.tweets.length - 1]?.id
         });
 
-        // Debug log the response
-        console.log('Raw API Response:', JSON.stringify(response, null, 2).substring(0, 500) + '...');
-
         // Transform the response to match our expected format
         const tweets: TwitterAPITweet[] = (response.data.tweets || []).map(tweet => {
           // Parse and format the date properly
           let createdAt: string;
           try {
             // Try to parse the date and format it consistently
-            const date = new Date(tweet.timestamp);  // Use timestamp instead of created_at
+            const date = new Date(tweet.timestamp);
             if (isNaN(date.getTime())) {
               // If invalid date, use current time as fallback
               createdAt = new Date().toISOString();
@@ -305,16 +274,27 @@ export class TwitterAPIClient {
             createdAt = new Date().toISOString();
           }
 
+          // Log the metrics for debugging
+          console.log('Tweet metrics:', {
+            id: tweet.id,
+            viewCount: tweet.viewCount,
+            retweetCount: tweet.retweetCount,
+            replyCount: tweet.replyCount,
+            likeCount: tweet.likeCount,
+            quoteCount: tweet.quoteCount
+          });
+
           return {
             id: tweet.id,
             text: tweet.text,
             createdAt,
             url: tweet.url,
             isReply: tweet.is_reply,
-            viewCount: tweet.view_count,
-            conversationId: tweet.conversation_id,
-            inReplyToUserId: tweet.in_reply_to_user_id,
-            entities: tweet.entities
+            viewCount: tweet.viewCount,
+            retweetCount: tweet.retweetCount,
+            replyCount: tweet.replyCount,
+            likeCount: tweet.likeCount,
+            quoteCount: tweet.quoteCount
           };
         });
 
@@ -323,11 +303,14 @@ export class TwitterAPIClient {
           count: tweets.length,
           firstTweet: tweets[0] ? {
             id: tweets[0].id,
-            createdAt: tweets[0].createdAt
-          } : null,
-          lastTweet: tweets[tweets.length - 1] ? {
-            id: tweets[tweets.length - 1].id,
-            createdAt: tweets[tweets.length - 1].createdAt
+            createdAt: tweets[0].createdAt,
+            metrics: {
+              viewCount: tweets[0].viewCount,
+              retweetCount: tweets[0].retweetCount,
+              replyCount: tweets[0].replyCount,
+              likeCount: tweets[0].likeCount,
+              quoteCount: tweets[0].quoteCount
+            }
           } : null
         });
 

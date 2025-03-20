@@ -8,6 +8,11 @@ interface Tweet {
   url?: string;
   isReply?: boolean;
   metadata?: Record<string, unknown>;
+  viewCount?: number;
+  retweetCount?: number;
+  replyCount?: number;
+  likeCount?: number;
+  quoteCount?: number;
 }
 
 interface QueueItem {
@@ -110,6 +115,11 @@ class DatabaseQueue {
           created_at: new Date(tweet.timestamp),
           url: tweet.url || `https://twitter.com/${item.username}/status/${tweet.id}`,
           is_reply: tweet.isReply || false,
+          view_count: tweet.viewCount || 0,
+          retweet_count: tweet.retweetCount || 0,
+          reply_count: tweet.replyCount || 0,
+          like_count: tweet.likeCount || 0,
+          quote_count: tweet.quoteCount || 0,
           metadata: tweet.metadata || {},
           created_in_db: new Date()
         }));

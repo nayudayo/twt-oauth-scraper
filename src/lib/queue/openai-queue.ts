@@ -1,6 +1,6 @@
 import OpenAI from 'openai'
 import { analyzePersonality } from '@/lib/openai'
-import { Tweet, TwitterProfile } from '@/types/scraper'
+import { Tweet, TwitterProfile, PersonalityTuning } from '@/types/scraper'
 import type { ChatCompletionMessage } from 'openai/resources/chat/completions'
 import { RateLimiter } from './rate-limiter'
 
@@ -53,6 +53,7 @@ interface AnalyzeRequest {
   profile: TwitterProfile
   prompt?: string
   context?: string
+  currentTuning?: PersonalityTuning
 }
 
 export class OpenAIQueueManager {
@@ -195,10 +196,10 @@ export class OpenAIQueueManager {
   }
 
   private async processAnalyzeRequest(data: AnalyzeRequest): Promise<unknown> {
-    const { tweets, profile, prompt, context } = data
+    const { tweets, profile, prompt, context, currentTuning } = data
     // Convert profile to expected format
     const convertedProfile = convertProfile(profile)
-    return await analyzePersonality(tweets, convertedProfile, prompt, context)
+    return await analyzePersonality(tweets, convertedProfile, prompt, context, undefined, 0, currentTuning)
   }
 
   // Utility methods

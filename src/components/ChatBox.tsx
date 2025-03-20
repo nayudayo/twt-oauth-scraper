@@ -16,6 +16,7 @@ import { ToggleButton } from './ToggleButton';
 import { CycleButton } from './CycleButton';
 import { CommunicationLevel } from '@/lib/openai';
 import React, { CSSProperties } from 'react';
+import { PsychoanalysisModal } from './PsychoanalysisModal';
 
 interface ChatBoxProps {
   tweets: Tweet[]
@@ -53,6 +54,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
   const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null)
   const [showConsent, setShowConsent] = useState(false)
   const [showComplete, setShowComplete] = useState(false)
+  const [showPsychoanalysis, setShowPsychoanalysis] = useState(false)
   const [abortController, setAbortController] = useState<AbortController | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [showAnalysisPrompt, setShowAnalysisPrompt] = useState(false)
@@ -400,16 +402,19 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           [trait.name]: Math.round(trait.score * 10)
         }), {});
 
-        // Load tuning parameters from cache
+        // Ensure communication style is properly synced between cache and state
+        const syncedCommunicationStyle = {
+          formality: cachedData.communicationStyle.formality,
+          enthusiasm: cachedData.communicationStyle.enthusiasm,
+          technicalLevel: cachedData.communicationStyle.technicalLevel,
+          emojiUsage: cachedData.communicationStyle.emojiUsage
+        };
+
+        // Update tuning state with both communication style and trait modifiers
         setTuning(prev => ({
           ...prev,
           traitModifiers: initialTraitModifiers,
-          communicationStyle: {
-            formality: cachedData.communicationStyle.formality ?? prev.communicationStyle.formality,
-            enthusiasm: cachedData.communicationStyle.enthusiasm ?? prev.communicationStyle.enthusiasm,
-            technicalLevel: cachedData.communicationStyle.technicalLevel ?? prev.communicationStyle.technicalLevel,
-            emojiUsage: cachedData.communicationStyle.emojiUsage ?? prev.communicationStyle.emojiUsage
-          }
+          communicationStyle: syncedCommunicationStyle
         }));
         
         if (cachedData.interests) {
@@ -441,9 +446,19 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           }));
         }
 
-        setAnalysis(cachedData);
+        // Update analysis state with synced communication style
+        const syncedAnalysis = {
+          ...cachedData,
+          communicationStyle: {
+            ...cachedData.communicationStyle,
+            ...syncedCommunicationStyle
+          }
+        };
+        
+        setAnalysis(syncedAnalysis);
         setIsAnalyzing(false);
         setAnalysisStartTime(null);
+        setShowPsychoanalysis(true);
         return;
       }
 
@@ -497,37 +512,34 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           ...newInterestWeights
         },
         communicationStyle: {
-          formality: newAnalysis.communicationStyle.formality ?? prev.communicationStyle.formality,
-          enthusiasm: newAnalysis.communicationStyle.enthusiasm ?? prev.communicationStyle.enthusiasm,
-          technicalLevel: newAnalysis.communicationStyle.technicalLevel ?? prev.communicationStyle.technicalLevel,
-          emojiUsage: newAnalysis.communicationStyle.emojiUsage ?? prev.communicationStyle.emojiUsage
+          formality: newAnalysis.communicationStyle.formality ?? 'high',
+          enthusiasm: newAnalysis.communicationStyle.enthusiasm ?? 'high',
+          technicalLevel: newAnalysis.communicationStyle.technicalLevel ?? 'high',
+          emojiUsage: newAnalysis.communicationStyle.emojiUsage ?? 'low'
         }
       }));
 
       setAnalysis(newAnalysis);
+      setShowPsychoanalysis(true);
 
       // Save new analysis and tuning to cache
       await personalityCache.saveToCache({
         ...newAnalysis,
         traits: (Object.entries(newTraitModifiers) as [string, number][]).map(([name, score]) => ({
-          name,
-          // Convert UI score (0-100) back to analysis score (0-10) for storage
+          name: name.replace(/[*-]/g, '').trim(),
           score: Math.round(score / 10),
-          explanation: newAnalysis.traits.find((t: { name: string }) => t.name === name)?.explanation
+          explanation: newAnalysis.traits.find((t: { name: string }) => t.name === name)?.explanation?.replace(/[*-]/g, '').trim()
         })),
-        interests: Object.keys(newInterestWeights),
+        interests: Object.keys(newInterestWeights).map(interest => interest.replace(/[*-]/g, '').trim()),
         communicationStyle: {
           ...newAnalysis.communicationStyle,
-          formality: newAnalysis.communicationStyle.formality,
-          enthusiasm: newAnalysis.communicationStyle.enthusiasm,
-          technicalLevel: newAnalysis.communicationStyle.technicalLevel,
-          emojiUsage: newAnalysis.communicationStyle.emojiUsage
+          description: newAnalysis.communicationStyle.description?.replace(/[*-]/g, '').trim()
         },
         thoughtProcess: {
           ...newAnalysis.thoughtProcess,
-          initialApproach: newAnalysis.thoughtProcess.initialApproach,
-          processingStyle: newAnalysis.thoughtProcess.processingStyle,
-          expressionStyle: newAnalysis.thoughtProcess.expressionStyle
+          initialApproach: newAnalysis.thoughtProcess.initialApproach?.replace(/[*-]/g, '').trim(),
+          processingStyle: newAnalysis.thoughtProcess.processingStyle?.replace(/[*-]/g, '').trim(),
+          expressionStyle: newAnalysis.thoughtProcess.expressionStyle?.replace(/[*-]/g, '').trim()
         }
       });
 
@@ -551,12 +563,14 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     id: apiTweet.id,
     text: apiTweet.text,
     url: apiTweet.url,
-    createdAt: apiTweet.createdAt,
-    timestamp: apiTweet.timestamp || apiTweet.createdAt,
+    createdAt: apiTweet.timestamp || new Date().toISOString(),
+    timestamp: apiTweet.timestamp || new Date().toISOString(),
     metrics: {
       likes: 0,
       retweets: 0,
-      views: apiTweet.viewCount || 0
+      views: apiTweet.viewCount || 0,
+      replies: 0,
+      quotes: 0
     },
     images: [],
     isReply: apiTweet.isReply
@@ -1038,12 +1052,100 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
   }, [input])
 
   const handleUpdateAnalysis = async () => {
-    // Invalidate the cache first
-    await personalityCache.invalidateCache();
-    
-    // Reset the analysis state and start a new analysis
-    setAnalysis(null);
-    await handleAnalyze();
+    try {
+      // Reset analysis state but preserve tuning
+      const currentTuning = tuning;
+      setAnalysis(null);
+      setIsAnalyzing(true);
+      setError(null);
+      setAnalysisStartTime(Date.now());
+
+      // Perform new analysis with current tuning values
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tweets: accumulatedTweets,
+          profile,
+          currentTuning // Pass current tuning to preserve values
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to analyze personality');
+      }
+
+      const newAnalysis = await response.json();
+      
+      // Preserve existing communication style values
+      const preservedCommunicationStyle = {
+        ...newAnalysis.communicationStyle,
+        formality: currentTuning.communicationStyle.formality,
+        enthusiasm: currentTuning.communicationStyle.enthusiasm,
+        technicalLevel: currentTuning.communicationStyle.technicalLevel,
+        emojiUsage: currentTuning.communicationStyle.emojiUsage
+      };
+
+      // Update analysis with preserved values
+      const finalAnalysis = {
+        ...newAnalysis,
+        communicationStyle: preservedCommunicationStyle
+      };
+
+      // Convert traits to toggle states - traits should be ON by default when detected
+      const traitModifiers = newAnalysis.traits.reduce((acc: Record<string, number>, trait: { name: string; score: number }) => ({
+        ...acc,
+        [trait.name]: 100 // Set to 100 (ON) for detected traits
+      }), {});
+
+      // Combine existing and new interests, preserving existing weights and setting new ones to ON
+      const newInterests = newAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => {
+        const [interestName] = interest.split(':').map(s => s.trim());
+        // If interest already exists in currentTuning, preserve its weight, otherwise set to 100 (ON)
+        const weight = currentTuning.interestWeights[interestName] ?? 100;
+        return { ...acc, [interestName]: weight };
+      }, {});
+
+      setTuning(prev => ({
+        ...prev,
+        traitModifiers,
+        interestWeights: {
+          ...prev.interestWeights, // Keep existing interest weights
+          ...newInterests // Add new interests
+        },
+        communicationStyle: currentTuning.communicationStyle // Keep existing communication style
+      }));
+
+      setAnalysis(finalAnalysis);
+      setShowPsychoanalysis(true);
+
+      // Update the cache with preserved values
+      await personalityCache.saveToCache({
+        ...finalAnalysis,
+        traits: (Object.entries(traitModifiers) as [string, number][]).map(([name, score]) => ({
+          name: name.replace(/[*-]/g, '').trim(),
+          score: Math.round(score / 10),
+          explanation: newAnalysis.traits.find((t: { name: string }) => t.name === name)?.explanation?.replace(/[*-]/g, '').trim()
+        })),
+        interests: Object.keys(newInterests).map(interest => interest.replace(/[*-]/g, '').trim()),
+        communicationStyle: {
+          ...finalAnalysis.communicationStyle,
+          description: finalAnalysis.communicationStyle.description?.replace(/[*-]/g, '').trim()
+        },
+        thoughtProcess: {
+          ...finalAnalysis.thoughtProcess,
+          initialApproach: finalAnalysis.thoughtProcess.initialApproach?.replace(/[*-]/g, '').trim(),
+          processingStyle: finalAnalysis.thoughtProcess.processingStyle?.replace(/[*-]/g, '').trim(),
+          expressionStyle: finalAnalysis.thoughtProcess.expressionStyle?.replace(/[*-]/g, '').trim()
+        }
+      });
+    } catch (error) {
+      console.error('Analysis error:', error);
+      setError(error instanceof Error ? error.message : 'Failed to analyze personality');
+    } finally {
+      setIsAnalyzing(false);
+      setAnalysisStartTime(null);
+    }
   };
 
   // Load conversations and personality cache on mount
@@ -1063,9 +1165,10 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           // Initialize tuning from cache
           setTuning(prev => ({
             ...prev,
-            traitModifiers: cachedAnalysis.traits.reduce((acc: Record<string, number>, trait: { name: string; score: number }) => ({
+            // Set all cached traits to ON by default
+            traitModifiers: cachedAnalysis.traits.reduce((acc: Record<string, number>, trait: { name: string }) => ({
               ...acc,
-              [trait.name]: Math.round(trait.score * 10)
+              [trait.name]: 100 // Set to 100 (ON) for all traits
             }), {}),
             communicationStyle: {
               formality: cachedAnalysis.communicationStyle.formality,
@@ -1074,19 +1177,8 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
               emojiUsage: cachedAnalysis.communicationStyle.emojiUsage
             },
             interestWeights: cachedAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => {
-              const [interestName, expertiseLevel] = interest.split(':').map(s => s.trim());
-              let weight = 50; // Default to medium if no clear match
-              if (expertiseLevel) {
-                const level = expertiseLevel.toLowerCase();
-                if (level.includes('advanced') || level.includes('high') || level.includes('strong')) {
-                  weight = 75;
-                } else if (level.includes('intermediate') || level.includes('moderate')) {
-                  weight = 50;
-                } else if (level.includes('basic') || level.includes('low')) {
-                  weight = 25;
-                }
-              }
-              return { ...acc, [interestName]: weight };
+              const [interestName] = interest.split(':').map(s => s.trim());
+              return { ...acc, [interestName]: 100 }; // Set all interests to ON by default
             }, {})
           }));
         }
@@ -2764,6 +2856,13 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           </div>
         )}
       </div>
+
+      {/* Add PsychoanalysisModal */}
+      <PsychoanalysisModal 
+        isOpen={showPsychoanalysis} 
+        onClose={() => setShowPsychoanalysis(false)}
+        analysis={analysis}
+      />
     </>
   )
 }

@@ -84,11 +84,11 @@ export class PersonalityCacheDB {
           customInterests: existingData.customInterests !== undefined ? existingData.customInterests : [],
           communicationStyle: {
             ...analysisData.communicationStyle,
-            // Preserve communication style values if they exist
-            formality: existingData.communicationStyle?.formality || analysisData.communicationStyle.formality,
-            enthusiasm: existingData.communicationStyle?.enthusiasm || analysisData.communicationStyle.enthusiasm,
-            technicalLevel: existingData.communicationStyle?.technicalLevel || analysisData.communicationStyle.technicalLevel,
-            emojiUsage: existingData.communicationStyle?.emojiUsage || analysisData.communicationStyle.emojiUsage,
+            // Use nullish coalescing to properly preserve existing values
+            formality: existingData.communicationStyle?.formality ?? analysisData.communicationStyle.formality,
+            enthusiasm: existingData.communicationStyle?.enthusiasm ?? analysisData.communicationStyle.enthusiasm,
+            technicalLevel: existingData.communicationStyle?.technicalLevel ?? analysisData.communicationStyle.technicalLevel,
+            emojiUsage: existingData.communicationStyle?.emojiUsage ?? analysisData.communicationStyle.emojiUsage,
             description: analysisData.communicationStyle.description
           }
         };

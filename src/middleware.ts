@@ -16,7 +16,8 @@ const AUTH_ONLY_ROUTES = [
   '/api/tweets/[username]/all',  // Allow tweet fetching after sign in
   '/api/conversations',  // Allow listing conversations
   '/api/conversations/[id]/messages',  // Allow fetching messages
-  '/api/scrape'  // Allow scraping after sign in
+  '/api/scrape',  // Allow scraping after sign in
+  '/api/analytics'  // Allow analytics after sign in
 ]
 
 // Cache TTL in seconds
@@ -131,6 +132,7 @@ export const config = {
     '/((?!api/access-code)api/analyze)/:path*',
     '/((?!api/access-code)api/tweets)/:path*',
     '/((?!api/access-code)api/conversations)/:path*',
-    '/((?!api/access-code)api/scrape)/:path*'
+    '/((?!api/access-code)api/scrape)/:path*',
+    '/((?!api/access-code)api/analytics)/:path*'
   ]
 } 

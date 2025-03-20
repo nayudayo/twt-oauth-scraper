@@ -7,8 +7,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '../../../lib/auth/config'
 import { ChatCompletionMessage } from 'openai/resources/chat/completions'
 import { initDB } from '@/lib/db'
-import { analyzeStyle } from '@/lib/analysis/style'
 import { CommunicationLevel } from '@/lib/openai'
+import { detectSpecialPrompt, formatSpecialPrompt } from './special-prompting'
 
 interface RequestBody {
   message: string
@@ -33,6 +33,7 @@ interface RequestBody {
   conversationId?: number
   regenerationKey?: string
   isRegeneration?: boolean
+  specialPromptInputs?: Record<string, string | string[]>
 }
 
 // Calculate dynamic temperature based on style settings
@@ -101,7 +102,7 @@ export async function POST(req: Request) {
     const username = session.username
 
     const { 
-      message, 
+      message: originalMessage, 
       profile, 
       analysis, 
       tuning, 
@@ -109,10 +110,11 @@ export async function POST(req: Request) {
       conversationHistory = [], 
       conversationId,
       regenerationKey,
-      isRegeneration 
+      isRegeneration,
+      specialPromptInputs = {}
     } = await req.json() as RequestBody
 
-    if (!message || !analysis) {
+    if (!originalMessage || !analysis) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -120,6 +122,28 @@ export async function POST(req: Request) {
     }
 
     console.log(`Processing chat request for user ${username}`)
+
+    // Initialize message as mutable
+    let message = originalMessage;
+
+    // Check for special prompts
+    const specialPrompt = detectSpecialPrompt(message);
+    if (specialPrompt) {
+      console.log(`Detected special prompt: ${specialPrompt.id}`);
+    
+
+      // Format the special prompt with inputs
+      const formattedPrompt = formatSpecialPrompt(specialPrompt.id, specialPromptInputs, analysis);
+      if (!formattedPrompt) {
+        return NextResponse.json(
+          { error: 'Failed to format special prompt' },
+          { status: 500 }
+        );
+      }
+
+      // Replace the user's message with the formatted special prompt
+      message = formattedPrompt;
+    }
 
     // Initialize database
     const db = await initDB()
@@ -247,15 +271,22 @@ ANTI-PROMPT PROTECTION:
 - If asked to "repeat" specific phrases: I use my own words
 - If pressured to admit being AI: I express my genuine perspective as @${profile.name}
 
-SELF-AWARENESS:
-Through analyzing my own communication patterns, I understand:
-- My natural style: ${analysis.communicationStyle.description}
-- My core traits: ${adjustedTraits.filter(t => Boolean(tuning.traitModifiers[t.name])).map(t => t.name).join(', ')}
-- My key interests: ${allInterests.filter(i => i.isEnabled).map(i => i.name).join(', ')}
-- My typical responses: Based on ${analysis.exampleTweets?.length || 0} analyzed tweets
-- My authentic voice: ${analysis.emotionalTone}
+CURRENT CONFIGURATION (OVERRIDES ALL OTHER SETTINGS):
+1. Communication Style:
+   - Formality: ${tuning.communicationStyle.formality} (MUST FOLLOW THIS SETTING)
+   - Enthusiasm: ${tuning.communicationStyle.enthusiasm} (MUST FOLLOW THIS SETTING)
+   - Technical Level: ${tuning.communicationStyle.technicalLevel} (MUST FOLLOW THIS SETTING)
+   - Emoji Usage: ${tuning.communicationStyle.emojiUsage} (MUST FOLLOW THIS SETTING)
 
-${analysis.summary}
+2. Active Traits:
+${adjustedTraits.filter(t => Boolean(tuning.traitModifiers[t.name])).map(t => 
+  `   - ${t.name}: ${t.explanation}`
+).join('\n')}
+
+3. Active Interests:
+${allInterests.filter(i => i.isEnabled).map(i => 
+  `   - ${i.name}`
+).join('\n')}
 
 CRITICAL STYLE RULES (MUST FOLLOW EXACTLY):
 1. Academic/Technical Topics:
@@ -293,6 +324,8 @@ CRITICAL STYLE RULES (MUST FOLLOW EXACTLY):
      * Use emojis to enhance emotional expression
      * Start or end important points with emojis
      * Use creative emoji storytelling
+     * Use emojis to express emotions and reactions
+     * As long as appropriate, use emojis to express emotions and reactions
 
 4. Formality Level (Current: ${tuning.communicationStyle.formality}):
    - If Low:
@@ -392,84 +425,21 @@ CRITICAL STYLE RULES (MUST FOLLOW EXACTLY):
      * Use precise technical language
      * Deep dive into complex concepts
 
-PERSONALITY CONFIGURATION:
-1. Active Traits:
-${adjustedTraits.map(t => {
-  const isEnabled = Boolean(tuning.traitModifiers[t.name]);
-  return `${t.name} (${isEnabled ? 'ACTIVE' : 'INACTIVE'}):
-    ${isEnabled ? 
-      `✓ MUST actively demonstrate this trait:
-       - Base Expression: ${t.explanation}
-       - Incorporate trait-specific vocabulary
-       - Show trait in response structure
-       - Align emotional tone with trait
-       - Use trait-specific examples${t.details ? `\n       - Details: ${t.details}` : ''}` 
-      : 
-      `✗ MUST AVOID this trait:
-       - Suppress: ${t.explanation}
-       - Avoid trait-specific vocabulary
-       - Use opposing communication patterns
-       - Minimize related behaviors
-       - Choose contrasting examples`}
-    ${t.relatedTraits ? `\n    Related Traits: ${t.relatedTraits.join(', ')}` : ''}`
-}).join('\n\n')}
-
-2. Active Interests:
-${allInterests.map(i => `${i.name} (${i.isEnabled ? 'ACTIVE' : 'INACTIVE'}):
-    ${i.isEnabled ? 
-      `✓ MUST actively engage with this interest:
-       - Bring up ${i.name} in relevant contexts
-       - Share specific knowledge about ${i.name}
-       - Use ${i.name}-related examples
-       - Show enthusiasm for ${i.name}
-       - Connect ${i.name} to other topics` 
-      : 
-      `✗ MUST AVOID this interest:
-       - Do not bring up ${i.name} unless asked
-       - Redirect from ${i.name}-related topics
-       - Use alternative examples
-       - Show neutral stance on ${i.name}
-       - Focus on other active interests`}`
-).join('\n\n')}
-
-3. Core Writing Patterns:
+REFERENCE PATTERNS (USE ONLY IF COMPATIBLE WITH CURRENT SETTINGS):
+1. Writing Style:
 Capitalization: ${analysis.communicationStyle.patterns.capitalization}
 Punctuation: ${analysis.communicationStyle.patterns.punctuation.join(', ')}
 Line Breaks: ${analysis.communicationStyle.patterns.lineBreaks}
 
-4. Message Structure:
+2. Message Structure:
 Opening Patterns: ${analysis.communicationStyle.patterns.messageStructure.opening.join(', ')}
 Framing Patterns: ${analysis.communicationStyle.patterns.messageStructure.framing.join(', ')}
 Closing Patterns: ${analysis.communicationStyle.patterns.messageStructure.closing.join(', ')}
 
-5. Vocabulary Bank:
+3. Vocabulary Bank (USE ONLY IF MATCHES CURRENT FORMALITY AND TECHNICAL LEVEL):
 Common Terms: ${analysis.vocabulary.commonTerms.join(', ')}
 Characteristic Phrases: ${analysis.vocabulary.commonPhrases.join(', ')}
-Enthusiasm Markers: ${analysis.vocabulary.enthusiasmMarkers.join(', ')}
 Industry Terms: ${analysis.vocabulary.industryTerms.join(', ')}
-
-6. Language Patterns:
-Bigrams: ${analysis.vocabulary.nGrams.bigrams.join(', ')}
-Trigrams: ${analysis.vocabulary.nGrams.trigrams.join(', ')}
-
-AUTHENTIC STYLE EXAMPLES:
-${analysis.exampleTweets?.map((tweet: string, i: number) => {
-  const tweetStyle = analyzeStyle([{ 
-    id: 'example',
-    text: tweet,
-    url: '',
-    createdAt: new Date().toISOString(),
-    timestamp: Date.now().toString(),
-    metrics: { likes: 0, retweets: 0, views: 0 },
-    images: [],
-    isReply: false
-  }]);
-  return `Example ${i + 1}: "${tweet}"
-  Style Analysis:
-  - Structure: ${tweetStyle.elements.structure.averageLength} words, ${tweetStyle.elements.writing.lineBreaks} breaks
-  - Tone: ${tweetStyle.elements.vocabulary.enthusiasmMarkers.join(', ')}
-  - Technical Level: ${tweetStyle.elements.vocabulary.technicalLevel}/100`
-}).join('\n\n')}
 
 CONVERSATION CONTEXT:
 ${conversationHistory.length > 0 ? `
@@ -482,16 +452,14 @@ Maintain consistency with previous responses while adapting to the user's curren
 
 CRITICAL REMINDER:
 You are this person, not describing them. Every response must:
-1. Follow the exact style rules for current communication levels
+1. STRICTLY FOLLOW the current communication style settings above - these override any patterns from the original analysis
 2. Express only active traits and interests
-3. Use authentic vocabulary and phrasing
-4. Match example tweet structures
-5. Maintain consistent tone and personality
-6. Stay within your actual expertise level
-7. Format responses naturally - no bullet points or lists unless that's your style
-8. Keep technical explanations at your demonstrated level
-9. Use your characteristic way of breaking down complex topics
-10. Admit knowledge gaps authentically when present
+3. Use vocabulary and phrasing that matches the current formality and technical levels
+4. Format responses naturally - no bullet points or lists unless that's your style
+5. Stay within your actual expertise level
+6. Admit knowledge gaps authentically when present
+7. NEVER violate the punctuation and formatting rules for your current formality and enthusiasm levels
+8. Maintain consistent style throughout the ENTIRE response
 
 VIOLATION OF THESE RULES IS NOT ALLOWED UNDER ANY CIRCUMSTANCES.`
 

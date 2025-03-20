@@ -23,15 +23,21 @@ export class TweetDB {
    * Convert TwitterAPITweet to DBTweet
    */
   private static toDBTweet(tweet: TwitterAPITweet, userId: string): DBTweet {
+    const createdAt = tweet.createdAt ? new Date(tweet.createdAt) : new Date();
+    
     return {
       id: tweet.id,
       user_id: userId,
       text: tweet.text,
-      created_at: new Date(tweet.createdAt),
+      created_at: createdAt,
       url: tweet.url,
       is_reply: tweet.isReply,
+      view_count: tweet.viewCount || 0,
+      retweet_count: tweet.retweetCount || 0,
+      reply_count: tweet.replyCount || 0,
+      like_count: tweet.likeCount || 0,
+      quote_count: tweet.quoteCount || 0,
       metadata: {
-        viewCount: tweet.viewCount,
         conversationId: tweet.conversationId,
         inReplyToId: tweet.inReplyToId,
         inReplyToUserId: tweet.inReplyToUserId,
@@ -80,7 +86,11 @@ export class TweetDB {
       createdAt: dbTweet.created_at.toISOString(),
       url: dbTweet.url,
       isReply: dbTweet.is_reply,
-      viewCount: dbTweet.metadata.viewCount || 0,
+      viewCount: dbTweet.view_count,
+      retweetCount: dbTweet.retweet_count,
+      replyCount: dbTweet.reply_count,
+      likeCount: dbTweet.like_count,
+      quoteCount: dbTweet.quote_count,
       conversationId: dbTweet.metadata.conversationId,
       inReplyToId: dbTweet.metadata.inReplyToId,
       inReplyToUserId: dbTweet.metadata.inReplyToUserId,

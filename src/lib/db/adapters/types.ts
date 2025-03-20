@@ -30,8 +30,12 @@ export interface DBTweet {
   created_at: Date;
   url: string;
   is_reply: boolean;
+  view_count: number;
+  retweet_count: number;
+  reply_count: number;
+  like_count: number;
+  quote_count: number;
   metadata: {
-    viewCount?: number;
     conversationId?: string;
     inReplyToId?: string;
     inReplyToUserId?: string;
