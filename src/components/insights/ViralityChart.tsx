@@ -34,8 +34,8 @@ interface Props {
 export function ViralityChart({ data }: Props) {
   // Sort tweets by virality score
   const sortedTweets = [...data.byTweet].sort((a, b) => {
-    const aScore = ((a.retweets || 0) + (a.quotes || 0)) / ((a.likes || 0) + 1);
-    const bScore = ((b.retweets || 0) + (b.quotes || 0)) / ((b.likes || 0) + 1);
+    const aScore = ((a.retweets ?? 0) + (a.quotes ?? 0)) / ((a.likes ?? 0) + 1);
+    const bScore = ((b.retweets ?? 0) + (b.quotes ?? 0)) / ((b.likes ?? 0) + 1);
     return bScore - aScore;
   });
 
@@ -43,8 +43,8 @@ export function ViralityChart({ data }: Props) {
     datasets: [{
       label: 'Tweets',
       data: sortedTweets.map(tweet => ({
-        x: tweet.likes || 0,
-        y: (tweet.retweets || 0) + (tweet.quotes || 0),
+        x: tweet.likes ?? 0,
+        y: (tweet.retweets ?? 0) + (tweet.quotes ?? 0),
       })),
       backgroundColor: 'rgba(239, 68, 68, 0.6)',
       borderColor: 'rgb(239, 68, 68)',
@@ -59,8 +59,9 @@ export function ViralityChart({ data }: Props) {
       {
         label: 'Engagement Per Thousand Views',
         data: sortedTweets.map(tweet => {
-          const views = tweet.views || 1;
-          return (tweet.engagement / views) * 1000;
+          const views = tweet.views ?? 1;
+          const engagement = tweet.engagement ?? 0;
+          return (engagement / views) * 1000;
         }),
         backgroundColor: 'rgba(239, 68, 68, 0.8)',
         borderColor: 'rgb(239, 68, 68)',
@@ -173,19 +174,19 @@ export function ViralityChart({ data }: Props) {
           <div className="text-center">
             <p className="text-red-400 text-sm">Amplification Score</p>
             <p className="text-red-500 text-2xl font-bold">
-              {(data.amplificationScore * 100).toFixed(1)}%
+              {((data.amplificationScore ?? 0) * 100).toFixed(1)}%
             </p>
           </div>
           <div className="text-center">
             <p className="text-red-400 text-sm">Shareability Factor</p>
             <p className="text-red-500 text-2xl font-bold">
-              {(data.shareabilityFactor * 100).toFixed(1)}%
+              {((data.shareabilityFactor ?? 0) * 100).toFixed(1)}%
             </p>
           </div>
           <div className="text-center">
             <p className="text-red-400 text-sm">Conversion Potential</p>
             <p className="text-red-500 text-2xl font-bold">
-              {data.conversionPotential.toFixed(2)}
+              {(data.conversionPotential ?? 0).toFixed(2)}
             </p>
           </div>
         </div>
@@ -199,19 +200,19 @@ export function ViralityChart({ data }: Props) {
           <div className="text-center">
             <p className="text-red-400 text-sm">EPMV</p>
             <p className="text-red-500 text-2xl font-bold">
-              {data.engagementPerThousandViews.toFixed(1)}
+              {(data.engagementPerThousandViews ?? 0).toFixed(1)}
             </p>
           </div>
           <div className="text-center">
             <p className="text-red-400 text-sm">Conversation Score</p>
             <p className="text-red-500 text-2xl font-bold">
-              {(data.conversationScore * 100).toFixed(1)}%
+              {((data.conversationScore ?? 0) * 100).toFixed(1)}%
             </p>
           </div>
           <div className="text-center">
             <p className="text-red-400 text-sm">Total Engagement</p>
             <p className="text-red-500 text-2xl font-bold">
-              {data.byTweet.reduce((sum, tweet) => sum + tweet.engagement, 0).toLocaleString()}
+              {data.byTweet.reduce((sum, tweet) => sum + (tweet.engagement ?? 0), 0).toLocaleString()}
             </p>
           </div>
         </div>

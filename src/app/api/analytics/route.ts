@@ -5,12 +5,12 @@ import { AnalyticsService } from '@/lib/analytics';
 interface TweetMetric {
   id: string;
   date: Date;
+  views: number;
+  retweets: number;
+  replies: number;
+  likes: number;
+  quotes: number;
   engagement: number;
-  views?: number;
-  retweets?: number;
-  replies?: number;
-  quotes?: number;
-  likes?: number;
 }
 
 interface MetricBase {
@@ -122,121 +122,10 @@ async function updateCachedMetrics(
   );
 }
 
-export async function GET(req: NextRequest) {
-  try {
-    const searchParams = req.nextUrl.searchParams;
-    const username = searchParams.get('username');
-    const forceRefresh = searchParams.get('refresh') === 'true';
-    const chartData = searchParams.get('chartData') === 'true';
-
-    if (!username) {
-      return NextResponse.json(
-        { error: 'username is required' },
-        { status: 400 }
-      );
-    }
-
-    // Try to get cached results first
-    if (!forceRefresh) {
-      const cachedMetrics = await getCachedMetrics(username, 'all');
-      if (cachedMetrics) {
-        if (chartData) {
-          // Format response with chart data
-          return NextResponse.json({
-            username,
-            metrics: {
-              engagement: {
-                ...cachedMetrics.engagement,
-                chartData: {
-                  type: 'line',
-                  data: cachedMetrics.engagement
-                }
-              },
-              quality: {
-                ...cachedMetrics.quality,
-                chartData: {
-                  type: 'radar',
-                  data: cachedMetrics.quality
-                }
-              },
-              visibility: {
-                ...cachedMetrics.visibility,
-                chartData: {
-                  type: 'bar',
-                  data: cachedMetrics.visibility
-                }
-              },
-              virality: {
-                ...cachedMetrics.virality,
-                chartData: {
-                  type: 'scatter',
-                  data: cachedMetrics.virality
-                }
-              }
-            }
-          });
-        }
-        return NextResponse.json(cachedMetrics);
-      }
-    }
-
-    // Calculate fresh metrics
-    const metrics = await analyticsService.getAllMetrics(username);
-    
-    // Cache the results
-    await updateCachedMetrics(username, 'all', metrics);
-    
-    if (chartData) {
-      // Format response with chart data
-      return NextResponse.json({
-        username,
-        metrics: {
-          engagement: {
-            ...metrics.engagement,
-            chartData: {
-              type: 'line',
-              data: metrics.engagement
-            }
-          },
-          quality: {
-            ...metrics.quality,
-            chartData: {
-              type: 'radar',
-              data: metrics.quality
-            }
-          },
-          visibility: {
-            ...metrics.visibility,
-            chartData: {
-              type: 'bar',
-              data: metrics.visibility
-            }
-          },
-          virality: {
-            ...metrics.virality,
-            chartData: {
-              type: 'scatter',
-              data: metrics.virality
-            }
-          }
-        }
-      });
-    }
-    
-    return NextResponse.json(metrics);
-  } catch (error) {
-    console.error('Analytics API Error:', error);
-    return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
-    );
-  }
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { username, metrics: requestedMetrics, refresh = false } = body;
+    const { username, metrics: requestedMetrics, refresh = false, chartData = false } = body;
 
     if (!username || !requestedMetrics || !Array.isArray(requestedMetrics)) {
       return NextResponse.json(
@@ -245,42 +134,80 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const results: MetricResults = {};
+    // Try to get cached results first
+    if (!refresh) {
+      const cachedMetrics = await getCachedMetrics(username, 'all');
+      if (cachedMetrics) {
+        // Filter only requested metrics
+        const filteredMetrics: MetricResults = Object.fromEntries(
+          Object.entries(cachedMetrics).filter(([key]) => requestedMetrics.includes(key as MetricType))
+        );
 
-    for (const metric of requestedMetrics as MetricType[]) {
-      // Try to get cached results first
-      if (!refresh) {
-        const cachedMetric = await getCachedMetrics(username, metric);
-        if (cachedMetric) {
-          results[metric] = cachedMetric;
-          continue;
+        if (chartData) {
+          // Format response with chart data for requested metrics
+          const chartDataMetrics = Object.fromEntries(
+            Object.entries(filteredMetrics).map(([key, value]) => [
+              key,
+              {
+                ...value,
+                chartData: {
+                  type: key === 'engagement' ? 'line' :
+                        key === 'quality' ? 'radar' :
+                        key === 'visibility' ? 'bar' : 'scatter',
+                  data: value
+                }
+              }
+            ])
+          ) as MetricResults;
+          return NextResponse.json({
+            username,
+            ...chartDataMetrics
+          });
         }
-      }
-
-      // Calculate fresh metrics if no cache or refresh requested
-      switch (metric) {
-        case 'engagement':
-          results.engagement = await analyticsService.calculateEngagementMetrics(username);
-          await updateCachedMetrics(username, 'engagement', results.engagement);
-          break;
-        case 'quality':
-          results.quality = await analyticsService.calculateQualityMetrics(username);
-          await updateCachedMetrics(username, 'quality', results.quality);
-          break;
-        case 'visibility':
-          results.visibility = await analyticsService.calculateVisibilityMetrics(username);
-          await updateCachedMetrics(username, 'visibility', results.visibility);
-          break;
-        case 'virality':
-          results.virality = await analyticsService.calculateViralityMetrics(username);
-          await updateCachedMetrics(username, 'virality', results.virality);
-          break;
-        default:
-          console.warn(`Unknown metric type: ${metric}`);
+        return NextResponse.json({
+          username,
+          ...filteredMetrics
+        });
       }
     }
 
-    return NextResponse.json(results);
+    // Calculate fresh metrics
+    const allMetrics = await analyticsService.getAllMetrics(username);
+    
+    // Cache all metrics
+    await updateCachedMetrics(username, 'all', allMetrics);
+    
+    // Filter only requested metrics
+    const filteredMetrics: MetricResults = Object.fromEntries(
+      Object.entries(allMetrics).filter(([key]) => requestedMetrics.includes(key as MetricType))
+    );
+
+    if (chartData) {
+      // Format response with chart data for requested metrics
+      const chartDataMetrics = Object.fromEntries(
+        Object.entries(filteredMetrics).map(([key, value]) => [
+          key,
+          {
+            ...value,
+            chartData: {
+              type: key === 'engagement' ? 'line' :
+                    key === 'quality' ? 'radar' :
+                    key === 'visibility' ? 'bar' : 'scatter',
+              data: value
+            }
+          }
+        ])
+      ) as MetricResults;
+      return NextResponse.json({
+        username,
+        ...chartDataMetrics
+      });
+    }
+    
+    return NextResponse.json({
+      username,
+      ...filteredMetrics
+    });
   } catch (error) {
     console.error('Analytics API Error:', error);
     return NextResponse.json(

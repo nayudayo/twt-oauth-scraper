@@ -61,6 +61,7 @@ export interface PersonalityAnalysis {
     enthusiasm: CommunicationLevel
     technicalLevel: CommunicationLevel
     emojiUsage: CommunicationLevel
+    verbosity: CommunicationLevel
     description: string
   }
   topicsAndThemes: string[]
@@ -76,6 +77,7 @@ export interface PersonalityTuning {
     enthusiasm: CommunicationLevel
     technicalLevel: CommunicationLevel
     emojiUsage: CommunicationLevel
+    verbosity: CommunicationLevel
   }
 }
 
@@ -85,13 +87,16 @@ export interface ScrapedData {
 }
 
 export interface ScanProgress {
-  phase: 'posts' | 'replies' | 'complete'
+  phase: 'posts' | 'replies' | 'complete' | 'ready'
   count: number
+  total?: number
+  currentBatch?: number
+  totalBatches?: number
   message?: string
 }
 
 export interface EventData {
-  type?: 'complete' | 'error' | 'progress'
+  type?: 'complete' | 'error' | 'progress' | 'warning'
   error?: string
   tweets?: Tweet[]
   username?: string
@@ -101,6 +106,8 @@ export interface EventData {
   isLastBatch?: boolean
   scanProgress?: ScanProgress
   status?: string
+  message?: string
+  reset?: number
 }
 
 export interface WorkerMessage {

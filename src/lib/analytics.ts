@@ -36,12 +36,12 @@ interface Tweet {
 interface TweetMetric {
   id: string;
   date: Date;
+  views: number;
+  retweets: number;
+  replies: number;
+  likes: number;
+  quotes: number;
   engagement: number;
-  views?: number;
-  retweets?: number;
-  replies?: number;
-  quotes?: number;
-  likes?: number;
 }
 
 interface EngagementMetrics {
@@ -94,52 +94,60 @@ export class AnalyticsService {
 
   private async getUserTweets(username: string): Promise<Tweet[]> {
     try {
-      // First get the user's ID
-      const userQuery = 'SELECT id FROM users WHERE username = $1';
-      const userResult = await this.pool.query(userQuery, [username]);
-      
+      // First get the user ID
+      console.log('Getting user ID for username:', username);
+      const userResult = await this.pool.query(
+        'SELECT id FROM users WHERE username = $1',
+        [username]
+      );
+
       if (userResult.rows.length === 0) {
         console.log('No user found with username:', username);
-        return [];
+        throw new Error('User not found');
       }
 
       const userId = userResult.rows[0].id;
+      console.log('Found user ID:', userId);
 
-      // Then get their tweets with all metric columns
-      const tweetsQuery = `
-        SELECT 
+      // Then get their tweets with all metrics
+      console.log('Fetching tweets for user ID:', userId);
+      const result = await this.pool.query(
+        `SELECT 
           id,
-          user_id,
           text,
           created_at,
-          url,
-          is_reply,
           view_count,
           retweet_count,
           reply_count,
           like_count,
-          quote_count,
-          metadata,
-          created_in_db
-        FROM tweets
-        WHERE user_id = $1
-        ORDER BY created_at ASC
-      `;
-      
-      const { rows } = await this.pool.query(tweetsQuery, [userId]);
+          quote_count
+        FROM tweets 
+        WHERE user_id = $1 
+        ORDER BY created_at DESC`,
+        [userId]
+      );
+
+      const rows = result.rows;
       
       if (rows.length === 0) {
         console.log('No tweets found for user:', username);
       } else {
         console.log(`Found ${rows.length} tweets for user:`, username);
         // Log first tweet metrics for debugging
-        console.log('First tweet metrics sample:', {
+        console.log('First tweet metrics:', {
           id: rows[0].id,
-          views: rows[0].view_count,
-          retweets: rows[0].retweet_count,
-          replies: rows[0].reply_count,
-          likes: rows[0].like_count,
-          quotes: rows[0].quote_count
+          text: rows[0].text?.substring(0, 50) + '...',
+          view_count: rows[0].view_count,
+          retweet_count: rows[0].retweet_count,
+          reply_count: rows[0].reply_count,
+          like_count: rows[0].like_count,
+          quote_count: rows[0].quote_count,
+          total_engagement: (
+            (rows[0].retweet_count ?? 0) + 
+            (rows[0].reply_count ?? 0) + 
+            (rows[0].like_count ?? 0) + 
+            (rows[0].quote_count ?? 0)
+          )
         });
       }
       
@@ -152,59 +160,74 @@ export class AnalyticsService {
 
   // 1. Engagement & Popularity Metrics
   private calculateEngagementMetricsInternal(tweets: Tweet[]): EngagementMetrics {
-    const totalEngagement = tweets.reduce((sum, tweet) => 
-      sum + tweet.retweet_count + tweet.reply_count + tweet.like_count + tweet.quote_count, 0);
+    const byTweet = tweets.map(tweet => ({
+      id: tweet.id,
+      date: tweet.created_at,
+      views: tweet.view_count ?? 0,
+      retweets: tweet.retweet_count ?? 0,
+      replies: tweet.reply_count ?? 0,
+      likes: tweet.like_count ?? 0,
+      quotes: tweet.quote_count ?? 0,
+      engagement: (tweet.retweet_count ?? 0) + (tweet.reply_count ?? 0) + 
+                 (tweet.like_count ?? 0) + (tweet.quote_count ?? 0)
+    }));
 
-    const totalViews = tweets.reduce((sum, tweet) => sum + tweet.view_count, 0);
+    const totalEngagement = byTweet.reduce((sum, tweet) => sum + tweet.engagement, 0);
+    const totalViews = byTweet.reduce((sum, tweet) => sum + tweet.views, 0);
 
     return {
+      byTweet,
       totalEngagement,
-      engagementRate: totalViews > 0 ? (totalEngagement / totalViews) * 100 : 0,
-      viralityScore: tweets.reduce((sum, tweet) => 
-        sum + (tweet.retweet_count + tweet.quote_count) / (tweet.like_count + 1), 0) / tweets.length,
-      interactionRate: totalEngagement > 0 ? 
-        tweets.reduce((sum, tweet) => sum + (tweet.reply_count + tweet.quote_count), 0) / totalEngagement : 0,
-      amplificationRatio: tweets.reduce((sum, tweet) => 
-        sum + (tweet.retweet_count / (tweet.like_count + 1)), 0) / tweets.length,
-      discussionRatio: tweets.reduce((sum, tweet) => {
-        const total = tweet.retweet_count + tweet.like_count + tweet.quote_count;
-        return sum + (tweet.reply_count / (total || 1));
+      engagementRate: totalViews > 0 ? totalEngagement / totalViews : 0,
+      viralityScore: byTweet.reduce((sum, tweet) => {
+        const total = tweet.engagement || 1;
+        return sum + ((tweet.retweets + tweet.quotes) / total);
       }, 0) / tweets.length,
-      byTweet: tweets.map(tweet => ({
-        id: tweet.id,
-        date: tweet.created_at,
-        engagement: tweet.retweet_count + tweet.reply_count + tweet.like_count + tweet.quote_count,
-        views: tweet.view_count
-      }))
+      interactionRate: totalEngagement > 0 ? 
+        byTweet.reduce((sum, tweet) => sum + (tweet.replies + tweet.quotes), 0) / totalEngagement : 0,
+      amplificationRatio: byTweet.reduce((sum, tweet) => {
+        const total = tweet.likes + 1;
+        return sum + (tweet.retweets / total);
+      }, 0) / tweets.length,
+      discussionRatio: byTweet.reduce((sum, tweet) => {
+        const total = tweet.retweets + tweet.likes + tweet.quotes || 1;
+        return sum + (tweet.replies / total);
+      }, 0) / tweets.length
     };
   }
 
   // 2. Quality & Influence Metrics
   private calculateQualityMetricsInternal(tweets: Tweet[]): QualityMetrics {
+    const byTweet = tweets.map(tweet => ({
+      id: tweet.id,
+      date: tweet.created_at,
+      views: tweet.view_count ?? 0,
+      retweets: tweet.retweet_count ?? 0,
+      replies: tweet.reply_count ?? 0,
+      likes: tweet.like_count ?? 0,
+      quotes: tweet.quote_count ?? 0,
+      engagement: (tweet.retweet_count ?? 0) + (tweet.reply_count ?? 0) + 
+                 (tweet.like_count ?? 0) + (tweet.quote_count ?? 0)
+    }));
+
     const metrics = {
-      engagementToRetweetRatio: tweets.reduce((sum, tweet) => {
-        const total = tweet.retweet_count + tweet.reply_count + tweet.like_count + tweet.quote_count;
-        return sum + (total / (tweet.retweet_count + 1));
+      engagementToRetweetRatio: byTweet.reduce((sum, tweet) => {
+        const total = tweet.engagement;
+        return sum + (total / (tweet.retweets + 1));
       }, 0) / tweets.length,
-      quoteToRetweetRatio: tweets.reduce((sum, tweet) => 
-        sum + (tweet.quote_count / (tweet.retweet_count + 1)), 0) / tweets.length,
-      likeToReplyRatio: tweets.reduce((sum, tweet) => 
-        sum + (tweet.like_count / (tweet.reply_count + 1)), 0) / tweets.length,
-      conversationDepthScore: tweets.reduce((sum, tweet) => {
-        const total = tweet.retweet_count + tweet.reply_count + tweet.like_count + tweet.quote_count;
-        return sum + (tweet.reply_count / (total || 1));
+      quoteToRetweetRatio: byTweet.reduce((sum, tweet) => 
+        sum + (tweet.quotes / (tweet.retweets + 1)), 0) / tweets.length,
+      likeToReplyRatio: byTweet.reduce((sum, tweet) => 
+        sum + (tweet.likes / (tweet.replies + 1)), 0) / tweets.length,
+      conversationDepthScore: byTweet.reduce((sum, tweet) => {
+        const total = tweet.engagement || 1;
+        return sum + (tweet.replies / total);
       }, 0) / tweets.length,
-      shareabilityScore: tweets.reduce((sum, tweet) => {
-        const total = tweet.retweet_count + tweet.reply_count + tweet.like_count + tweet.quote_count;
-        return sum + ((tweet.retweet_count + tweet.quote_count) / (total || 1));
+      shareabilityScore: byTweet.reduce((sum, tweet) => {
+        const total = tweet.engagement || 1;
+        return sum + ((tweet.retweets + tweet.quotes) / total);
       }, 0) / tweets.length,
-      byTweet: tweets.map(tweet => ({
-        id: tweet.id,
-        date: tweet.created_at,
-        engagement: tweet.retweet_count + tweet.reply_count + tweet.like_count + tweet.quote_count,
-        retweets: tweet.retweet_count,
-        quotes: tweet.quote_count
-      }))
+      byTweet
     };
 
     return {
@@ -220,60 +243,67 @@ export class AnalyticsService {
 
   // 3. Visibility-Adjusted Metrics
   private calculateVisibilityMetricsInternal(tweets: Tweet[]): VisibilityMetrics {
+    const byTweet = tweets.map(tweet => ({
+      id: tweet.id,
+      date: tweet.created_at,
+      views: tweet.view_count ?? 0,
+      retweets: tweet.retweet_count ?? 0,
+      replies: tweet.reply_count ?? 0,
+      likes: tweet.like_count ?? 0,
+      quotes: tweet.quote_count ?? 0,
+      engagement: (tweet.retweet_count ?? 0) + (tweet.reply_count ?? 0) + 
+                 (tweet.like_count ?? 0) + (tweet.quote_count ?? 0)
+    }));
+
     return {
-      engagementRate: tweets.reduce((sum, tweet) => {
-        const total = tweet.retweet_count + tweet.reply_count + tweet.like_count + tweet.quote_count;
-        return sum + ((total / (tweet.view_count + 1)) * 100);
+      engagementRate: byTweet.reduce((sum, tweet) => {
+        const total = tweet.engagement;
+        return sum + ((total / (tweet.views + 1)) * 100);
       }, 0) / tweets.length,
-      retweetRate: tweets.reduce((sum, tweet) => 
-        sum + ((tweet.retweet_count / (tweet.view_count + 1)) * 100), 0) / tweets.length,
-      replyRate: tweets.reduce((sum, tweet) => 
-        sum + ((tweet.reply_count / (tweet.view_count + 1)) * 100), 0) / tweets.length,
-      likeRate: tweets.reduce((sum, tweet) => 
-        sum + ((tweet.like_count / (tweet.view_count + 1)) * 100), 0) / tweets.length,
-      quoteRate: tweets.reduce((sum, tweet) => 
-        sum + ((tweet.quote_count / (tweet.view_count + 1)) * 100), 0) / tweets.length,
-      byTweet: tweets.map(tweet => {
-        const total = tweet.retweet_count + tweet.reply_count + tweet.like_count + tweet.quote_count;
-        return {
-          id: tweet.id,
-          date: tweet.created_at,
-          engagement: (total / (tweet.view_count + 1)) * 100,
-          retweets: (tweet.retweet_count / (tweet.view_count + 1)) * 100,
-          replies: (tweet.reply_count / (tweet.view_count + 1)) * 100,
-          likes: (tweet.like_count / (tweet.view_count + 1)) * 100,
-          quotes: (tweet.quote_count / (tweet.view_count + 1)) * 100
-        };
-      })
+      retweetRate: byTweet.reduce((sum, tweet) => 
+        sum + ((tweet.retweets / (tweet.views + 1)) * 100), 0) / tweets.length,
+      replyRate: byTweet.reduce((sum, tweet) => 
+        sum + ((tweet.replies / (tweet.views + 1)) * 100), 0) / tweets.length,
+      likeRate: byTweet.reduce((sum, tweet) => 
+        sum + ((tweet.likes / (tweet.views + 1)) * 100), 0) / tweets.length,
+      quoteRate: byTweet.reduce((sum, tweet) => 
+        sum + ((tweet.quotes / (tweet.views + 1)) * 100), 0) / tweets.length,
+      byTweet
     };
   }
 
   // 4. Virality & Influence Metrics
   private calculateViralityMetricsInternal(tweets: Tweet[]): ViralityMetrics {
+    const byTweet = tweets.map(tweet => ({
+      id: tweet.id,
+      date: tweet.created_at,
+      views: tweet.view_count ?? 0,
+      retweets: tweet.retweet_count ?? 0,
+      replies: tweet.reply_count ?? 0,
+      likes: tweet.like_count ?? 0,
+      quotes: tweet.quote_count ?? 0,
+      engagement: (tweet.retweet_count ?? 0) + (tweet.reply_count ?? 0) + 
+                 (tweet.like_count ?? 0) + (tweet.quote_count ?? 0)
+    }));
+
+    const totalEngagement = byTweet.reduce((sum, tweet) => sum + tweet.engagement, 0);
+    const totalViews = byTweet.reduce((sum, tweet) => sum + tweet.views, 0);
+
     return {
-      amplificationScore: tweets.reduce((sum, tweet) => 
-        sum + ((tweet.retweet_count + tweet.quote_count) / (tweet.view_count + 1)), 0) / tweets.length,
-      conversationScore: tweets.reduce((sum, tweet) => 
-        sum + (tweet.reply_count / (tweet.view_count + 1)), 0) / tweets.length,
-      engagementPerThousandViews: tweets.reduce((sum, tweet) => {
-        const total = tweet.retweet_count + tweet.reply_count + tweet.like_count + tweet.quote_count;
-        return sum + ((total / (tweet.view_count + 1)) * 1000);
+      amplificationScore: byTweet.reduce((sum, tweet) => {
+        const total = tweet.engagement || 1;
+        return sum + ((tweet.retweets + tweet.quotes) / total);
       }, 0) / tweets.length,
-      shareabilityFactor: tweets.reduce((sum, tweet) => 
-        sum + ((tweet.retweet_count + tweet.quote_count) / (tweet.like_count + 1)), 0) / tweets.length,
-      conversionPotential: tweets.reduce((sum, tweet) => {
-        const total = tweet.retweet_count + tweet.reply_count + tweet.like_count + tweet.quote_count;
-        return sum + (total / (tweet.retweet_count + 1));
+      conversationScore: byTweet.reduce((sum, tweet) => {
+        const total = tweet.engagement || 1;
+        return sum + (tweet.replies / total);
       }, 0) / tweets.length,
-      byTweet: tweets.map(tweet => ({
-        id: tweet.id,
-        date: tweet.created_at,
-        views: tweet.view_count,
-        engagement: tweet.retweet_count + tweet.reply_count + tweet.like_count + tweet.quote_count,
-        retweets: tweet.retweet_count,
-        quotes: tweet.quote_count,
-        likes: tweet.like_count
-      }))
+      engagementPerThousandViews: totalViews > 0 ? (totalEngagement / totalViews) * 1000 : 0,
+      shareabilityFactor: totalViews > 0 ? 
+        byTweet.reduce((sum, tweet) => sum + tweet.retweets, 0) / totalViews : 0,
+      conversionPotential: totalViews > 0 ? 
+        byTweet.reduce((sum, tweet) => sum + tweet.likes, 0) / totalViews : 0,
+      byTweet
     };
   }
 

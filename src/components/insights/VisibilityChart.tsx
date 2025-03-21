@@ -35,8 +35,8 @@ interface Props {
 export function VisibilityChart({ data }: Props) {
   // Sort tweets by total visibility metrics
   const sortedTweets = [...data.byTweet].sort((a, b) => {
-    const aTotal = (a.retweets || 0) + (a.replies || 0) + (a.likes || 0) + (a.quotes || 0);
-    const bTotal = (b.retweets || 0) + (b.replies || 0) + (b.likes || 0) + (b.quotes || 0);
+    const aTotal = (a.retweets ?? 0) + (a.replies ?? 0) + (a.likes ?? 0) + (a.quotes ?? 0);
+    const bTotal = (b.retweets ?? 0) + (b.replies ?? 0) + (b.likes ?? 0) + (b.quotes ?? 0);
     return bTotal - aTotal;
   });
 
@@ -45,25 +45,25 @@ export function VisibilityChart({ data }: Props) {
     datasets: [
       {
         label: 'Retweets',
-        data: sortedTweets.map(tweet => tweet.retweets || 0),
+        data: sortedTweets.map(tweet => tweet.retweets ?? 0),
         backgroundColor: 'rgb(239, 68, 68)',
         stack: 'Stack 0',
       },
       {
         label: 'Replies',
-        data: sortedTweets.map(tweet => tweet.replies || 0),
+        data: sortedTweets.map(tweet => tweet.replies ?? 0),
         backgroundColor: 'rgb(251, 146, 60)',
         stack: 'Stack 0',
       },
       {
         label: 'Likes',
-        data: sortedTweets.map(tweet => tweet.likes || 0),
+        data: sortedTweets.map(tweet => tweet.likes ?? 0),
         backgroundColor: 'rgb(34, 197, 94)',
         stack: 'Stack 0',
       },
       {
         label: 'Quotes',
-        data: sortedTweets.map(tweet => tweet.quotes || 0),
+        data: sortedTweets.map(tweet => tweet.quotes ?? 0),
         backgroundColor: 'rgb(59, 130, 246)',
         stack: 'Stack 0',
       }
@@ -205,7 +205,7 @@ export function VisibilityChart({ data }: Props) {
           <div className="text-center">
             <p className="text-red-400 text-sm">Total Engagement</p>
             <p className="text-red-500 text-2xl font-bold">
-              {data.byTweet.reduce((sum, tweet) => sum + tweet.engagement, 0).toLocaleString()}
+              {data.byTweet.reduce((sum, tweet) => sum + (tweet.engagement ?? 0), 0).toLocaleString()}
             </p>
           </div>
         </div>

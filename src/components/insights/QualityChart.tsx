@@ -58,8 +58,8 @@ export function QualityChart({ data }: Props) {
       {
         label: 'Interaction Ratios',
         data: [
-          data.quoteToRetweetRatio * 100,
-          data.likeToReplyRatio
+          (data.quoteToRetweetRatio ?? 0) * 100,
+          (data.likeToReplyRatio ?? 0)
         ],
         backgroundColor: [
           'rgba(239, 68, 68, 0.8)',
@@ -151,19 +151,19 @@ export function QualityChart({ data }: Props) {
           <div className="text-center">
             <p className="text-red-400 text-sm">Shareability Score</p>
             <p className="text-red-500 text-2xl font-bold">
-              {(data.shareabilityScore * 100).toFixed(1)}%
+              {((data.shareabilityScore ?? 0) * 100).toFixed(1)}%
             </p>
           </div>
           <div className="text-center">
             <p className="text-red-400 text-sm">Conversation Depth</p>
             <p className="text-red-500 text-2xl font-bold">
-              {(data.conversationDepthScore * 100).toFixed(1)}%
+              {((data.conversationDepthScore ?? 0) * 100).toFixed(1)}%
             </p>
           </div>
           <div className="text-center">
             <p className="text-red-400 text-sm">E/R Ratio</p>
             <p className="text-red-500 text-2xl font-bold">
-              {data.engagementToRetweetRatio.toFixed(2)}
+              {(data.engagementToRetweetRatio ?? 0).toFixed(2)}
             </p>
           </div>
         </div>
@@ -177,19 +177,19 @@ export function QualityChart({ data }: Props) {
           <div className="text-center">
             <p className="text-red-400 text-sm">Quote/RT Ratio</p>
             <p className="text-red-500 text-2xl font-bold">
-              {(data.quoteToRetweetRatio * 100).toFixed(1)}%
+              {((data.quoteToRetweetRatio ?? 0) * 100).toFixed(1)}%
             </p>
           </div>
           <div className="text-center">
             <p className="text-red-400 text-sm">Like/Reply Ratio</p>
             <p className="text-red-500 text-2xl font-bold">
-              {data.likeToReplyRatio.toFixed(1)}
+              {((data.likeToReplyRatio ?? 0) * 100).toFixed(1)}%
             </p>
           </div>
           <div className="text-center">
             <p className="text-red-400 text-sm">Quality Score</p>
             <p className="text-red-500 text-2xl font-bold">
-              {((data.shareabilityScore + data.conversationDepthScore) * 50).toFixed(1)}%
+              {(((data.shareabilityScore ?? 0) + (data.conversationDepthScore ?? 0)) * 50).toFixed(1)}%
             </p>
           </div>
         </div>

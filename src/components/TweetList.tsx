@@ -14,6 +14,10 @@ interface TweetListProps {
     count: number;
     total?: number;
     message?: string;
+    currentBatch?: number;
+    totalBatches?: number;
+    rateLimitReset?: number;
+    isRateLimited?: boolean;
   } | null;
   tweets?: Tweet[];
 }
@@ -108,10 +112,22 @@ export function TweetList({
               </span>
             </div>
             {scrapingProgress && (
-              <div className="flex items-center justify-between text-xs">
-                <span>Total Collected: {displayedCount}</span>
-                {scrapingProgress.total && (
-                  <span>Target: {scrapingProgress.total}</span>
+              <div className="flex flex-col gap-1 text-xs">
+                <div className="flex items-center justify-between">
+                  <span>Total Collected: {displayedCount}</span>
+                  {scrapingProgress.total && (
+                    <span>Target: {scrapingProgress.total}</span>
+                  )}
+                </div>
+                {scrapingProgress.currentBatch && scrapingProgress.totalBatches && (
+                  <div className="flex items-center justify-between">
+                    <span>Batch Progress: {scrapingProgress.currentBatch}/{scrapingProgress.totalBatches}</span>
+                  </div>
+                )}
+                {scrapingProgress.isRateLimited && (
+                  <div className="text-yellow-500/80">
+                    Rate limit reached. Resuming in {Math.ceil((scrapingProgress.rateLimitReset || 0) / 1000)}s...
+                  </div>
                 )}
               </div>
             )}

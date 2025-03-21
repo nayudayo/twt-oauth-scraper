@@ -32,14 +32,14 @@ interface Props {
 
 export function EngagementChart({ data }: Props) {
   // Sort tweets by engagement for better visualization
-  const sortedTweets = [...data.byTweet].sort((a, b) => b.engagement - a.engagement);
+  const sortedTweets = [...data.byTweet].sort((a, b) => (b.engagement ?? 0) - (a.engagement ?? 0));
 
   const chartData = {
     labels: sortedTweets.map((_, i) => `Tweet ${i + 1}`),
     datasets: [
       {
         label: 'Engagement',
-        data: sortedTweets.map(tweet => tweet.engagement),
+        data: sortedTweets.map(tweet => tweet.engagement ?? 0),
         borderColor: 'rgb(239, 68, 68)',
         backgroundColor: 'rgba(239, 68, 68, 0.1)',
         fill: true,
@@ -48,7 +48,7 @@ export function EngagementChart({ data }: Props) {
       },
       {
         label: 'Views',
-        data: sortedTweets.map(tweet => tweet.views || 0),
+        data: sortedTweets.map(tweet => tweet.views ?? 0),
         borderColor: 'rgb(251, 146, 60)',
         backgroundColor: 'rgba(251, 146, 60, 0.1)',
         fill: false,
@@ -63,9 +63,11 @@ export function EngagementChart({ data }: Props) {
     datasets: [
       {
         label: 'Engagement per View',
-        data: sortedTweets.map(tweet => 
-          tweet.views ? (tweet.engagement / tweet.views) * 100 : 0
-        ),
+        data: sortedTweets.map(tweet => {
+          const views = tweet.views ?? 1;
+          const engagement = tweet.engagement ?? 0;
+          return (engagement / views) * 100;
+        }),
         backgroundColor: 'rgba(239, 68, 68, 0.8)',
         borderColor: 'rgb(239, 68, 68)',
         borderWidth: 1
@@ -204,7 +206,7 @@ export function EngagementChart({ data }: Props) {
           <div className="text-center">
             <p className="text-red-400 text-sm">Virality Score</p>
             <p className="text-red-500 text-2xl font-bold">
-              {data.viralityScore.toFixed(2)}
+              {(data.viralityScore ?? 0).toFixed(2)}
             </p>
           </div>
         </div>

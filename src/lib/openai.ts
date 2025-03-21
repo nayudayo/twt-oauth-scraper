@@ -32,6 +32,7 @@ export interface PersonalityAnalysis {
     enthusiasm: CommunicationLevel
     technicalLevel: CommunicationLevel
     emojiUsage: CommunicationLevel
+    verbosity: CommunicationLevel  // Added verbosity level
     description: string
     patterns: {
       capitalization: 'mostly-lowercase' | 'mostly-uppercase' | 'mixed' | 'standard'
@@ -413,6 +414,7 @@ export async function analyzePersonality(
         enthusiasm: currentTuning?.communicationStyle?.enthusiasm ?? 'medium',
         technicalLevel: currentTuning?.communicationStyle?.technicalLevel ?? 'medium',
         emojiUsage: currentTuning?.communicationStyle?.emojiUsage ?? 'medium',
+        verbosity: currentTuning?.communicationStyle?.verbosity ?? 'medium',
         description: '',
         patterns: {
           capitalization: 'mixed',
@@ -793,6 +795,7 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
             enthusiasm: 'low',
             technicalLevel: 'low',
             emojiUsage: 'low',
+            verbosity: 'low',
             description: 'Default communication style due to analysis failure after multiple attempts',
             patterns: {
               capitalization: 'mixed',
@@ -882,6 +885,7 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
         enthusiasm: 'low',
         technicalLevel: 'low',
         emojiUsage: 'low',
+        verbosity: 'low',
         description: 'Default communication style due to analysis failure after multiple attempts',
         patterns: {
           capitalization: 'mixed',
@@ -951,6 +955,7 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
       enthusiasm: 'medium',
       technicalLevel: 'medium',
       emojiUsage: 'medium',
+      verbosity: 'medium',
       description: '',
       patterns: {
         capitalization: 'mixed',
@@ -1027,9 +1032,9 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
               const isEnabled = parseInt(score) >= 7
               
               analysis.traits.push({
-                name: name.trim(),
+                name: formatTraitText(name),
                 score: isEnabled ? 1 : 0,  // Use 1 for true, 0 for false
-                explanation: explanation.trim()
+                explanation: formatTraitText(explanation)
               })
               matched = true
               foundTraits = true
@@ -1386,60 +1391,162 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
                section.toLowerCase().includes('behavior patterns')) {
         const lines = section.split('\n')
         
+        // Define scoring criteria for each metric
+        const scoringCriteria = {
+          oversharer: {
+            high: 'Frequently shares personal details, emotions, or daily activities',
+            medium: 'Occasionally shares personal information with discretion',
+            low: 'Rarely shares personal information, keeps posts professional/topical'
+          },
+          replyGuy: {
+            high: 'Frequently responds to others\' posts, often among first responders',
+            medium: 'Balanced mix of replies and original content',
+            low: 'Primarily posts original content, limited engagement in replies'
+          },
+          viralChaser: {
+            high: 'Often posts trending topics, uses viral hashtags, reposts popular content',
+            medium: 'Occasionally engages with trends while maintaining original content',
+            low: 'Focuses on original content regardless of trends'
+          },
+          threadMaker: {
+            high: 'Regularly creates multi-tweet threads, detailed explanations',
+            medium: 'Occasionally uses threads for longer topics',
+            low: 'Prefers single tweets, rarely creates threads'
+          },
+          retweeter: {
+            high: 'Frequently retweets others\' content, high ratio of RTs to original posts',
+            medium: 'Balanced mix of retweets and original content',
+            low: 'Primarily posts original content, selective retweeting'
+          },
+          hotTaker: {
+            high: 'Often posts controversial opinions or contrarian views',
+            medium: 'Occasionally shares strong opinions on specific topics',
+            low: 'Generally neutral or measured in opinions'
+          },
+          joker: {
+            high: 'Frequently uses humor, memes, or witty responses',
+            medium: 'Occasional use of humor mixed with serious content',
+            low: 'Primarily serious/professional tone'
+          },
+          debater: {
+            high: 'Often engages in discussions/arguments, strong opinion defense',
+            medium: 'Selective engagement in discussions with balanced approach',
+            low: 'Avoids confrontation, rarely engages in debates'
+          },
+          doomPoster: {
+            high: 'Frequently posts negative news/predictions, pessimistic tone',
+            medium: 'Balanced reporting of positive and negative content',
+            low: 'Maintains optimistic or neutral tone'
+          },
+          earlyAdopter: {
+            high: 'Quick to try new features, discusses emerging trends/tech',
+            medium: 'Adopts new features after initial testing period',
+            low: 'Prefers established features and traditional approaches'
+          },
+          knowledgeDropper: {
+            high: 'Regularly shares in-depth expertise, educational content',
+            medium: 'Occasional sharing of expertise on specific topics',
+            low: 'Rarely shares technical/educational content'
+          },
+          hypeBeast: {
+            high: 'Frequently expresses strong enthusiasm, uses superlatives',
+            medium: 'Moderate enthusiasm for specific topics',
+            low: 'Reserved expressions, measured enthusiasm'
+          }
+        }
+
+        let currentMetric = ''
+        let description = ''
+        
         for (const line of lines) {
           const trimmedLine = line.trim()
           if (!trimmedLine) continue
 
-          // Check for metric headers
-          if (trimmedLine.toLowerCase().includes('oversharer:')) {
-            const score = extractScore(trimmedLine)
-            if (score !== null) analysis.socialBehaviorMetrics.oversharer = score
-          }
-          else if (trimmedLine.toLowerCase().includes('reply guy:')) {
-            const score = extractScore(trimmedLine)
-            if (score !== null) analysis.socialBehaviorMetrics.replyGuy = score
-          }
-          else if (trimmedLine.toLowerCase().includes('viral chaser:')) {
-            const score = extractScore(trimmedLine)
-            if (score !== null) analysis.socialBehaviorMetrics.viralChaser = score
-          }
-          else if (trimmedLine.toLowerCase().includes('thread maker:')) {
-            const score = extractScore(trimmedLine)
-            if (score !== null) analysis.socialBehaviorMetrics.threadMaker = score
-          }
-          else if (trimmedLine.toLowerCase().includes('retweeter:')) {
-            const score = extractScore(trimmedLine)
-            if (score !== null) analysis.socialBehaviorMetrics.retweeter = score
-          }
-          else if (trimmedLine.toLowerCase().includes('hot take')) {
-            const score = extractScore(trimmedLine)
-            if (score !== null) analysis.socialBehaviorMetrics.hotTaker = score
-          }
-          else if (trimmedLine.toLowerCase().includes('joker:')) {
-            const score = extractScore(trimmedLine)
-            if (score !== null) analysis.socialBehaviorMetrics.joker = score
-          }
-          else if (trimmedLine.toLowerCase().includes('debater:')) {
-            const score = extractScore(trimmedLine)
-            if (score !== null) analysis.socialBehaviorMetrics.debater = score
-          }
-          else if (trimmedLine.toLowerCase().includes('doom poster:')) {
-            const score = extractScore(trimmedLine)
-            if (score !== null) analysis.socialBehaviorMetrics.doomPoster = score
-          }
-          else if (trimmedLine.toLowerCase().includes('early adopter:')) {
-            const score = extractScore(trimmedLine)
-            if (score !== null) analysis.socialBehaviorMetrics.earlyAdopter = score
-          }
-          else if (trimmedLine.toLowerCase().includes('knowledge dropper:')) {
-            const score = extractScore(trimmedLine)
-            if (score !== null) analysis.socialBehaviorMetrics.knowledgeDropper = score
-          }
-          else if (trimmedLine.toLowerCase().includes('hype beast:')) {
-            const score = extractScore(trimmedLine)
-            if (score !== null) analysis.socialBehaviorMetrics.hypeBeast = score
+          // Extract metric name and description
+          const metricMatch = trimmedLine.match(/^[-•*]?\s*([^:]+):\s*(.+)/)
+          if (metricMatch) {
+            const [, name, desc] = metricMatch
+            currentMetric = name.toLowerCase().replace(/\s+/g, '')
+            description = desc.trim()
+
+            // Calculate score based on description and criteria
+            let score = 0
+            const normalizedDesc = description.toLowerCase()
+
+            // First check for explicit numeric scores
+            const numericScore = normalizedDesc.match(/(\d+)(?:\/100|\s*%|\s*points?)?/)
+            if (numericScore) {
+              score = parseInt(numericScore[1])
+            } else {
+              // If no numeric score, analyze description against criteria
+              for (const [metric] of Object.entries(scoringCriteria)) {
+                if (currentMetric.includes(metric.toLowerCase())) {
+                  if (normalizedDesc.includes('high') || 
+                      normalizedDesc.includes('frequent') || 
+                      normalizedDesc.includes('strong') ||
+                      normalizedDesc.includes('often')) {
+                    score = Math.floor(Math.random() * (100 - 75) + 75) // 75-100
+                  } else if (normalizedDesc.includes('medium') || 
+                           normalizedDesc.includes('moderate') || 
+                           normalizedDesc.includes('occasional') ||
+                           normalizedDesc.includes('balanced')) {
+                    score = Math.floor(Math.random() * (74 - 40) + 40) // 40-74
+                  } else if (normalizedDesc.includes('low') || 
+                           normalizedDesc.includes('rare') || 
+                           normalizedDesc.includes('minimal') ||
+                           normalizedDesc.includes('limited')) {
+                    score = Math.floor(Math.random() * (39 - 1) + 1) // 1-39
+                  }
+                  break
+                }
+              }
+            }
+
+            // Map the metric to our socialBehaviorMetrics object
+            switch (currentMetric) {
+              case 'oversharer':
+                analysis.socialBehaviorMetrics.oversharer = score
+                break
+              case 'replyguy':
+                analysis.socialBehaviorMetrics.replyGuy = score
+                break
+              case 'viralchaser':
+                analysis.socialBehaviorMetrics.viralChaser = score
+                break
+              case 'threadmaker':
+                analysis.socialBehaviorMetrics.threadMaker = score
+                break
+              case 'retweeter':
+                analysis.socialBehaviorMetrics.retweeter = score
+                break
+              case 'hottakes':
+              case 'hottaker':
+                analysis.socialBehaviorMetrics.hotTaker = score
+                break
+              case 'joker':
+                analysis.socialBehaviorMetrics.joker = score
+                break
+              case 'debater':
+                analysis.socialBehaviorMetrics.debater = score
+                break
+              case 'doomposter':
+                analysis.socialBehaviorMetrics.doomPoster = score
+                break
+              case 'earlyadopter':
+                analysis.socialBehaviorMetrics.earlyAdopter = score
+                break
+              case 'knowledgedropper':
+                analysis.socialBehaviorMetrics.knowledgeDropper = score
+                break
+              case 'hypebeast':
+                analysis.socialBehaviorMetrics.hypeBeast = score
+                break
+            }
           }
         }
+
+        // Log the extracted metrics for debugging
+        console.log('Extracted social behavior metrics:', analysis.socialBehaviorMetrics)
       }
     }
 
@@ -1542,6 +1649,7 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
         enthusiasm: 'low',
         technicalLevel: 'low',
         emojiUsage: 'low',
+        verbosity: 'low',
         description: 'Default communication style due to parsing error',
         patterns: {
           capitalization: 'mixed',
@@ -1624,14 +1732,11 @@ function assessResponseQuality(
   return Math.max(0, Math.min(1, score));
 }
 
-function extractScore(line: string): number | null {
-  // Try to find a number between 0-100 in the line
-  const matches = line.match(/(\d+)(?:\/100|\s*points?|\s*%)?/)
-  if (matches && matches[1]) {
-    const score = parseInt(matches[1])
-    if (score >= 0 && score <= 100) {
-      return score
-    }
-  }
-  return null
+// Add helper function for formatting trait text
+function formatTraitText(text: string): string {
+  return text
+    .replace(/^\s*[-*]+\s*/, '') // Remove leading dashes and asterisks
+    .replace(/\*\*/g, '')        // Remove markdown bold markers
+    .replace(/^[0-9]+\.\s*/, '') // Remove leading numbers
+    .trim();
 } 

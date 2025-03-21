@@ -34,14 +34,54 @@ interface PersonalityTuning {
     enthusiasm: CommunicationLevel
     technicalLevel: CommunicationLevel
     emojiUsage: CommunicationLevel
+    verbosity: CommunicationLevel
   }
 }
 
 interface ScanProgress {
   phase: 'posts' | 'replies' | 'complete' | 'ready'
   count: number
+  total?: number
+  currentBatch?: number
+  totalBatches?: number
   message?: string
+  isRateLimited?: boolean
+  rateLimitReset?: number
 }
+
+// Add these helper functions near the top of the file, after the imports
+const formatTraitName = (name: string) => {
+  if (!name) return '';
+  
+  // First remove any special characters
+  const cleanName = name.replace(/[*\-]/g, '');
+  
+  // Convert camelCase to space-separated words
+  const spacedName = cleanName.replace(/([A-Z])/g, ' $1').trim();
+  
+  // Capitalize first letter of each word
+  return spacedName.split(' ').map(word => 
+    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  ).join(' ');
+};
+
+const formatTraitExplanation = (explanation: string) => {
+  if (!explanation) return '';
+  
+  // Remove trailing "(e" with any surrounding whitespace
+  let formatted = explanation.replace(/\s*\([eE]\s*$/, '');
+  
+  // Also handle cases where it might be "(e)" or just "e"
+  formatted = formatted.replace(/\s*\([eE]\)\s*$/, '');
+  formatted = formatted.replace(/\s+[eE]\s*$/, '');
+  
+  // Ensure proper sentence ending
+  if (!formatted.endsWith('.') && !formatted.endsWith('!') && !formatted.endsWith('?')) {
+    formatted += '.';
+  }
+  
+  return formatted.trim();
+};  
 
 export default function ChatBox({ tweets: initialTweets, profile, onClose, onTweetsUpdate }: ChatBoxProps) {
   const queryClient = useQueryClient();
@@ -66,7 +106,8 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       formality: 'medium',
       enthusiasm: 'medium',
       technicalLevel: 'medium',
-      emojiUsage: 'medium'
+      emojiUsage: 'medium',
+      verbosity: 'medium'
     }
   })
   const [newInterest, setNewInterest] = useState('')
@@ -407,7 +448,8 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           formality: cachedData.communicationStyle.formality,
           enthusiasm: cachedData.communicationStyle.enthusiasm,
           technicalLevel: cachedData.communicationStyle.technicalLevel,
-          emojiUsage: cachedData.communicationStyle.emojiUsage
+          emojiUsage: cachedData.communicationStyle.emojiUsage,
+          verbosity: cachedData.communicationStyle.verbosity ?? 'medium'
         };
 
         // Update tuning state with both communication style and trait modifiers
@@ -512,10 +554,11 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           ...newInterestWeights
         },
         communicationStyle: {
-          formality: newAnalysis.communicationStyle.formality ?? 'high',
-          enthusiasm: newAnalysis.communicationStyle.enthusiasm ?? 'high',
-          technicalLevel: newAnalysis.communicationStyle.technicalLevel ?? 'high',
-          emojiUsage: newAnalysis.communicationStyle.emojiUsage ?? 'low'
+          formality: newAnalysis.communicationStyle.formality ?? 'medium',
+          enthusiasm: newAnalysis.communicationStyle.enthusiasm ?? 'medium',
+          technicalLevel: newAnalysis.communicationStyle.technicalLevel ?? 'medium',
+          emojiUsage: newAnalysis.communicationStyle.emojiUsage ?? 'medium',
+          verbosity: newAnalysis.communicationStyle.verbosity ?? 'medium'
         }
       }));
 
@@ -827,19 +870,36 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       }
     }
 
-    // Handle progress updates
+    // Handle progress updates with enhanced information
     if (data.scanProgress) {
       const phase = data.scanProgress.phase;
       if (phase === 'posts' || phase === 'replies' || phase === 'complete') {
         setScanProgress({
           phase,
           count: data.scanProgress.count,
+          total: data.scanProgress.total,
+          currentBatch: data.scanProgress.currentBatch,
+          totalBatches: data.scanProgress.totalBatches,
           message: data.scanProgress.message || data.status || 
-            `${phase === 'posts' ? 'SCANNING POSTS' : phase === 'replies' ? 'SCANNING REPLIES' : 'SCAN COMPLETE'}: ${data.scanProgress.count} TWEETS COLLECTED`
+            `${phase === 'posts' ? 'SCANNING POSTS' : phase === 'replies' ? 'SCANNING REPLIES' : 'SCAN COMPLETE'}: ${data.scanProgress.count} TWEETS COLLECTED`,
+          isRateLimited: data.type === 'warning' && data.message?.includes('Rate limit reached'),
+          rateLimitReset: data.reset
         });
       } else {
         console.warn('Invalid scan phase received:', phase);
       }
+    }
+
+    // Handle rate limit warnings explicitly
+    if (data.type === 'warning' && data.message?.includes('Rate limit reached')) {
+      setScanProgress(prev => ({
+        ...prev,
+        phase: prev?.phase || 'posts', // Ensure phase is always defined
+        count: prev?.count || 0, // Ensure count is always defined
+        isRateLimited: true,
+        rateLimitReset: data.reset,
+        message: `Rate limit reached. Waiting for reset...`
+      }));
     }
 
     // Handle completion
@@ -1083,7 +1143,8 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
         formality: currentTuning.communicationStyle.formality,
         enthusiasm: currentTuning.communicationStyle.enthusiasm,
         technicalLevel: currentTuning.communicationStyle.technicalLevel,
-        emojiUsage: currentTuning.communicationStyle.emojiUsage
+        emojiUsage: currentTuning.communicationStyle.emojiUsage,
+        verbosity: currentTuning.communicationStyle.verbosity ?? 'medium'
       };
 
       // Update analysis with preserved values
@@ -1113,7 +1174,10 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           ...prev.interestWeights, // Keep existing interest weights
           ...newInterests // Add new interests
         },
-        communicationStyle: currentTuning.communicationStyle // Keep existing communication style
+        communicationStyle: {
+          ...currentTuning.communicationStyle,
+          verbosity: currentTuning.communicationStyle.verbosity ?? 'medium'
+        }
       }));
 
       setAnalysis(finalAnalysis);
@@ -1174,7 +1238,8 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
               formality: cachedAnalysis.communicationStyle.formality,
               enthusiasm: cachedAnalysis.communicationStyle.enthusiasm,
               technicalLevel: cachedAnalysis.communicationStyle.technicalLevel,
-              emojiUsage: cachedAnalysis.communicationStyle.emojiUsage
+              emojiUsage: cachedAnalysis.communicationStyle.emojiUsage,
+              verbosity: cachedAnalysis.communicationStyle.verbosity ?? 'medium'
             },
             interestWeights: cachedAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => {
               const [interestName] = interest.split(':').map(s => s.trim());
@@ -1643,37 +1708,68 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                             label={trait.name}
                             className="w-full"
                           />
-                          <div className="text-[14px] leading-relaxed text-red-300/80 pl-2 border-l border-red-500/10">
-                            {trait.explanation ? trait.explanation.replace(/[*]/g, '') : trait.explanation}
-                          </div>
                         </div>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* Interest Weights */}
+                {/* Interests Section */}
                 <div className="space-y-4">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box" />
-                    <span className="glow-text">Interests & Topics</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+                    <span className="glow-text">Interests</span>
                   </h4>
                   <div className="space-y-3">
-                    {analysis.interests.map((interest: string, index: number) => {
-                      const [interestName] = interest.split(':').map(s => s.trim());
-                      return (
-                        <div key={`interest-${index}-${interestName}`} className="space-y-1">
-                          <ToggleButton
-                            value={Boolean(tuning.interestWeights[interestName] || 0)}
-                            onChange={(enabled) => handleInterestWeight(interestName, enabled)}
-                            label={interestName}
-                            className={`w-full ${tuning.interestWeights[interestName] === 0 ? 'opacity-50' : ''}`}
-                          />
-                        </div>
-                      );
-                    })}
+                    {analysis.interests
+                      .filter(interest => {
+                        // Filter out social behavior metrics and other non-interest items
+                        const nonInterests = [
+                          'Content Sharing Patterns',
+                          'Score',
+                          'Interaction Style',
+                          'Platform Behavior',
+                          'Oversharer',
+                          'Reply Guy',
+                          'Viral Chaser',
+                          'Thread Maker',
+                          'Retweeter',
+                          'Hot Takes',
+                          'Joker',
+                          'Debater',
+                          'Doom Poster',
+                          'Early Adopter',
+                          'Knowledge Dropper',
+                          'Hype Beast',
+                          'Evidence',
+                          'Evidences'
+                        ];
+                        const [interestName] = interest.split(':').map(s => s.trim());
+                        return !nonInterests.includes(interestName);
+                      })
+                      .map((interest: string, index: number) => {
+                        const [interestName] = interest.split(':').map(s => s.trim());
+                        return (
+                          <div key={`interest-${index}-${interestName}`} className="space-y-1">
+                            <ToggleButton
+                              value={Boolean(tuning.interestWeights[interestName] || 0)}
+                              onChange={(enabled) => handleInterestWeight(interestName, enabled)}
+                              label={interestName}
+                              className={`w-full ${tuning.interestWeights[interestName] === 0 ? 'opacity-50' : ''}`}
+                            />
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
 
-                    {/* Custom Interests */}
+                {/* Custom Interests */}
+                <div className="space-y-4">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+                    <span className="glow-text">Custom Interests</span>
+                  </h4>
+                  <div className="space-y-3">
                     {tuning.customInterests.map((interest: string, index: number) => (
                       <div key={`custom-interest-${index}-${interest}`} className="space-y-1">
                         <ToggleButton
@@ -1685,26 +1781,22 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                         />
                       </div>
                     ))}
-
-                    {/* Custom Interests Form */}
-                    <div className="space-y-2">
-                      <form onSubmit={handleAddCustomInterest} className="flex gap-2">
-                        <input
-                          type="text"
-                          value={newInterest}
-                          onChange={(e) => setNewInterest(e.target.value)}
-                          placeholder="Add custom interest..."
-                          className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow"
-                        />
-                        <button
-                          type="submit"
-                          disabled={!newInterest.trim()}
-                          className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow"
-                        >
-                          Add
-                        </button>
-                      </form>
-                    </div>
+                    <form onSubmit={handleAddCustomInterest} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newInterest}
+                        onChange={(e) => setNewInterest(e.target.value)}
+                        placeholder="Add custom interest..."
+                        className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!newInterest.trim()}
+                        className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow"
+                      >
+                        Add
+                      </button>
+                    </form>
                   </div>
                 </div>
 
@@ -1747,6 +1839,15 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                         value={tuning.communicationStyle.emojiUsage}
                         onChange={(value) => handleStyleAdjustment('emojiUsage', value)}
                         label="Emoji Usage"
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div className="space-y-1 hover-glow">
+                      <CycleButton
+                        value={tuning.communicationStyle.verbosity}
+                        onChange={(value) => handleStyleAdjustment('verbosity', value)}
+                        label="Verbosity"
                         className="w-full"
                       />
                     </div>
@@ -1835,7 +1936,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                       <div key={`trait-${index}-${trait.name}`} className="hover-glow">
                         <div className="flex justify-between mb-2 items-center">
                           <span className="text-red-400/90 tracking-wide text-[15px] capitalize font-bold">
-                            {trait.name ? trait.name.replace(/[*-]/g, '') : trait.name}
+                            {formatTraitName(trait.name)}
                           </span>
                           <span className="text-red-500/80 text-sm">
                             {trait.score >= 8 ? 'High' : trait.score >= 4 ? 'Medium' : 'Low'}
@@ -1851,7 +1952,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                           />
                         </div>
                         <div className="text-[14px] leading-relaxed text-red-300/80 prose prose-red prose-invert max-w-none hover-text-glow pl-2 border-l border-red-500/10">
-                          <ReactMarkdown>{trait.explanation}</ReactMarkdown>
+                          <ReactMarkdown>{formatTraitExplanation(trait.explanation)}</ReactMarkdown>
                         </div>
                       </div>
                     ))}
@@ -1909,23 +2010,44 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
                     <span className="ancient-text text-base">Interests</span>
                   </h4>
-                  <div className="flex flex-wrap gap-2.5">
-                    {analysis.interests.map((interest: string) => {
-                      const [interestName, expertiseLevel] = interest.split(':').map(s => s.trim());
-                      return (
-                        <span 
-                          key={interestName}
-                          className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
-                        >
-                          <span>{interestName}</span>
-                          {expertiseLevel && (
-                            <span className="text-red-500/60 ml-2">
-                              {expertiseLevel}
-                            </span>
-                          )}
-                        </span>
-                      );
-                    })}
+                  <div className="flex flex-wrap gap-2.5 font-bold">
+                    {analysis.interests
+                      .filter(interest => {
+                        // Filter out social behavior metrics and other non-interest items
+                        const nonInterests = [
+                          'Content Sharing Patterns',
+                          'Score',
+                          'Interaction Style',
+                          'Platform Behavior',
+                          'Oversharer',
+                          'Reply Guy',
+                          'Viral Chaser',
+                          'Thread Maker',
+                          'Retweeter',
+                          'Hot Takes',
+                          'Joker',
+                          'Debater',
+                          'Doom Poster',
+                          'Early Adopter',
+                          'Knowledge Dropper',
+                          'Hype Beast',
+                          'Evidence',
+                          'Evidences'
+                        ];
+                        const [interestName] = interest.split(':').map(s => s.trim());
+                        return !nonInterests.includes(interestName);
+                      })
+                      .map((interest: string) => {
+                        const [interestName] = interest.split(':').map(s => s.trim());
+                        return (
+                          <button 
+                            key={interestName}
+                            className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
+                          >
+                            {interestName}
+                          </button>
+                        );
+                      })}
                   </div>
                 </div>
 
@@ -1936,19 +2058,39 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     <span className="ancient-text text-base">Topics & Themes</span>
                   </h4>
                   <ul className="list-none space-y-3 bg-black/20 rounded-lg p-4">
-                    {analysis.topicsAndThemes.map((topic: string, i: number) => (
-                      <li key={i} className="flex items-center gap-3 text-red-300/90 hover-text-glow group">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500/30 group-hover:bg-red-500/50 transition-colors duration-200"></div>
-                        <span className="text-[14px] leading-relaxed tracking-wide">
-                          <span className="text-red-500/90">
-                            {topic.match(/^\d+\.\s/) ? topic.match(/^\d+\.\s/)?.[0] : ''}
+                    {analysis.topicsAndThemes
+                      .filter(topic => {
+                        // Filter out social behavior metrics and other non-interest items
+                        const nonInterests = [
+                          'Content Sharing Patterns',
+                          'Score',
+                          'Interaction Style',
+                          'Platform Behavior',
+                          'Oversharer',
+                          'Reply Guy',
+                          'Viral Chaser',
+                          'Thread Maker',
+                          'Retweeter',
+                          'Hot Takes',
+                          'Joker',
+                          'Debater',
+                          'Doom Poster',
+                          'Early Adopter',
+                          'Knowledge Dropper',
+                          'Hype Beast',
+                          'Evidence',
+                          'Evidences'
+                        ];
+                        return !nonInterests.some(metric => topic.includes(metric));
+                      })
+                      .map((topic: string, i: number) => (
+                        <li key={i} className="flex items-center gap-3 text-red-300/90 hover-text-glow group">
+                          <div className="w-1.5 h-1.5 rounded-full bg-red-500/30 group-hover:bg-red-500/50 transition-colors duration-200"></div>
+                          <span className="text-[14px] leading-relaxed tracking-wide font-bold">
+                            {topic ? topic.replace(/[*-]/g, '') : topic}
                           </span>
-                          <span className="text-red-300/90">
-                            {topic.replace(/^\d+\.\s/, '')}
-                          </span>
-                        </span>
-                      </li>
-                    ))}
+                        </li>
+                      ))}
                   </ul>
                 </div>
 
@@ -1958,8 +2100,26 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
                     <span className="ancient-text text-base">Emotional Tone</span>
                   </h4>
-                  <div className="prose prose-red prose-invert max-w-none hover-text-glow prose-p:text-red-300/90 prose-p:leading-relaxed prose-p:text-[15px] bg-black/20 rounded-lg p-4">
-                    <ReactMarkdown>{analysis.emotionalTone}</ReactMarkdown>
+                  <div className="space-y-4 bg-black/20 rounded-lg p-4">
+                    {analysis.emotionalTone.split(' - ').map((section, index) => {
+                      const [title, content] = section.split(' involves ').length > 1 
+                        ? section.split(' involves ')
+                        : section.split(' shows ').length > 1
+                        ? section.split(' shows ')
+                        : section.split(' is ');
+                      
+                      return (
+                        <div key={`tone-${index}`} className="flex items-start gap-3">
+                          <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
+                          <div className="flex-1">
+                            <span className="text-red-400/90 font-medium">{title}</span>
+                            <p className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow mt-1">
+                              {content}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -2219,37 +2379,66 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                             label={trait.name}
                             className="w-full"
                           />
-                          <div className="text-[14px] leading-relaxed text-red-300/80 pl-2 border-l border-red-500/10">
-                            {trait.explanation ? trait.explanation.replace(/[*]/g, '') : trait.explanation}
-                          </div>
                         </div>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* Interest Weights */}
+                {/* Interests Section */}
                 <div className="space-y-4">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box" />
-                    <span className="glow-text">Interests & Topics</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+                    <span className="glow-text">Interests</span>
                   </h4>
                   <div className="space-y-3">
-                    {analysis.interests.map((interest: string, index: number) => {
-                      const [interestName] = interest.split(':').map(s => s.trim());
-                      return (
-                        <div key={`interest-${index}-${interestName}`} className="space-y-1">
-                          <ToggleButton
-                            value={Boolean(tuning.interestWeights[interestName] || 0)}
-                            onChange={(enabled) => handleInterestWeight(interestName, enabled)}
-                            label={interestName}
-                            className={`w-full ${tuning.interestWeights[interestName] === 0 ? 'opacity-50' : ''}`}
-                          />
-                        </div>
-                      );
-                    })}
+                    {analysis.interests
+                      .filter(interest => {
+                        // Filter out social behavior metrics and other non-interest items
+                        const nonInterests = [
+                          'Content Sharing Patterns',
+                          'Score',
+                          'Interaction Style',
+                          'Platform Behavior',
+                          'Oversharer',
+                          'Reply Guy',
+                          'Viral Chaser',
+                          'Thread Maker',
+                          'Retweeter',
+                          'Hot Takes',
+                          'Joker',
+                          'Debater',
+                          'Doom Poster',
+                          'Early Adopter',
+                          'Knowledge Dropper',
+                          'Hype Beast'
+                        ];
+                        const [interestName] = interest.split(':').map(s => s.trim());
+                        return !nonInterests.includes(interestName);
+                      })
+                      .map((interest: string, index: number) => {
+                        const [interestName] = interest.split(':').map(s => s.trim());
+                        return (
+                          <div key={`interest-${index}-${interestName}`} className="space-y-1">
+                            <ToggleButton
+                              value={Boolean(tuning.interestWeights[interestName] || 0)}
+                              onChange={(enabled) => handleInterestWeight(interestName, enabled)}
+                              label={interestName}
+                              className={`w-full ${tuning.interestWeights[interestName] === 0 ? 'opacity-50' : ''}`}
+                            />
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
 
-                    {/* Custom Interests */}
+                {/* Custom Interests */}
+                <div className="space-y-4">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
+                    <span className="glow-text">Custom Interests</span>
+                  </h4>
+                  <div className="space-y-3">
                     {tuning.customInterests.map((interest: string, index: number) => (
                       <div key={`custom-interest-${index}-${interest}`} className="space-y-1">
                         <ToggleButton
@@ -2261,26 +2450,22 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                         />
                       </div>
                     ))}
-
-                    {/* Custom Interests Form */}
-                    <div className="space-y-2">
-                      <form onSubmit={handleAddCustomInterest} className="flex gap-2">
-                        <input
-                          type="text"
-                          value={newInterest}
-                          onChange={(e) => setNewInterest(e.target.value)}
-                          placeholder="Add custom interest..."
-                          className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow"
-                        />
-                        <button
-                          type="submit"
-                          disabled={!newInterest.trim()}
-                          className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow"
-                        >
-                          Add
-                        </button>
-                      </form>
-                    </div>
+                    <form onSubmit={handleAddCustomInterest} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newInterest}
+                        onChange={(e) => setNewInterest(e.target.value)}
+                        placeholder="Add custom interest..."
+                        className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!newInterest.trim()}
+                        className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow"
+                      >
+                        Add
+                      </button>
+                    </form>
                   </div>
                 </div>
 
@@ -2323,6 +2508,15 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                         value={tuning.communicationStyle.emojiUsage}
                         onChange={(value) => handleStyleAdjustment('emojiUsage', value)}
                         label="Emoji Usage"
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div className="space-y-1 hover-glow">
+                      <CycleButton
+                        value={tuning.communicationStyle.verbosity}
+                        onChange={(value) => handleStyleAdjustment('verbosity', value)}
+                        label="Verbosity"
                         className="w-full"
                       />
                     </div>
@@ -2465,7 +2659,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                         <div key={`trait-${index}-${trait.name}`} className="hover-glow">
                           <div className="flex justify-between mb-2 items-center">
                             <span className="text-red-400/90 font-medium tracking-wide text-[15px] capitalize">
-                              {trait.name ? trait.name.replace(/[*-]/g, '') : trait.name}
+                              {formatTraitName(trait.name)}
                             </span>
                           </div>
                           <div className="text-[14px] leading-relaxed text-red-300/80 prose prose-red prose-invert max-w-none hover-text-glow pl-2 border-l border-red-500/10">
@@ -2528,22 +2722,41 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                       <span className="ancient-text text-base">Interests</span>
                     </h4>
                     <div className="flex flex-wrap gap-2.5 font-bold">
-                      {analysis.interests.map((interest: string) => {
-                        const [interestName, expertiseLevel] = interest.split(':').map(s => s.trim());
-                        return (
-                          <span 
-                            key={interestName}
-                            className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
-                          >
-                            <span>{interestName}</span>
-                            {expertiseLevel && (
-                              <span className="text-red-500/60 ml-2">
-                                {expertiseLevel}
-                              </span>
-                            )}
-                          </span>
-                        );
-                      })}
+                      {analysis.interests
+                        .filter(interest => {
+                          // Filter out social behavior metrics and other non-interest items
+                          const nonInterests = [
+                            'Content Sharing Patterns',
+                            'Score',
+                            'Interaction Style',
+                            'Platform Behavior',
+                            'Oversharer',
+                            'Reply Guy',
+                            'Viral Chaser',
+                            'Thread Maker',
+                            'Retweeter',
+                            'Hot Takes',
+                            'Joker',
+                            'Debater',
+                            'Doom Poster',
+                            'Early Adopter',
+                            'Knowledge Dropper',
+                            'Hype Beast'
+                          ];
+                          const [interestName] = interest.split(':').map(s => s.trim());
+                          return !nonInterests.includes(interestName);
+                        })
+                        .map((interest: string) => {
+                          const [interestName] = interest.split(':').map(s => s.trim());
+                          return (
+                            <button 
+                              key={interestName}
+                              className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
+                            >
+                              {interestName}
+                            </button>
+                          );
+                        })}
                     </div>
                   </div>
 
@@ -2554,14 +2767,37 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                       <span className="ancient-text text-base">Topics & Themes</span>
                     </h4>
                     <ul className="list-none space-y-3 bg-black/20 rounded-lg p-4">
-                      {analysis.topicsAndThemes.map((topic: string, i: number) => (
-                        <li key={i} className="flex items-center gap-3 text-red-300/90 hover-text-glow group">
-                          <div className="w-1.5 h-1.5 rounded-full bg-red-500/30 group-hover:bg-red-500/50 transition-colors duration-200"></div>
-                          <span className="text-[14px] leading-relaxed tracking-wide font-bold">
-                            {topic ? topic.replace(/[*-]/g, '') : topic}
-                          </span>
-                        </li>
-                      ))}
+                      {analysis.topicsAndThemes
+                        .filter(topic => {
+                          // Filter out social behavior metrics and other non-interest items
+                          const nonInterests = [
+                            'Content Sharing Patterns',
+                            'Score',
+                            'Interaction Style',
+                            'Platform Behavior',
+                            'Oversharer',
+                            'Reply Guy',
+                            'Viral Chaser',
+                            'Thread Maker',
+                            'Retweeter',
+                            'Hot Takes',
+                            'Joker',
+                            'Debater',
+                            'Doom Poster',
+                            'Early Adopter',
+                            'Knowledge Dropper',
+                            'Hype Beast'
+                          ];
+                          return !nonInterests.some(metric => topic.includes(metric));
+                        })
+                        .map((topic: string, i: number) => (
+                          <li key={i} className="flex items-center gap-3 text-red-300/90 hover-text-glow group">
+                            <div className="w-1.5 h-1.5 rounded-full bg-red-500/30 group-hover:bg-red-500/50 transition-colors duration-200"></div>
+                            <span className="text-[14px] leading-relaxed tracking-wide font-bold">
+                              {topic ? topic.replace(/[*-]/g, '') : topic}
+                            </span>
+                          </li>
+                        ))}
                     </ul>
                   </div>
 
@@ -2571,8 +2807,26 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
                       <span className="ancient-text text-base">Emotional Tone</span>
                     </h4>
-                    <div className="prose prose-red prose-invert max-w-none hover-text-glow prose-p:text-red-300/90 prose-p:leading-relaxed prose-p:text-[15px] bg-black/20 rounded-lg p-4">
-                      <ReactMarkdown>{analysis.emotionalTone}</ReactMarkdown>
+                    <div className="space-y-4 bg-black/20 rounded-lg p-4">
+                      {analysis.emotionalTone.split(' - ').map((section, index) => {
+                        const [title, content] = section.split(' involves ').length > 1 
+                          ? section.split(' involves ')
+                          : section.split(' shows ').length > 1
+                          ? section.split(' shows ')
+                          : section.split(' is ');
+                        
+                        return (
+                          <div key={`tone-${index}`} className="flex items-start gap-3">
+                            <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
+                            <div className="flex-1">
+                              <span className="text-red-400/90 font-medium">{title}</span>
+                              <p className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow mt-1">
+                                {content}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 

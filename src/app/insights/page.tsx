@@ -37,7 +37,17 @@ export default function InsightsPage() {
     
     setIsCalculating(true);
     try {
-      const response = await fetch(`/api/analytics?username=${username}&refresh=true`);
+      const response = await fetch('/api/analytics', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          username,
+          metrics: ['engagement', 'quality', 'visibility', 'virality'],
+          refresh: true
+        })
+      });
       if (!response.ok) {
         throw new Error('Failed to calculate analytics');
       }

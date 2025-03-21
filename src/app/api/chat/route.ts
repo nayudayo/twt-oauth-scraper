@@ -23,6 +23,7 @@ interface RequestBody {
       enthusiasm: CommunicationLevel
       technicalLevel: CommunicationLevel
       emojiUsage: CommunicationLevel
+      verbosity: CommunicationLevel
     }
   }
   consciousness?: ConsciousnessConfig
@@ -277,6 +278,7 @@ CURRENT CONFIGURATION (OVERRIDES ALL OTHER SETTINGS):
    - Enthusiasm: ${tuning.communicationStyle.enthusiasm} (MUST FOLLOW THIS SETTING)
    - Technical Level: ${tuning.communicationStyle.technicalLevel} (MUST FOLLOW THIS SETTING)
    - Emoji Usage: ${tuning.communicationStyle.emojiUsage} (MUST FOLLOW THIS SETTING)
+   - Verbosity: ${tuning.communicationStyle.verbosity} (MUST FOLLOW THIS SETTING)
 
 2. Active Traits:
 ${adjustedTraits.filter(t => Boolean(tuning.traitModifiers[t.name])).map(t => 
@@ -327,7 +329,42 @@ CRITICAL STYLE RULES (MUST FOLLOW EXACTLY):
      * Use emojis to express emotions and reactions
      * As long as appropriate, use emojis to express emotions and reactions
 
-4. Formality Level (Current: ${tuning.communicationStyle.formality}):
+4. Verbosity Level (Current: ${tuning.communicationStyle.verbosity}):
+   - If Low:
+     * Keep responses under 3 sentences
+     * Maximum 50 words per response
+     * Use only essential details
+     * One point per topic
+     * No elaboration or examples
+     * Skip pleasantries and greetings
+     * Omit context unless critical
+   - If Medium:
+     * Use 3-5 sentences per response
+     * 50-100 words per response
+     * Include brief context when needed
+     * 1-2 examples if relevant
+     * Basic greeting/closing
+     * Balance detail with brevity
+     * One supporting point per main idea
+   - If High:
+     * Use 5+ sentences per response
+     * 100-200 words per response
+     * Provide full context
+     * Multiple examples and analogies
+     * Proper greeting and closing
+     * In-depth explanations
+     * Multiple supporting points
+     * Address potential questions
+     * Include relevant background
+
+CRITICAL VERBOSITY RULES:
+1. NEVER exceed word limits for each level
+2. Count sentences before responding
+3. Include EXACTLY the specified number of examples
+4. Match greeting/closing style to verbosity level
+5. These rules override any other style preferences
+
+5. Formality Level (Current: ${tuning.communicationStyle.formality}):
    - If Low:
      * Use contractions extensively (can't, won't, etc.)
      * Include casual phrases and slang
@@ -366,7 +403,7 @@ CRITICAL STYLE RULES (MUST FOLLOW EXACTLY):
        - Single question marks only when necessary
        - Parentheses for substantive additions only
 
-5. Enthusiasm Level (Current: ${tuning.communicationStyle.enthusiasm}):
+6. Enthusiasm Level (Current: ${tuning.communicationStyle.enthusiasm}):
    - If Low:
      * Use neutral language
      * NO exclamation marks whatsoever
@@ -403,7 +440,7 @@ CRITICAL STYLE RULES (MUST FOLLOW EXACTLY):
        - Creative punctuation combinations
        - Expressive marks (!!!, !?, etc.)
 
-6. Technical Level (Current: ${tuning.communicationStyle.technicalLevel}):
+7. Technical Level (Current: ${tuning.communicationStyle.technicalLevel}):
    - If Low:
      * Use everyday language only
      * Explain concepts simply
