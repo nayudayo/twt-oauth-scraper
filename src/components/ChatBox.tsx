@@ -1742,7 +1742,8 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                           'Knowledge Dropper',
                           'Hype Beast',
                           'Evidence',
-                          'Evidences'
+                          'Evidences',
+                          'Level'
                         ];
                         const [interestName] = interest.split(':').map(s => s.trim());
                         return !nonInterests.includes(interestName);

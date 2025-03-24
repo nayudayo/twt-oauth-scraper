@@ -324,7 +324,7 @@ const FALLBACK_CONFIG = {
   maxExampleTweets: 5
 };
 
-// Add regeneration context tracking
+// Add regeneration context tracking 
 const regenerationContexts = new Map<string, RegenerationContext>();
 
 // Add OpenAI error type
@@ -1404,25 +1404,74 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
   }
 }
 
+function parseSocialBehaviorMetrics(text: string) {
+  const metrics = {
+    oversharer: 0,
+    replyGuy: 0,
+    viralChaser: 0,
+    threadMaker: 0,
+    retweeter: 0,
+    hotTaker: 0,
+    joker: 0,
+    debater: 0,
+    doomPoster: 0,
+    earlyAdopter: 0,
+    knowledgeDropper: 0,
+    hypeBeast: 0
+  };
+
+  // Find the Social Behavior Metrics section
+  const sections = text.split(/###\s+\d+\./);
+  const metricsSection = sections.find(section => 
+    section.trim().startsWith('Social Behavior Metrics') || 
+    section.includes('Social Behavior Metrics:')
+  );
+
+  if (!metricsSection) return metrics;
+
+  // Process each line
+  const lines = metricsSection.split('\n');
+
+  lines.forEach(line => {
+    const trimmedLine = line.trim();
+    
+    // Skip empty lines and section headers
+    if (!trimmedLine || /^[a-z]\)/.test(trimmedLine)) return;
+
+    // Extract metric name and score
+    const metricMatch = trimmedLine.match(/\*\*([^*]+)\*\*:\s*(?:Score\s+)?(\d+)/i);
+    if (metricMatch) {
+      const [, name, scoreStr] = metricMatch;
+      const normalizedName = name.toLowerCase().replace(/[-\s]/g, '');
+      const score = parseInt(scoreStr, 10);
+
+      // Map the normalized name to our metric keys
+      switch (normalizedName) {
+        case 'oversharer': metrics.oversharer = score; break;
+        case 'replyguy': metrics.replyGuy = score; break;
+        case 'viralchaser': metrics.viralChaser = score; break;
+        case 'threadmaker': metrics.threadMaker = score; break;
+        case 'retweeter': metrics.retweeter = score; break;
+        case 'hottakes': metrics.hotTaker = score; break;
+        case 'joker': metrics.joker = score; break;
+        case 'debater': metrics.debater = score; break;
+        case 'doomposter': metrics.doomPoster = score; break;
+        case 'earlyadopter': metrics.earlyAdopter = score; break;
+        case 'knowledgedropper': metrics.knowledgeDropper = score; break;
+        case 'hypebeast': metrics.hypeBeast = score; break;
+      }
+    }
+  });
+
+  return metrics;
+}
+
 function parseAnalysisResponse(response: string): PersonalityAnalysis {
   const analysis: PersonalityAnalysis = {
     summary: '',
     traits: [],
     interests: [],
-    socialBehaviorMetrics: {
-      oversharer: 0,
-      replyGuy: 0,
-      viralChaser: 0,
-      threadMaker: 0,
-      retweeter: 0,
-      hotTaker: 0,
-      joker: 0,
-      debater: 0,
-      doomPoster: 0,
-      earlyAdopter: 0,
-      knowledgeDropper: 0,
-      hypeBeast: 0
-    },
+    socialBehaviorMetrics: parseSocialBehaviorMetrics(response),
     communicationStyle: {
       formality: 'medium',
       enthusiasm: 'medium',
@@ -1596,6 +1645,9 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
                section.toLowerCase().includes('interests & expertise')) {
         const lines = section.split('\n')
         const interestLines: string[] = []
+        let currentInterest = ''
+        let currentExpertise = ''
+        let currentEvidence = ''
         
         for (const line of lines) {
           const trimmedLine = line.trim()
@@ -1607,27 +1659,67 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
             continue
           }
           
-          // Check for bullet points and extract interest with expertise
-          if (trimmedLine.startsWith('-')) {
-            // Match pattern: "- **Interest**: Description" or "- Interest: Description"
-            const match = trimmedLine.match(/^-\s*\*?\*?([^*:]+)\*?\*?(?::\s*(.+))?/)
+          // Check for main interest bullet points with various formats
+          const bulletPatterns = [
+            /^[-•*]\s*\*?\*?([^*:]+?)(?:\*?\*?:|$)/, // Matches "- Interest:" or "- **Interest**:"
+            /^[-•*]\s*([^:]+?)(?::|$)/, // Matches "- Interest:"
+            /^\d+\.\s*\*?\*?([^*:]+?)(?:\*?\*?:|$)/, // Matches "1. Interest:" or "1. **Interest**:"
+            /^[-•*]\s*\*?\*?([^*]+?)\*?\*?(?:\s*\([^)]+\))?$/ // Matches "- Interest (details)"
+          ]
+          
+          let foundInterest = false
+          for (const pattern of bulletPatterns) {
+            const match = trimmedLine.match(pattern)
             if (match) {
-              const [, interest, description] = match
-              const interestName = interest.trim()
-              
-              // If there's a description, extract expertise level if present
-              if (description) {
-                const expertiseMatch = description.match(/(?:strong|high|moderate|basic|advanced)\s+(?:interest|expertise)/i)
-                if (expertiseMatch) {
-                  interestLines.push(`${interestName}: ${expertiseMatch[0]}`)
-                } else {
-                  // Just add the interest name if no clear expertise level
-                  interestLines.push(interestName)
+              // If we have a previous interest with expertise/evidence, add it
+              if (currentInterest) {
+                const formattedInterest = formatInterest(currentInterest, currentExpertise, currentEvidence)
+                if (formattedInterest && !interestLines.includes(formattedInterest)) {
+                  interestLines.push(formattedInterest)
                 }
-              } else {
-                interestLines.push(interestName)
+              }
+              
+              currentInterest = match[1].trim()
+              currentExpertise = ''
+              currentEvidence = ''
+              foundInterest = true
+              break
+            }
+          }
+          
+          if (!foundInterest) {
+            // Check for expertise level with various formats
+            const expertisePatterns = [
+              /Expert(?:ise)?\s*Level:\s*([^-\n]+)/i,
+              /Level:\s*([^-\n]+)/i,
+              /Expertise:\s*([^-\n]+)/i,
+              /\(([^)]+?)\s*expert(?:ise)?\)/i
+            ]
+            
+            for (const pattern of expertisePatterns) {
+              const match = trimmedLine.match(pattern)
+              if (match) {
+                currentExpertise = match[1].trim()
+                break
               }
             }
+            
+            // Check for evidence
+            if (trimmedLine.toLowerCase().includes('evidence:')) {
+              currentEvidence = trimmedLine.split(/evidence:\s*/i)[1]?.trim() || ''
+            }
+            // If line contains additional details but isn't a new interest or expertise
+            else if (!trimmedLine.match(/^[-•*\d]/) && currentInterest) {
+              currentEvidence = (currentEvidence ? currentEvidence + '; ' : '') + trimmedLine
+            }
+          }
+        }
+        
+        // Add the last interest if there is one
+        if (currentInterest) {
+          const formattedInterest = formatInterest(currentInterest, currentExpertise, currentEvidence)
+          if (formattedInterest && !interestLines.includes(formattedInterest)) {
+            interestLines.push(formattedInterest)
           }
         }
         
@@ -1635,10 +1727,20 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
         analysis.interests = interestLines
           .filter(interest => interest.length > 0)
           .map(interest => interest.replace(/\*\*/g, '').trim()) // Remove any remaining markdown
+          .filter((interest, index, self) => self.indexOf(interest) === index) // Remove duplicates
         
         // Only use fallback if no interests were found
         if (analysis.interests.length === 0) {
-          analysis.interests = ['General topics']
+          // Try to extract interests from other sections if available
+          if (analysis.topicsAndThemes?.length > 0) {
+            analysis.interests = analysis.topicsAndThemes.map(theme => theme.split(':')[0].trim())
+          } else if (analysis.traits?.length > 0) {
+            analysis.interests = analysis.traits
+              .filter(trait => trait.score >= 7) // Only use high-scoring traits
+              .map(trait => trait.name)
+          } else {
+            analysis.interests = ['General topics']
+          }
         }
       }
       else if (section.includes('Communication Style Analysis') || section.includes('Communication Style')) {
@@ -2350,4 +2452,40 @@ function formatTraitText(text: string): string {
     .replace(/\*\*/g, '')        // Remove markdown bold markers
     .replace(/^[0-9]+\.\s*/, '') // Remove leading numbers
     .trim();
+}
+
+// Add helper function for formatting interests
+function formatInterest(interest: string, expertise?: string, evidence?: string): string {
+  if (!interest) return ''
+  
+  // Clean up the interest text
+  interest = interest
+    .replace(/^[-•*\d.]+\s*/, '') // Remove bullet points and numbers
+    .replace(/\*\*/g, '')         // Remove markdown
+    .replace(/:\s*$/, '')         // Remove trailing colons
+    .trim()
+  
+  // Add expertise level if available
+  if (expertise) {
+    // Normalize expertise level text
+    expertise = expertise
+      .replace(/^(?:at\s+)?(?:an?\s+)?/i, '') // Remove leading articles
+      .replace(/\s*level$/i, '')              // Remove trailing "level"
+      .trim()
+      
+    // Only add if it's not already part of the interest
+    if (!interest.toLowerCase().includes(expertise.toLowerCase())) {
+      interest += ` (${expertise} expertise)`
+    }
+  }
+  
+  // Add brief evidence if available and the interest isn't too long
+  if (evidence && interest.length < 50) {
+    const briefEvidence = evidence.split(';')[0].trim() // Take first evidence point
+    if (briefEvidence.length < 50) { // Only add if it's reasonably short
+      interest += ` - ${briefEvidence}`
+    }
+  }
+  
+  return interest
 } 

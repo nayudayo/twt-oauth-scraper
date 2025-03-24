@@ -135,67 +135,91 @@ export function PsychoanalysisModal({ isOpen, onClose, analysis }: Psychoanalysi
 
       // Extract metrics with default values
       const metrics = {
-        oversharer: analysis.socialBehaviorMetrics?.oversharer || 0,
-        replyGuy: analysis.socialBehaviorMetrics?.replyGuy || 0,
-        viralChaser: analysis.socialBehaviorMetrics?.viralChaser || 0,
-        threadMaker: analysis.socialBehaviorMetrics?.threadMaker || 0,
-        retweeter: analysis.socialBehaviorMetrics?.retweeter || 0,
-        hotTaker: analysis.socialBehaviorMetrics?.hotTaker || 0,
-        joker: analysis.socialBehaviorMetrics?.joker || 0,
-        debater: analysis.socialBehaviorMetrics?.debater || 0,
-        doomPoster: analysis.socialBehaviorMetrics?.doomPoster || 0,
-        earlyAdopter: analysis.socialBehaviorMetrics?.earlyAdopter || 0,
-        knowledgeDropper: analysis.socialBehaviorMetrics?.knowledgeDropper || 0,
-        hypeBeast: analysis.socialBehaviorMetrics?.hypeBeast || 0
+        oversharer: analysis.socialBehaviorMetrics?.oversharer ?? 0,
+        replyGuy: analysis.socialBehaviorMetrics?.replyGuy ?? 0,
+        viralChaser: analysis.socialBehaviorMetrics?.viralChaser ?? 0,
+        threadMaker: analysis.socialBehaviorMetrics?.threadMaker ?? 0,
+        retweeter: analysis.socialBehaviorMetrics?.retweeter ?? 0,
+        hotTaker: analysis.socialBehaviorMetrics?.hotTaker ?? 0,
+        joker: analysis.socialBehaviorMetrics?.joker ?? 0,
+        debater: analysis.socialBehaviorMetrics?.debater ?? 0,
+        doomPoster: analysis.socialBehaviorMetrics?.doomPoster ?? 0,
+        earlyAdopter: analysis.socialBehaviorMetrics?.earlyAdopter ?? 0,
+        knowledgeDropper: analysis.socialBehaviorMetrics?.knowledgeDropper ?? 0,
+        hypeBeast: analysis.socialBehaviorMetrics?.hypeBeast ?? 0
       };
 
-      console.log('Extracted metrics:', metrics);
+      console.log('Initial metrics from socialBehaviorMetrics:', metrics);
 
-      // Check if we have any non-zero values
+      // If all values are 0, try to extract from summary
       const hasNonZeroValues = Object.values(metrics).some(value => value > 0);
-      console.log('Has non-zero values:', hasNonZeroValues);
-
-      // If all values are 0, try to extract from traits
-      if (!hasNonZeroValues) {
-        console.log('No metric values found, attempting to extract from traits');
-        console.log('Available traits:', analysis.traits);
+      if (!hasNonZeroValues && analysis.summary) {
+        console.log('No values in socialBehaviorMetrics, attempting to extract from summary');
         
-        const traitMetrics = analysis.traits.reduce((acc, trait) => {
-          // Convert trait scores (0-10) to metric scores (0-100)
-          const metricValue = Math.round(trait.score * 10);
-          const normalizedName = trait.name.toLowerCase().replace(/\s+/g, '');
+        // Function to extract score from text
+        const extractScore = (text: string): number => {
+          // Try different score formats
+          const patterns = [
+            /score[:\s]+(\d+)/i,              // "Score: 80" or "Score 80"
+            /(\d+)(?:\/100|\s*%|\s*points?)/i, // "80/100" or "80%" or "80 points"
+            /:\s*(\d+)/,                      // ": 80"
+            /[-–]\s*(\d+)/,                   // "- 80" or "– 80"
+            /(\d+)/                           // Just a number
+          ];
+
+          for (const pattern of patterns) {
+            const match = text.match(pattern);
+            if (match) {
+              const score = parseInt(match[1], 10);
+              if (score >= 0 && score <= 100) {
+                return score;
+              }
+            }
+          }
+          return 0;
+        };
+
+        const lines = analysis.summary.split('\n');
+        let inSocialBehaviorSection = false;
+
+        lines.forEach(line => {
+          const trimmedLine = line.trim().toLowerCase();
           
-          console.log(`Processing trait: ${trait.name} (normalized: ${normalizedName}) with score: ${metricValue}`);
-          
-          // Map trait names to metric names if they match
-          Object.keys(metrics).forEach(metricName => {
-            const normalizedMetricName = metricName.toLowerCase();
-            if (normalizedName.includes(normalizedMetricName)) {
-              console.log(`Found matching metric: ${metricName} for trait: ${trait.name}`);
-              acc[metricName] = metricValue;
+          // Check if we're in the Social Behavior Metrics section
+          if (trimmedLine.includes('social behavior metrics')) {
+            inSocialBehaviorSection = true;
+            return;
+          }
+
+          if (!inSocialBehaviorSection || !trimmedLine) return;
+
+          // Skip section headers
+          if (trimmedLine.startsWith('###') || /^[a-z]\)/.test(trimmedLine)) {
+            return;
+          }
+
+          // Clean up the line
+          const cleanLine = trimmedLine.replace(/\*\*/g, '').replace(/[""]/g, '');
+
+          Object.keys(metrics).forEach(metricKey => {
+            const key = metricKey as keyof typeof metrics;
+            const searchTerm = key.replace(/([A-Z])/g, ' $1').toLowerCase();
+            
+            if (cleanLine.includes(searchTerm)) {
+              const score = extractScore(line);
+              if (score > 0) {
+                console.log(`Found score for ${key} in summary: ${score}`);
+                metrics[key] = score;
+              }
             }
           });
-          
-          return acc;
-        }, {} as Record<string, number>);
-
-        console.log('Extracted trait metrics:', traitMetrics);
-
-        // Merge trait metrics with original metrics
-        Object.assign(metrics, traitMetrics);
+        });
       }
 
-      // Normalize all metrics to ensure they're between 0-100
-      const normalizedMetrics = Object.entries(metrics).reduce((acc, [key, value]) => {
-        const numValue = typeof value === 'number' ? value : 0;
-        acc[key] = Math.max(0, Math.min(100, numValue));
-        return acc;
-      }, {} as Record<string, number>);
-
-      console.log('Final normalized metrics:', normalizedMetrics);
+      console.log('Final metrics after extraction:', metrics);
 
       // Map metrics to chart labels
-      const chartValues = mapMetricsToChartLabels(normalizedMetrics, CHART_LABELS);
+      const chartValues = mapMetricsToChartLabels(metrics, CHART_LABELS);
       console.log('Chart labels:', CHART_LABELS);
       console.log('Mapped chart values:', chartValues);
 
