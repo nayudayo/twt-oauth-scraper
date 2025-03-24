@@ -93,7 +93,7 @@ export function ConversationList({
                   onNewChat();
                   setIsOpen(false);
                 }}
-                className="w-full px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text flex items-center justify-center gap-2"
+                className="w-full px-3 py-2 bg-red-500/40 text-white border-2 border-red-500/60 rounded hover:bg-red-500/50 hover:border-red-500/80 transition-all duration-300 uppercase tracking-wider text-xs font-semibold backdrop-blur-sm shadow-lg shadow-red-500/40 ancient-text flex items-center justify-center gap-2"
               >
                 <svg 
                   xmlns="http://www.w3.org/2000/svg" 
