@@ -11,6 +11,28 @@ import { QualityChart } from '@/components/insights/QualityChart';
 import { VisibilityChart } from '@/components/insights/VisibilityChart';
 import { ViralityChart } from '@/components/insights/ViralityChart';
 
+// Add helper function to check if all values in an object are zero
+const areAllValuesZero = <T extends object>(obj: T): boolean => {
+  if (!obj) return true;
+  return Object.values(obj).every(value => {
+    if (typeof value === 'object' && value !== null) {
+      return areAllValuesZero(value);
+    }
+    return value === 0 || value === '0' || value === '';
+  });
+};
+
+// Add Analyzing component
+const AnalyzingFallback = () => (
+  <div className="p-6 rounded-lg border border-red-500/20 bg-black/40">
+    <div className="flex flex-col items-center justify-center h-48 space-y-4">
+      <Calculator className="h-8 w-8 text-red-500 animate-pulse" />
+      <p className="text-red-500 text-center">Analyzing... Check back later</p>
+      <p className="text-red-400/60 text-sm">This may take some time to gather enough data</p>
+    </div>
+  </div>
+);
+
 export default function InsightsPage() {
   const { data: session, status } = useSession();
   const username = session?.username;
@@ -139,7 +161,11 @@ export default function InsightsPage() {
           {analytics.engagement && (
             <section>
               <h2 className="text-xl font-semibold text-red-500 mb-4">Engagement Analytics</h2>
-              <EngagementChart data={analytics.engagement} />
+              {areAllValuesZero(analytics.engagement) ? (
+                <AnalyzingFallback />
+              ) : (
+                <EngagementChart data={analytics.engagement} />
+              )}
             </section>
           )}
 
@@ -148,13 +174,21 @@ export default function InsightsPage() {
             {analytics.quality && (
               <section>
                 <h2 className="text-xl font-semibold text-red-500 mb-4">Quality Metrics</h2>
-                <QualityChart data={analytics.quality} />
+                {areAllValuesZero(analytics.quality) ? (
+                  <AnalyzingFallback />
+                ) : (
+                  <QualityChart data={analytics.quality} />
+                )}
               </section>
             )}
             {analytics.visibility && (
               <section>
                 <h2 className="text-xl font-semibold text-red-500 mb-4">Visibility Metrics</h2>
-                <VisibilityChart data={analytics.visibility} />
+                {areAllValuesZero(analytics.visibility) ? (
+                  <AnalyzingFallback />
+                ) : (
+                  <VisibilityChart data={analytics.visibility} />
+                )}
               </section>
             )}
           </div>
@@ -163,7 +197,11 @@ export default function InsightsPage() {
           {analytics.virality && (
             <section>
               <h2 className="text-xl font-semibold text-red-500 mb-4">Virality Analytics</h2>
-              <ViralityChart data={analytics.virality} />
+              {areAllValuesZero(analytics.virality) ? (
+                <AnalyzingFallback />
+              ) : (
+                <ViralityChart data={analytics.virality} />
+              )}
             </section>
           )}
         </div>

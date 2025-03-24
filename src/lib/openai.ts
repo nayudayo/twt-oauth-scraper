@@ -32,16 +32,16 @@ export interface PersonalityAnalysis {
     enthusiasm: CommunicationLevel
     technicalLevel: CommunicationLevel
     emojiUsage: CommunicationLevel
-    verbosity: CommunicationLevel  // Added verbosity level
+    verbosity: CommunicationLevel
     description: string
     patterns: {
       capitalization: 'mostly-lowercase' | 'mostly-uppercase' | 'mixed' | 'standard'
-      punctuation: string[]  // e.g., ['...', '-', '!']
+      punctuation: string[]
       lineBreaks: 'frequent' | 'moderate' | 'minimal'
       messageStructure: {
-        opening: string[]    // Common opening patterns
-        framing: string[]    // Contextual framing patterns
-        closing: string[]    // Common closing phrases
+        opening: string[]
+        framing: string[]
+        closing: string[]
       }
     }
     contextualVariations: {
@@ -57,13 +57,83 @@ export interface PersonalityAnalysis {
     expressionStyle: string  // How they formulate and express their thoughts
   }
   vocabulary: {
-    commonTerms: string[]
-    commonPhrases: string[]
+    commonTerms: Array<{
+      term: string
+      frequency: number
+      percentage: number
+      category?: 'pronoun' | 'modal' | 'adjective' | 'verb' | 'noun' | 'other'
+    }>
+    commonPhrases: Array<{
+      phrase: string
+      frequency: number
+      percentage: number
+    }>
     enthusiasmMarkers: string[]
     industryTerms: string[]
     nGrams: {
-      bigrams: string[]
-      trigrams: string[]
+      bigrams: Array<{
+        phrase: string
+        frequency: number
+        percentage: number
+      }>
+      trigrams: Array<{
+        phrase: string
+        frequency: number
+        percentage: number
+      }>
+    }
+    metrics: {
+      sentenceLengths: {
+        veryShort: number  // 1-5 words
+        short: number      // 6-10 words
+        medium: number     // 11-20 words
+        long: number       // 21-40 words
+        veryLong: number   // 41+ words
+        distribution: {
+          veryShort: number  // percentage
+          short: number      // percentage
+          medium: number     // percentage
+          long: number       // percentage
+          veryLong: number   // percentage
+        }
+      }
+      capitalizationStats: {
+        lowercase: number    // percentage
+        sentenceCase: number // percentage
+        mixedCase: number    // percentage
+        totalMessages: number
+      }
+      averageMessageLength: number
+      uniqueWordsCount: number
+      totalWordsAnalyzed: number
+      messageArchitecture: {
+        structureTypes: {
+          singleWord: number        // % of single word messages
+          shortPhrase: number       // % of 2-3 word phrases
+          actionOriented: number    // % of action/directive messages
+          bulletedList: number      // % of messages with bullet points
+          streamOfConsciousness: number  // % of long, flowing messages
+        }
+        terminalPunctuation: {
+          none: number             // % messages without terminal punctuation
+          period: number           // % messages ending with period
+          questionMark: number     // % messages ending with question mark
+          exclamationMark: number  // % messages ending with exclamation
+          ellipsis: number         // % messages ending with ...
+        }
+        characterMetrics: {
+          averageLength: number    // average characters per message
+          shortMessages: number    // % messages under specific char length
+          longMessages: number     // % messages over specific char length
+        }
+        preferences: {
+          usesMarkdown: boolean    // whether user formats with markdown
+          usesBulletPoints: boolean // whether user uses bullet points
+          usesNumberedLists: boolean // whether user uses numbered lists
+          usesCodeBlocks: boolean  // whether user uses code blocks
+          preferredListStyle: 'bullet' | 'numbered' | 'none'
+        }
+      }
     }
   }
   emotionalIntelligence: {
@@ -243,8 +313,8 @@ class ModelUnavailableError extends OpenAIError {
 const FALLBACK_CONFIG = {
   maxRetries: 3,
   fallbackModel: 'gpt-4o-mini',
-  minTokens: 3500,
-  maxTokens: 4500,
+  minTokens: 5500,
+  maxTokens: 7500,
   defaultTemperature: 0.85,
   styleVariationStep: 0.1,
   maxStyleVariation: 0.3,
@@ -370,6 +440,240 @@ function validateAnalysis(analysis: PersonalityAnalysis): { isValid: boolean; mi
   };
 }
 
+// Add new helper function for message architecture analysis
+function analyzeMessageArchitecture(tweets: Tweet[]) {
+  const architecture = {
+    structureTypes: {
+      singleWord: 0,
+      shortPhrase: 0,
+      actionOriented: 0,
+      bulletedList: 0,
+      streamOfConsciousness: 0
+    },
+    terminalPunctuation: {
+      none: 0,
+      period: 0,
+      questionMark: 0,
+      exclamationMark: 0,
+      ellipsis: 0
+    },
+    characterMetrics: {
+      averageLength: 0,
+      shortMessages: 0,
+      longMessages: 0
+    },
+    preferences: {
+      usesMarkdown: false,
+      usesBulletPoints: false,
+      usesNumberedLists: false,
+      usesCodeBlocks: false,
+      preferredListStyle: 'none' as 'bullet' | 'numbered' | 'none'
+    }
+  };
+
+  let totalCharacters = 0;
+  const LONG_MESSAGE_THRESHOLD = 280; // Twitter's max length
+  const SHORT_MESSAGE_THRESHOLD = 50;  // Arbitrary threshold for short messages
+
+  tweets.forEach(tweet => {
+    const text = tweet.text;
+    const words = text.split(/\s+/).filter(w => w.length > 0);
+    const charLength = text.length;
+    totalCharacters += charLength;
+
+    // Structure type analysis
+    if (words.length === 1) {
+      architecture.structureTypes.singleWord++;
+    } else if (words.length <= 3) {
+      architecture.structureTypes.shortPhrase++;
+    }
+    
+    // Action-oriented detection (starts with verb)
+    if (/^[A-Za-z]+(?:ed|ing|s|)\b/.test(text)) {
+      architecture.structureTypes.actionOriented++;
+    }
+
+    // Bullet point detection
+    if (text.includes('\n-') || text.includes('\n•')) {
+      architecture.structureTypes.bulletedList++;
+      architecture.preferences.usesBulletPoints = true;
+    }
+
+    // Numbered list detection
+    if (/\n\d+\./.test(text)) {
+      architecture.preferences.usesNumberedLists = true;
+    }
+
+    // Code block detection
+    if (text.includes('```') || text.includes('`')) {
+      architecture.preferences.usesCodeBlocks = true;
+    }
+
+    // Stream of consciousness (long messages with few punctuation marks)
+    if (charLength > LONG_MESSAGE_THRESHOLD && text.split(/[.!?]+/).length <= 2) {
+      architecture.structureTypes.streamOfConsciousness++;
+    }
+
+    // Terminal punctuation analysis
+    if (!/[.!?…]$/.test(text.trim())) {
+      architecture.terminalPunctuation.none++;
+    } else {
+      const lastChar = text.trim().slice(-1);
+      if (lastChar === '.') architecture.terminalPunctuation.period++;
+      else if (lastChar === '?') architecture.terminalPunctuation.questionMark++;
+      else if (lastChar === '!') architecture.terminalPunctuation.exclamationMark++;
+      else if (lastChar === '…' || text.endsWith('...')) architecture.terminalPunctuation.ellipsis++;
+    }
+
+    // Character-based metrics
+    if (charLength < SHORT_MESSAGE_THRESHOLD) {
+      architecture.characterMetrics.shortMessages++;
+    }
+    if (charLength > LONG_MESSAGE_THRESHOLD) {
+      architecture.characterMetrics.longMessages++;
+    }
+  });
+
+  // Calculate percentages
+  const total = tweets.length;
+  architecture.structureTypes.singleWord = (architecture.structureTypes.singleWord / total) * 100;
+  architecture.structureTypes.shortPhrase = (architecture.structureTypes.shortPhrase / total) * 100;
+  architecture.structureTypes.actionOriented = (architecture.structureTypes.actionOriented / total) * 100;
+  architecture.structureTypes.bulletedList = (architecture.structureTypes.bulletedList / total) * 100;
+  architecture.structureTypes.streamOfConsciousness = (architecture.structureTypes.streamOfConsciousness / total) * 100;
+
+  architecture.terminalPunctuation.none = (architecture.terminalPunctuation.none / total) * 100;
+  architecture.terminalPunctuation.period = (architecture.terminalPunctuation.period / total) * 100;
+  architecture.terminalPunctuation.questionMark = (architecture.terminalPunctuation.questionMark / total) * 100;
+  architecture.terminalPunctuation.exclamationMark = (architecture.terminalPunctuation.exclamationMark / total) * 100;
+  architecture.terminalPunctuation.ellipsis = (architecture.terminalPunctuation.ellipsis / total) * 100;
+
+  architecture.characterMetrics.averageLength = totalCharacters / total;
+  architecture.characterMetrics.shortMessages = (architecture.characterMetrics.shortMessages / total) * 100;
+  architecture.characterMetrics.longMessages = (architecture.characterMetrics.longMessages / total) * 100;
+
+  // Determine preferred list style
+  if (architecture.preferences.usesBulletPoints && !architecture.preferences.usesNumberedLists) {
+    architecture.preferences.preferredListStyle = 'bullet';
+  } else if (!architecture.preferences.usesBulletPoints && architecture.preferences.usesNumberedLists) {
+    architecture.preferences.preferredListStyle = 'numbered';
+  }
+
+  return architecture;
+}
+
+// Update the analyzeLinguisticMetrics function to include message architecture
+function analyzeLinguisticMetrics(tweets: Tweet[]) {
+  const wordMap = new Map<string, number>();
+  const sentenceLengths = {
+    veryShort: 0,
+    short: 0,
+    medium: 0,
+    long: 0,
+    veryLong: 0,
+    total: 0
+  };
+  const capStats = {
+    lowercase: 0,
+    sentenceCase: 0,
+    mixedCase: 0,
+    totalMessages: tweets.length
+  };
+  let totalWords = 0;
+  const uniqueWords = new Set<string>();
+
+  // Analyze each tweet
+  tweets.forEach(tweet => {
+    const text = tweet.text;
+    const words = text.split(/\s+/).filter(w => w.length > 0);
+    const wordCount = words.length;
+    totalWords += wordCount;
+
+    // Word frequency and unique words
+    words.forEach(word => {
+      const normalized = word.toLowerCase();
+      uniqueWords.add(normalized);
+      wordMap.set(normalized, (wordMap.get(normalized) || 0) + 1);
+    });
+
+    // Sentence length categorization
+    if (wordCount <= 5) sentenceLengths.veryShort++;
+    else if (wordCount <= 10) sentenceLengths.short++;
+    else if (wordCount <= 20) sentenceLengths.medium++;
+    else if (wordCount <= 40) sentenceLengths.long++;
+    else sentenceLengths.veryLong++;
+    sentenceLengths.total++;
+
+    // Capitalization analysis
+    if (text === text.toLowerCase()) capStats.lowercase++;
+    else if (text === text.charAt(0).toUpperCase() + text.slice(1).toLowerCase()) capStats.sentenceCase++;
+    else capStats.mixedCase++;
+  });
+
+  // Calculate distributions
+  const distribution = {
+    veryShort: (sentenceLengths.veryShort / sentenceLengths.total) * 100,
+    short: (sentenceLengths.short / sentenceLengths.total) * 100,
+    medium: (sentenceLengths.medium / sentenceLengths.total) * 100,
+    long: (sentenceLengths.long / sentenceLengths.total) * 100,
+    veryLong: (sentenceLengths.veryLong / sentenceLengths.total) * 100
+  };
+
+  // Calculate capitalization percentages
+  const capPercentages = {
+    lowercase: (capStats.lowercase / capStats.totalMessages) * 100,
+    sentenceCase: (capStats.sentenceCase / capStats.totalMessages) * 100,
+    mixedCase: (capStats.mixedCase / capStats.totalMessages) * 100,
+    totalMessages: capStats.totalMessages
+  };
+
+  // Sort words by frequency and convert to array with percentages
+  const sortedTerms = Array.from(wordMap.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 20)  // Keep top 20 most frequent terms
+    .map(([term, frequency]) => ({
+      term,
+      frequency,
+      percentage: (frequency / totalWords) * 100,
+      category: categorizeWord(term)
+    }));
+
+  const architecture = analyzeMessageArchitecture(tweets);
+  
+  return {
+    commonTerms: sortedTerms,
+    metrics: {
+      sentenceLengths: {
+        ...sentenceLengths,
+        distribution
+      },
+      capitalizationStats: capPercentages,
+      averageMessageLength: totalWords / tweets.length,
+      uniqueWordsCount: uniqueWords.size,
+      totalWordsAnalyzed: totalWords,
+      messageArchitecture: architecture
+    }
+  };
+}
+
+function categorizeWord(word: string): 'pronoun' | 'modal' | 'adjective' | 'verb' | 'noun' | 'other' {
+  const pronouns = ['i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them'];
+  const modals = ['can', 'could', 'will', 'would', 'shall', 'should', 'may', 'might', 'must'];
+  const commonAdjectives = ['good', 'great', 'nice', 'bad', 'best', 'better', 'worse', 'worst'];
+  const commonVerbs = ['is', 'are', 'was', 'were', 'be', 'have', 'has', 'had', 'do', 'does', 'did'];
+  
+  word = word.toLowerCase();
+  
+  if (pronouns.includes(word)) return 'pronoun';
+  if (modals.includes(word)) return 'modal';
+  if (commonAdjectives.includes(word)) return 'adjective';
+  if (commonVerbs.includes(word)) return 'verb';
+  // Basic noun detection (this is simplified)
+  if (word.match(/^[a-z]+[^s]s$/)) return 'noun';  // Plural nouns
+  
+  return 'other';
+}
+
 export async function analyzePersonality(
   tweets: Tweet[], 
   profile: OpenAITwitterProfile,
@@ -441,6 +745,59 @@ export async function analyzePersonality(
         nGrams: {
           bigrams: [],
           trigrams: []
+        },
+        metrics: {
+          sentenceLengths: {
+            veryShort: 0,
+            short: 0,
+            medium: 0,
+            long: 0,
+            veryLong: 0,
+            distribution: {
+              veryShort: 0,
+              short: 0,
+              medium: 0,
+              long: 0,
+              veryLong: 0
+            }
+          },
+          capitalizationStats: {
+            lowercase: 0,
+            sentenceCase: 0,
+            mixedCase: 0,
+            totalMessages: 0
+          },
+          averageMessageLength: 0,
+          uniqueWordsCount: 0,
+          totalWordsAnalyzed: 0,
+          messageArchitecture: {
+            structureTypes: {
+              singleWord: 0,
+              shortPhrase: 0,
+              actionOriented: 0,
+              bulletedList: 0,
+              streamOfConsciousness: 0
+            },
+            terminalPunctuation: {
+              none: 0,
+              period: 0,
+              questionMark: 0,
+              exclamationMark: 0,
+              ellipsis: 0
+            },
+            characterMetrics: {
+              averageLength: 0,
+              shortMessages: 0,
+              longMessages: 0
+            },
+            preferences: {
+              usesMarkdown: false,
+              usesBulletPoints: false,
+              usesNumberedLists: false,
+              usesCodeBlocks: false,
+              preferredListStyle: 'none' as 'bullet' | 'numbered' | 'none'
+            }
+          }
         }
       },
       emotionalIntelligence: {
@@ -457,6 +814,16 @@ export async function analyzePersonality(
         expressionStyle: ''
       }
     }
+
+    // Perform linguistic analysis
+    const linguisticMetrics = analyzeLinguisticMetrics(validTweets);
+    
+    // Update the combinedAnalysis with the new metrics
+    combinedAnalysis.vocabulary = {
+      ...combinedAnalysis.vocabulary,
+      commonTerms: linguisticMetrics.commonTerms,
+      metrics: linguisticMetrics.metrics
+    };
 
     // Analyze each chunk
     for (const chunk of tweetChunks) {
@@ -518,8 +885,8 @@ ${combinedAnalysis.communicationStyle.description}
 - Analytical Tone: ${combinedAnalysis.emotionalIntelligence.analyticalTone}
 
 8. Common Language Patterns:
-- Terms: ${combinedAnalysis.vocabulary.commonTerms.join(', ')}
-- Phrases: ${combinedAnalysis.vocabulary.commonPhrases.join(', ')}
+- Terms: ${combinedAnalysis.vocabulary.commonTerms.map(t => t.term).join(', ')}
+- Phrases: ${combinedAnalysis.vocabulary.commonPhrases.map(p => p.phrase).join(', ')}
 - Enthusiasm Markers: ${combinedAnalysis.vocabulary.enthusiasmMarkers.join(', ')}
 
 9. Topics & Themes:
@@ -822,6 +1189,59 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
             nGrams: {
               bigrams: [],
               trigrams: []
+            },
+            metrics: {
+              sentenceLengths: {
+                veryShort: 0,
+                short: 0,
+                medium: 0,
+                long: 0,
+                veryLong: 0,
+                distribution: {
+                  veryShort: 0,
+                  short: 0,
+                  medium: 0,
+                  long: 0,
+                  veryLong: 0
+                }
+              },
+              capitalizationStats: {
+                lowercase: 0,
+                sentenceCase: 0,
+                mixedCase: 0,
+                totalMessages: 0
+              },
+              averageMessageLength: 0,
+              uniqueWordsCount: 0,
+              totalWordsAnalyzed: 0,
+              messageArchitecture: {
+                structureTypes: {
+                  singleWord: 0,
+                  shortPhrase: 0,
+                  actionOriented: 0,
+                  bulletedList: 0,
+                  streamOfConsciousness: 0
+                },
+                terminalPunctuation: {
+                  none: 0,
+                  period: 0,
+                  questionMark: 0,
+                  exclamationMark: 0,
+                  ellipsis: 0
+                },
+                characterMetrics: {
+                  averageLength: 0,
+                  shortMessages: 0,
+                  longMessages: 0
+                },
+                preferences: {
+                  usesMarkdown: false,
+                  usesBulletPoints: false,
+                  usesNumberedLists: false,
+                  usesCodeBlocks: false,
+                  preferredListStyle: 'none' as 'bullet' | 'numbered' | 'none'
+                }
+              }
             }
           },
           emotionalIntelligence: {
@@ -912,6 +1332,59 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
         nGrams: {
           bigrams: [],
           trigrams: []
+        },
+        metrics: {
+          sentenceLengths: {
+            veryShort: 0,
+            short: 0,
+            medium: 0,
+            long: 0,
+            veryLong: 0,
+            distribution: {
+              veryShort: 0,
+              short: 0,
+              medium: 0,
+              long: 0,
+              veryLong: 0
+            }
+          },
+          capitalizationStats: {
+            lowercase: 0,
+            sentenceCase: 0,
+            mixedCase: 0,
+            totalMessages: 0
+          },
+          averageMessageLength: 0,
+          uniqueWordsCount: 0,
+          totalWordsAnalyzed: 0,
+          messageArchitecture: {
+            structureTypes: {
+              singleWord: 0,
+              shortPhrase: 0,
+              actionOriented: 0,
+              bulletedList: 0,
+              streamOfConsciousness: 0
+            },
+            terminalPunctuation: {
+              none: 0,
+              period: 0,
+              questionMark: 0,
+              exclamationMark: 0,
+              ellipsis: 0
+            },
+            characterMetrics: {
+              averageLength: 0,
+              shortMessages: 0,
+              longMessages: 0
+            },
+            preferences: {
+              usesMarkdown: false,
+              usesBulletPoints: false,
+              usesNumberedLists: false,
+              usesCodeBlocks: false,
+              preferredListStyle: 'none' as 'bullet' | 'numbered' | 'none'
+            }
+          }
         }
       },
       emotionalIntelligence: {
@@ -982,6 +1455,59 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
       nGrams: {
         bigrams: [],
         trigrams: []
+      },
+      metrics: {
+        sentenceLengths: {
+          veryShort: 0,
+          short: 0,
+          medium: 0,
+          long: 0,
+          veryLong: 0,
+          distribution: {
+            veryShort: 0,
+            short: 0,
+            medium: 0,
+            long: 0,
+            veryLong: 0
+          }
+        },
+        capitalizationStats: {
+          lowercase: 0,
+          sentenceCase: 0,
+          mixedCase: 0,
+          totalMessages: 0
+        },
+        averageMessageLength: 0,
+        uniqueWordsCount: 0,
+        totalWordsAnalyzed: 0,
+        messageArchitecture: {
+          structureTypes: {
+            singleWord: 0,
+            shortPhrase: 0,
+            actionOriented: 0,
+            bulletedList: 0,
+            streamOfConsciousness: 0
+          },
+          terminalPunctuation: {
+            none: 0,
+            period: 0,
+            questionMark: 0,
+            exclamationMark: 0,
+            ellipsis: 0
+          },
+          characterMetrics: {
+            averageLength: 0,
+            shortMessages: 0,
+            longMessages: 0
+          },
+          preferences: {
+            usesMarkdown: false,
+            usesBulletPoints: false,
+            usesNumberedLists: false,
+            usesCodeBlocks: false,
+            preferredListStyle: 'none' as 'bullet' | 'numbered' | 'none'
+          }
+        }
       }
     },
     emotionalIntelligence: {
@@ -1338,10 +1864,19 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
             const term = trimmedLine.replace(/^[-•]\s*/, '').trim()
             switch (currentVocabSection) {
               case 'terms':
-                analysis.vocabulary.commonTerms.push(term)
+                analysis.vocabulary.commonTerms.push({
+                  term,
+                  frequency: 0,
+                  percentage: 0,
+                  category: undefined
+                })
                 break
               case 'phrases':
-                analysis.vocabulary.commonPhrases.push(term)
+                analysis.vocabulary.commonPhrases.push({
+                  phrase: term,
+                  frequency: 0,
+                  percentage: 0
+                })
                 break
               case 'enthusiasm':
                 analysis.vocabulary.enthusiasmMarkers.push(term)
@@ -1350,10 +1885,18 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
                 analysis.vocabulary.industryTerms.push(term)
                 break
               case 'bigrams':
-                analysis.vocabulary.nGrams.bigrams.push(term)
+                analysis.vocabulary.nGrams.bigrams.push({
+                  phrase: term,
+                  frequency: 0,
+                  percentage: 0
+                })
                 break
               case 'trigrams':
-                analysis.vocabulary.nGrams.trigrams.push(term)
+                analysis.vocabulary.nGrams.trigrams.push({
+                  phrase: term,
+                  frequency: 0,
+                  percentage: 0
+                })
                 break
             }
           }
@@ -1573,7 +2116,22 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
 
     // Validate vocabulary
     if (!analysis.vocabulary.commonTerms.length) {
-      analysis.vocabulary.commonTerms = ['general', 'standard', 'typical']
+      analysis.vocabulary.commonTerms = [{
+        term: 'general',
+        frequency: 0,
+        percentage: 0,
+        category: undefined
+      }, {
+        term: 'standard',
+        frequency: 0,
+        percentage: 0,
+        category: undefined
+      }, {
+        term: 'typical',
+        frequency: 0,
+        percentage: 0,
+        category: undefined
+      }]
     }
     if (!analysis.vocabulary.enthusiasmMarkers.length) {
       analysis.vocabulary.enthusiasmMarkers = ['good', 'great', 'nice']
@@ -1676,6 +2234,59 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
         nGrams: {
           bigrams: [],
           trigrams: []
+        },
+        metrics: {
+          sentenceLengths: {
+            veryShort: 0,
+            short: 0,
+            medium: 0,
+            long: 0,
+            veryLong: 0,
+            distribution: {
+              veryShort: 0,
+              short: 0,
+              medium: 0,
+              long: 0,
+              veryLong: 0
+            }
+          },
+          capitalizationStats: {
+            lowercase: 0,
+            sentenceCase: 0,
+            mixedCase: 0,
+            totalMessages: 0
+          },
+          averageMessageLength: 0,
+          uniqueWordsCount: 0,
+          totalWordsAnalyzed: 0,
+          messageArchitecture: {
+            structureTypes: {
+              singleWord: 0,
+              shortPhrase: 0,
+              actionOriented: 0,
+              bulletedList: 0,
+              streamOfConsciousness: 0
+            },
+            terminalPunctuation: {
+              none: 0,
+              period: 0,
+              questionMark: 0,
+              exclamationMark: 0,
+              ellipsis: 0
+            },
+            characterMetrics: {
+              averageLength: 0,
+              shortMessages: 0,
+              longMessages: 0
+            },
+            preferences: {
+              usesMarkdown: false,
+              usesBulletPoints: false,
+              usesNumberedLists: false,
+              usesCodeBlocks: false,
+              preferredListStyle: 'none' as 'bullet' | 'numbered' | 'none'
+            }
+          }
         }
       },
       emotionalIntelligence: {
