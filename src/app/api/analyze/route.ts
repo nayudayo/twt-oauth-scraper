@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth/config'
 import { CommunicationLevel, PersonalityAnalysis } from '@/lib/openai'
 import { PersonalityTuning } from '@/types/scraper'
+import { MissingInterestsError, MissingPsychoanalysisError, PersonalityAnalysisError } from '@/lib/openai'
 
 export async function POST(req: Request) {
   try {
@@ -87,8 +88,34 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(analysis)
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error in analyze route:', error)
+    
+    // Handle specific error types
+    if (error instanceof MissingInterestsError) {
+      return NextResponse.json(
+        { error: 'Failed to generate interests after multiple attempts. Please try again.' },
+        { status: 422 }
+      )
+    }
+    
+    if (error instanceof MissingPsychoanalysisError) {
+      return NextResponse.json(
+        { error: 'Failed to generate psychological analysis after multiple attempts. Please try again.' },
+        { status: 422 }
+      )
+    }
+    
+    if (error instanceof PersonalityAnalysisError) {
+      return NextResponse.json(
+        { 
+          error: 'Failed to generate complete personality analysis',
+          missingFields: error.missingFields 
+        },
+        { status: 422 }
+      )
+    }
+    
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to analyze personality' },
       { status: 500 }

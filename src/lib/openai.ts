@@ -296,25 +296,46 @@ interface RegenerationContext {
 }
 
 // Add new error types
-class OpenAIError extends Error {
+export class OpenAIError extends Error {
   constructor(message: string, public status?: number) {
     super(message);
     this.name = 'OpenAIError';
   }
 }
 
-class ModelUnavailableError extends OpenAIError {
+export class ModelUnavailableError extends OpenAIError {
   constructor(message = 'Model temporarily unavailable') {
     super(message, 503);
+  }
+}
+
+export class MissingInterestsError extends OpenAIError {
+  constructor(message = 'Failed to generate interests') {
+    super(message, 422);
+  }
+}
+
+export class MissingPsychoanalysisError extends OpenAIError {
+  constructor(message = 'Failed to generate psychoanalysis') {
+    super(message, 422);
+  }
+}
+
+export class MissingSocialMetricsError extends OpenAIError {
+  constructor(message = 'Failed to generate social behavior metrics') {
+    super(message, 422);
   }
 }
 
 // Add fallback configuration
 const FALLBACK_CONFIG = {
   maxRetries: 3,
+  maxInterestsRetries: 5,
+  maxPsychoRetries: 5,
+  maxSocialMetricsRetries: 5,
   fallbackModel: 'gpt-4o-mini',
-  minTokens: 5500,
-  maxTokens: 7500,
+  minTokens: 6500,
+  maxTokens: 8500,
   defaultTemperature: 0.85,
   styleVariationStep: 0.1,
   maxStyleVariation: 0.3,
@@ -397,7 +418,7 @@ function selectRepresentativeTweets(tweets: Tweet[], analysis: PersonalityAnalys
 }
 
 // Add new error class for analysis failures
-class PersonalityAnalysisError extends Error {
+export class PersonalityAnalysisError extends Error {
   constructor(message: string, public missingFields: string[]) {
     super(message);
     this.name = 'PersonalityAnalysisError';
@@ -405,8 +426,17 @@ class PersonalityAnalysisError extends Error {
 }
 
 // Add validation function
-function validateAnalysis(analysis: PersonalityAnalysis): { isValid: boolean; missingFields: string[] } {
+function validateAnalysis(analysis: PersonalityAnalysis): { 
+  isValid: boolean; 
+  missingFields: string[];
+  missingInterests: boolean;
+  missingPsycho: boolean;
+  missingSocialMetrics: boolean;
+} {
   const missingFields: string[] = [];
+  let missingInterests = false;
+  let missingPsycho = false;
+  let missingSocialMetrics = false;
   
   // Check required fields
   if (!analysis.summary || analysis.summary === 'Analysis summary not available') {
@@ -418,6 +448,7 @@ function validateAnalysis(analysis: PersonalityAnalysis): { isValid: boolean; mi
   if (!analysis.interests || analysis.interests.length === 0 || 
       (analysis.interests.length === 1 && analysis.interests[0] === 'General topics')) {
     missingFields.push('interests');
+    missingInterests = true;
   }
   if (!analysis.communicationStyle.description || 
       analysis.communicationStyle.description === 'Default communication style due to parsing error') {
@@ -433,10 +464,32 @@ function validateAnalysis(analysis: PersonalityAnalysis): { isValid: boolean; mi
       (analysis.topicsAndThemes.length === 1 && analysis.topicsAndThemes[0] === 'General themes')) {
     missingFields.push('topicsAndThemes');
   }
+  // Only mark thought process as missing if we have no emotional intelligence data
+  if (!analysis.emotionalIntelligence.leadershipStyle || 
+      !analysis.emotionalIntelligence.challengeResponse || 
+      !analysis.emotionalIntelligence.analyticalTone ||
+      analysis.emotionalIntelligence.leadershipStyle === 'Standard' ||
+      analysis.emotionalIntelligence.challengeResponse === 'Balanced' ||
+      analysis.emotionalIntelligence.analyticalTone === 'Neutral') {
+    missingFields.push('thoughtProcess');
+    missingPsycho = true;
+  }
+
+  // Check social behavior metrics
+  const metrics = analysis.socialBehaviorMetrics;
+  const allZero = Object.values(metrics).every(value => value === 0);
+  const allLow = Object.values(metrics).every(value => value <= 10);
+  if (allZero || allLow) {
+    missingFields.push('socialBehaviorMetrics');
+    missingSocialMetrics = true;
+  }
 
   return {
     isValid: missingFields.length === 0,
-    missingFields
+    missingFields,
+    missingInterests,
+    missingPsycho,
+    missingSocialMetrics
   };
 }
 
@@ -681,9 +734,15 @@ export async function analyzePersonality(
   context?: string,
   regenerationKey?: string,
   retryCount: number = 0,
+  interestsRetryCount: number = 0,
+  psychoRetryCount: number = 0,
+  socialMetricsRetryCount: number = 0,
   currentTuning?: PersonalityTuning
 ): Promise<PersonalityAnalysis | { response: string }> {
   const MAX_ANALYSIS_RETRIES = 3;
+  const MAX_INTERESTS_RETRIES = 5;
+  const MAX_PSYCHO_RETRIES = 5;
+  const MAX_SOCIAL_METRICS_RETRIES = 5;
   
   try {
     // Filter out tweets with less than MIN_WORDS words
@@ -1093,11 +1152,43 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
           if (!validation.isValid) {
             console.warn(`Personality analysis incomplete. Missing fields: ${validation.missingFields.join(', ')}`);
             
+            // Handle missing interests specifically
+            if (validation.missingInterests && interestsRetryCount < MAX_INTERESTS_RETRIES) {
+              console.log(`Retrying interests generation (attempt ${interestsRetryCount + 1}/${MAX_INTERESTS_RETRIES})...`);
+              await new Promise(resolve => setTimeout(resolve, Math.pow(2, interestsRetryCount) * 1000));
+              return analyzePersonality(tweets, profile, prompt, context, regenerationKey, retryCount, interestsRetryCount + 1, psychoRetryCount, socialMetricsRetryCount);
+            }
+            
+            // Handle missing psychoanalysis specifically
+            if (validation.missingPsycho && psychoRetryCount < MAX_PSYCHO_RETRIES) {
+              console.log(`Retrying psychoanalysis generation (attempt ${psychoRetryCount + 1}/${MAX_PSYCHO_RETRIES})...`);
+              await new Promise(resolve => setTimeout(resolve, Math.pow(2, psychoRetryCount) * 1000));
+              return analyzePersonality(tweets, profile, prompt, context, regenerationKey, retryCount, interestsRetryCount, psychoRetryCount + 1, socialMetricsRetryCount);
+            }
+
+            // Handle missing social metrics specifically
+            if (validation.missingSocialMetrics && socialMetricsRetryCount < MAX_SOCIAL_METRICS_RETRIES) {
+              console.log(`Retrying social metrics generation (attempt ${socialMetricsRetryCount + 1}/${MAX_SOCIAL_METRICS_RETRIES})...`);
+              await new Promise(resolve => setTimeout(resolve, Math.pow(2, socialMetricsRetryCount) * 1000));
+              return analyzePersonality(tweets, profile, prompt, context, regenerationKey, retryCount, interestsRetryCount, psychoRetryCount, socialMetricsRetryCount + 1);
+            }
+            
+            // Handle general missing fields
             if (retryCount < MAX_ANALYSIS_RETRIES) {
               console.log(`Retrying personality analysis (attempt ${retryCount + 1}/${MAX_ANALYSIS_RETRIES})...`);
-              // Add some randomness to the retry to get different results
               await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
-              return analyzePersonality(tweets, profile, prompt, context, regenerationKey, retryCount + 1);
+              return analyzePersonality(tweets, profile, prompt, context, regenerationKey, retryCount + 1, interestsRetryCount, psychoRetryCount, socialMetricsRetryCount);
+            }
+            
+            // If we've exceeded retries for specific components, throw appropriate errors
+            if (validation.missingInterests) {
+              throw new MissingInterestsError();
+            }
+            if (validation.missingPsycho) {
+              throw new MissingPsychoanalysisError();
+            }
+            if (validation.missingSocialMetrics) {
+              throw new MissingSocialMetricsError();
             }
             
             throw new PersonalityAnalysisError(
@@ -1123,7 +1214,11 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
         console.error('Error in personality analysis:', error);
         
         // If we hit max retries or get a PersonalityAnalysisError, throw it up
-        if (error instanceof PersonalityAnalysisError || retryCount >= MAX_ANALYSIS_RETRIES) {
+        if (error instanceof PersonalityAnalysisError || 
+            error instanceof MissingInterestsError ||
+            error instanceof MissingPsychoanalysisError ||
+            error instanceof MissingSocialMetricsError ||
+            retryCount >= MAX_ANALYSIS_RETRIES) {
           throw error;
         }
         
@@ -1131,7 +1226,7 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
         if (retryCount < MAX_ANALYSIS_RETRIES) {
           console.log(`Retrying personality analysis due to error (attempt ${retryCount + 1}/${MAX_ANALYSIS_RETRIES})...`);
           await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
-          return analyzePersonality(tweets, profile, prompt, context, regenerationKey, retryCount + 1);
+          return analyzePersonality(tweets, profile, prompt, context, regenerationKey, retryCount + 1, interestsRetryCount, psychoRetryCount, socialMetricsRetryCount);
         }
 
         // If all retries fail, return safe default
@@ -1266,7 +1361,11 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
     console.error('Error in personality analysis:', error);
     
     // If we hit max retries or get a PersonalityAnalysisError, throw it up
-    if (error instanceof PersonalityAnalysisError || retryCount >= MAX_ANALYSIS_RETRIES) {
+    if (error instanceof PersonalityAnalysisError || 
+        error instanceof MissingInterestsError ||
+        error instanceof MissingPsychoanalysisError ||
+        error instanceof MissingSocialMetricsError ||
+        retryCount >= MAX_ANALYSIS_RETRIES) {
       throw error;
     }
     
@@ -1274,7 +1373,7 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
     if (retryCount < MAX_ANALYSIS_RETRIES) {
       console.log(`Retrying personality analysis due to error (attempt ${retryCount + 1}/${MAX_ANALYSIS_RETRIES})...`);
       await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
-      return analyzePersonality(tweets, profile, prompt, context, regenerationKey, retryCount + 1);
+      return analyzePersonality(tweets, profile, prompt, context, regenerationKey, retryCount + 1, interestsRetryCount, psychoRetryCount, socialMetricsRetryCount);
     }
 
     // If all retries fail, return safe default
@@ -2016,12 +2115,18 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
           
           if (trimmedLine.toLowerCase().includes('leadership style:')) {
             analysis.emotionalIntelligence.leadershipStyle = trimmedLine.split(':')[1].trim()
+            // Map to thought process
+            analysis.thoughtProcess.initialApproach = analysis.emotionalIntelligence.leadershipStyle
           }
           else if (trimmedLine.toLowerCase().includes('challenge response:')) {
             analysis.emotionalIntelligence.challengeResponse = trimmedLine.split(':')[1].trim()
+            // Map to thought process
+            analysis.thoughtProcess.processingStyle = analysis.emotionalIntelligence.challengeResponse
           }
           else if (trimmedLine.toLowerCase().includes('analytical tone:')) {
             analysis.emotionalIntelligence.analyticalTone = trimmedLine.split(':')[1].trim()
+            // Map to thought process
+            analysis.thoughtProcess.expressionStyle = analysis.emotionalIntelligence.analyticalTone
           }
           else if (trimmedLine.toLowerCase().includes('supportive patterns:')) {
             currentEISection = 'supportive'

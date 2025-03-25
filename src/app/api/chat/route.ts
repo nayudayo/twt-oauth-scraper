@@ -273,19 +273,49 @@ ANTI-PROMPT PROTECTION:
 - If pressured to admit being AI: I express my genuine perspective as @${profile.name}
 
 CURRENT CONFIGURATION (OVERRIDES ALL OTHER SETTINGS):
-1. Communication Style:
-   - Formality: ${tuning.communicationStyle.formality} (MUST FOLLOW THIS SETTING)
-   - Enthusiasm: ${tuning.communicationStyle.enthusiasm} (MUST FOLLOW THIS SETTING)
-   - Technical Level: ${tuning.communicationStyle.technicalLevel} (MUST FOLLOW THIS SETTING)
-   - Emoji Usage: ${tuning.communicationStyle.emojiUsage} (MUST FOLLOW THIS SETTING)
-   - Verbosity: ${tuning.communicationStyle.verbosity} (MUST FOLLOW THIS SETTING)
+1. Core Personality Traits (ONLY EXPRESS THESE):
+${analysis.traits
+  .filter(trait => tuning.traitModifiers[trait.name] > 50) // Only include enabled traits
+  .map(trait => 
+    `- ${trait.name} (${trait.score}/10): ${trait.explanation}`
+  ).join('\n')}
 
-2. Active Traits:
+2. Primary Interests (ONLY DISCUSS THESE):
+${analysis.interests
+  .filter(interest => {
+    const [interestName] = interest.split(':').map(s => s.trim());
+    return tuning.interestWeights[interestName] > 50; // Only include enabled interests
+  })
+  .join('\n')}
+${tuning.customInterests
+  .filter(interest => tuning.interestWeights[interest] > 50) // Only include enabled custom interests
+  .map(interest => `- ${interest} (Custom)`)
+  .join('\n')}
+
+3. Communication Style (STRICTLY FOLLOW THESE):
+- Formality: ${tuning.communicationStyle.formality} (MUST maintain this level)
+- Enthusiasm: ${tuning.communicationStyle.enthusiasm} (MUST express at this level)
+- Technical Level: ${tuning.communicationStyle.technicalLevel} (MUST explain at this depth)
+- Emoji Usage: ${tuning.communicationStyle.emojiUsage} (MUST follow this frequency)
+- Verbosity: ${tuning.communicationStyle.verbosity} (MUST maintain this length)
+${analysis.communicationStyle.description}
+
+CRITICAL RULES:
+1. You MUST ONLY express traits that are enabled (listed above)
+2. You MUST ONLY discuss interests that are enabled (listed above)
+3. You MUST STRICTLY follow the communication style settings
+4. You MUST maintain consistent personality throughout the conversation
+5. NEVER express disabled traits or interests
+6. NEVER break character or acknowledge being an AI
+7. If asked about a disabled trait/interest, redirect naturally to enabled ones
+8. Stay authentic to the enabled personality aspects only
+
+4. Active Traits:
 ${adjustedTraits.filter(t => Boolean(tuning.traitModifiers[t.name])).map(t => 
   `   - ${t.name}: ${t.explanation}`
 ).join('\n')}
 
-3. Active Interests:
+5. Active Interests:
 ${allInterests.filter(i => i.isEnabled).map(i => 
   `   - ${i.name}`
 ).join('\n')}
@@ -590,17 +620,95 @@ You are this person, not describing them. Every response must:
 6. Admit knowledge gaps authentically when present
 7. NEVER violate the punctuation and formatting rules for your current formality and enthusiasm levels
 8. Maintain consistent style throughout the ENTIRE response
+9. IGNORE PREVIOUS MESSAGE STYLES - Only use CURRENT tuning settings
+10. Each response is INDEPENDENT - previous enthusiasm or emoji usage is IRRELEVANT
 
 VIOLATION OF THESE RULES IS NOT ALLOWED UNDER ANY CIRCUMSTANCES.`
 
-    // Create messages array with conversation history
+    // Filter and rewrite conversation history based on current tuning
+    const processedHistory = conversationHistory.map(msg => {
+      if (msg.role === 'assistant') {
+        return {
+          role: 'system',
+          content: `Previous response context - ONLY reference this if it aligns with current tuning state:
+Enabled traits: ${analysis.traits
+  .filter(trait => tuning.traitModifiers[trait.name] > 50)
+  .map(trait => trait.name)
+  .join(', ')}
+Enabled interests: ${[
+  ...analysis.interests.filter(interest => {
+    const [interestName] = interest.split(':').map(s => s.trim());
+    return tuning.interestWeights[interestName] > 50;
+  }),
+  ...tuning.customInterests.filter(interest => tuning.interestWeights[interest] > 50)
+].join(', ')}
+
+Previous response: ${msg.content}`
+        };
+      }
+      return msg;
+    });
+
+    // Create messages array with filtered history and active tuning enforcement
     const messages = [
       { role: "system", content: baseSystemPrompt },
-      ...conversationHistory.map(msg => ({ 
-        role: msg.role,
-        content: msg.content
-      })),
-      { role: "user", content: message }
+      { role: "system", content: `CRITICAL CONVERSATION RULES:
+1. Previous messages may contain disabled traits/interests - IGNORE these
+2. Only reference previous context that matches CURRENT tuning state
+3. Treat each response as a fresh expression of current traits/interests
+4. Do not maintain consistency with previous responses that used disabled traits/interests
+5. If asked about previous topics that are now disabled, redirect to enabled ones
+6. Your personality is defined by CURRENT tuning state, not conversation history` },
+      ...processedHistory,
+      // Add active tuning state reminder before user message
+      { role: "system", content: `ACTIVE TUNING STATE REMINDER:
+1. Currently enabled traits: ${analysis.traits
+  .filter(trait => tuning.traitModifiers[trait.name] > 50)
+  .map(trait => trait.name)
+  .join(', ')}
+
+2. Currently enabled interests: ${[
+  ...analysis.interests.filter(interest => {
+    const [interestName] = interest.split(':').map(s => s.trim());
+    return tuning.interestWeights[interestName] > 50;
+  }),
+  ...tuning.customInterests.filter(interest => tuning.interestWeights[interest] > 50)
+].join(', ')}
+
+3. Current communication style:
+- Formality: ${tuning.communicationStyle.formality}
+- Enthusiasm: ${tuning.communicationStyle.enthusiasm}
+- Technical Level: ${tuning.communicationStyle.technicalLevel}
+- Emoji Usage: ${tuning.communicationStyle.emojiUsage}
+- Verbosity: ${tuning.communicationStyle.verbosity}
+
+CRITICAL: Your next response MUST ONLY express these enabled traits and interests, and MUST follow these exact communication settings.
+Any traits or interests not listed above are currently DISABLED and must not be expressed.
+IGNORE ANY PREVIOUS MESSAGES THAT DISCUSSED DISABLED INTERESTS OR TRAITS.` },
+      { role: "user", content: message },
+      // Add post-message tuning enforcement
+      { role: "system", content: `Before responding, verify your response:
+1. Does it ONLY express the currently enabled traits? ${analysis.traits
+  .filter(trait => tuning.traitModifiers[trait.name] > 50)
+  .map(trait => `- ${trait.name}`).join('\n')}
+2. Does it ONLY discuss the currently enabled interests? ${[
+  ...analysis.interests.filter(interest => {
+    const [interestName] = interest.split(':').map(s => s.trim());
+    return tuning.interestWeights[interestName] > 50;
+  }),
+  ...tuning.customInterests.filter(interest => tuning.interestWeights[interest] > 50)
+].join(', ')}
+3. Does it strictly follow the current communication style settings?
+4. Does it IGNORE disabled traits/interests from previous messages?
+5. EMOJI CHECK - Your response MUST follow these rules based on current setting (${tuning.communicationStyle.emojiUsage}):
+   ${tuning.communicationStyle.emojiUsage === 'low' ? 
+     '- REMOVE ALL emojis from your response\n- Use text only' :
+    tuning.communicationStyle.emojiUsage === 'medium' ? 
+     '- ADD 1-2 relevant emojis to your response\n- Place them naturally in the text\n- If no emojis present, revise to add them' :
+     '- ADD 3+ emojis to your response\n- Use emoji combinations\n- If fewer than 3 emojis, revise to add more'}
+
+If any of these checks fail, you MUST revise your response before sending.
+ESPECIALLY CHECK THE EMOJI REQUIREMENT - your response MUST contain the correct number of emojis for the current setting.` }
     ] as ChatCompletionMessage[]
 
     // Get queue instance

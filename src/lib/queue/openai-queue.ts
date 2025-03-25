@@ -196,10 +196,10 @@ export class OpenAIQueueManager {
   }
 
   private async processAnalyzeRequest(data: AnalyzeRequest): Promise<unknown> {
-    const { tweets, profile, prompt, context, currentTuning } = data
+    const { tweets, profile, prompt, context } = data
     // Convert profile to expected format
     const convertedProfile = convertProfile(profile)
-    return await analyzePersonality(tweets, convertedProfile, prompt, context, undefined, 0, currentTuning)
+    return await analyzePersonality(tweets, convertedProfile, prompt, context, undefined, 0, 0, 0)
   }
 
   // Utility methods

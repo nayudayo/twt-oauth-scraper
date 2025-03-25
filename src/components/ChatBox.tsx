@@ -273,17 +273,38 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       const existingTrait = analysis.traits.find(t => t.name === traitName);
       if (!existingTrait) return;
 
-      setAnalysis(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          traits: prev.traits.map(trait => 
-            trait.name === traitName 
-              ? { ...trait, score: analysisScore }
-              : trait
-          )
-        };
-      });
+      const updatedAnalysis = {
+        ...analysis,
+        traits: analysis.traits.map(trait => 
+          trait.name === traitName 
+            ? { ...trait, score: analysisScore }
+            : trait
+        )
+      };
+
+      setAnalysis(updatedAnalysis);
+
+      // Update active chat session if we have one
+      if (activeConversationId) {
+        const updateResponse = await fetch(`/api/conversations/${activeConversationId}/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            analysis: updatedAnalysis,
+            tuning: {
+              ...tuning,
+              traitModifiers: {
+                ...tuning.traitModifiers,
+                [traitName]: score
+              }
+            }
+          })
+        });
+
+        if (!updateResponse.ok) {
+          console.warn('Failed to update active chat session with new trait settings');
+        }
+      }
     }
   }
 
@@ -299,6 +320,38 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     }));
 
     if (analysis) {
+      const updatedAnalysis = {
+        ...analysis,
+        interestWeights: {
+          ...analysis.interestWeights,
+          [interest]: weight
+        }
+      };
+
+      setAnalysis(updatedAnalysis);
+
+      // Update active chat session if we have one
+      if (activeConversationId) {
+        const updateResponse = await fetch(`/api/conversations/${activeConversationId}/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            analysis: updatedAnalysis,
+            tuning: {
+              ...tuning,
+              interestWeights: {
+                ...tuning.interestWeights,
+                [interest]: weight
+              }
+            }
+          })
+        });
+
+        if (!updateResponse.ok) {
+          console.warn('Failed to update active chat session with new interest settings');
+        }
+      }
+
       await personalityCache.saveToCache({
         ...analysis,
         interestWeights: {
@@ -351,16 +404,37 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
 
     if (analysis) {
       // Update analysis state immediately
-      setAnalysis(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          communicationStyle: {
-            ...prev.communicationStyle,
-            [aspect]: value
-          }
-        };
-      });
+      const updatedAnalysis = {
+        ...analysis,
+        communicationStyle: {
+          ...analysis.communicationStyle,
+          [aspect]: value
+        }
+      };
+      
+      setAnalysis(updatedAnalysis);
+
+      // Update active chat session if we have one
+      if (activeConversationId) {
+        const updateResponse = await fetch(`/api/conversations/${activeConversationId}/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            analysis: updatedAnalysis,
+            tuning: {
+              ...tuning,
+              communicationStyle: {
+                ...tuning.communicationStyle,
+                [aspect]: value
+              }
+            }
+          })
+        });
+
+        if (!updateResponse.ok) {
+          console.warn('Failed to update active chat session with new communication style settings');
+        }
+      }
 
       // Save to cache with updated values
       await personalityCache.saveToCache({
@@ -1205,7 +1279,11 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       // Update analysis with preserved values
       const finalAnalysis = {
         ...newAnalysis,
-        communicationStyle: preservedCommunicationStyle
+        communicationStyle: preservedCommunicationStyle,
+        // Preserve tuning parameters
+        traitModifiers: currentTuning.traitModifiers,
+        interestWeights: currentTuning.interestWeights,
+        customInterests: currentTuning.customInterests
       };
 
       // Convert traits to toggle states - traits should be ON by default when detected
@@ -1241,23 +1319,63 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       // Update the cache with preserved values
       await personalityCache.saveToCache({
         ...finalAnalysis,
-        traits: (Object.entries(traitModifiers) as [string, number][]).map(([name, score]) => ({
-          name: name.replace(/[*-]/g, '').trim(),
-          score: Math.round(score / 10),
-          explanation: newAnalysis.traits.find((t: { name: string }) => t.name === name)?.explanation?.replace(/[*-]/g, '').trim()
+        traits: newAnalysis.traits.map((trait: { name: string; score: number; explanation?: string }) => ({
+          name: trait.name.replace(/[*-]/g, '').trim(),
+          score: traitModifiers[trait.name] ? 10 : 0, // Convert toggle state to score
+          explanation: trait.explanation?.replace(/[*-]/g, '').trim()
         })),
-        interests: Object.keys(newInterests).map(interest => interest.replace(/[*-]/g, '').trim()),
+        interests: Object.keys(newInterests),
+        interestWeights: newInterests,
+        customInterests: currentTuning.customInterests,
         communicationStyle: {
-          ...finalAnalysis.communicationStyle,
-          description: finalAnalysis.communicationStyle.description?.replace(/[*-]/g, '').trim()
+          ...preservedCommunicationStyle,
+          description: newAnalysis.communicationStyle.description?.replace(/[*-]/g, '').trim()
         },
         thoughtProcess: {
-          ...finalAnalysis.thoughtProcess,
-          initialApproach: finalAnalysis.thoughtProcess.initialApproach?.replace(/[*-]/g, '').trim(),
-          processingStyle: finalAnalysis.thoughtProcess.processingStyle?.replace(/[*-]/g, '').trim(),
-          expressionStyle: finalAnalysis.thoughtProcess.expressionStyle?.replace(/[*-]/g, '').trim()
+          ...newAnalysis.thoughtProcess,
+          initialApproach: newAnalysis.thoughtProcess.initialApproach?.replace(/[*-]/g, '').trim(),
+          processingStyle: newAnalysis.thoughtProcess.processingStyle?.replace(/[*-]/g, '').trim(),
+          expressionStyle: newAnalysis.thoughtProcess.expressionStyle?.replace(/[*-]/g, '').trim()
         }
       });
+
+      // Create a new chat with the updated personality
+      try {
+        const createChatResponse = await fetch('/api/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            analysis: finalAnalysis,
+            tuning: {
+              traitModifiers,
+              interestWeights: newInterests,
+              customInterests: currentTuning.customInterests,
+              communicationStyle: {
+                ...preservedCommunicationStyle,
+                verbosity: currentTuning.communicationStyle.verbosity ?? 'medium'
+              }
+            }
+          })
+        });
+
+        if (!createChatResponse.ok) {
+          throw new Error('Failed to create new chat');
+        }
+
+        const chatData = await createChatResponse.json();
+        if (chatData.success && chatData.data) {
+          // Update conversations list with new chat
+          setConversations(prev => [chatData.data, ...prev]);
+          // Set new chat as active
+          setActiveConversationId(chatData.data.id);
+          // Clear messages for new chat
+          setMessages([]);
+        }
+      } catch (error) {
+        console.error('Failed to create new chat:', error);
+        setError('Failed to create new chat with updated personality');
+      }
+
     } catch (error) {
       console.error('Analysis error:', error);
       setError(error instanceof Error ? error.message : 'Failed to analyze personality');
