@@ -53,16 +53,30 @@ interface ScanProgress {
 const formatTraitName = (name: string) => {
   if (!name) return '';
   
-  // First remove any special characters
-  const cleanName = name.replace(/[*\-]/g, '');
+  // First remove any special characters and extra spaces
+  const cleanName = name.replace(/[*\-_]/g, ' ').trim();
   
-  // Convert camelCase to space-separated words
-  const spacedName = cleanName.replace(/([A-Z])/g, ' $1').trim();
+  // Handle multiple formatting cases:
   
-  // Capitalize first letter of each word
-  return spacedName.split(' ').map(word => 
-    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-  ).join(' ');
+  // 1. Split camelCase and PascalCase
+  const splitCamelCase = cleanName.replace(/([a-z])([A-Z])/g, '$1 $2');
+  
+  // 2. Split concatenated words (e.g., "Communityoriented" -> "Community oriented")
+  const splitWords = splitCamelCase.replace(/([a-z])([A-Z][a-z])/g, '$1 $2');
+  
+  // 3. Handle special cases where words are just concatenated
+  const commonWords = ['oriented', 'driven', 'focused', 'based', 'centric', 'minded'];
+  let formattedName = splitWords;
+  commonWords.forEach(word => {
+    const regex = new RegExp(`(\\w+)${word}`, 'gi');
+    formattedName = formattedName.replace(regex, `$1 ${word}`);
+  });
+  
+  // 4. Capitalize first letter of each word
+  return formattedName
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
 };
 
 const formatTraitExplanation = (explanation: string) => {
@@ -82,6 +96,44 @@ const formatTraitExplanation = (explanation: string) => {
   
   return formatted.trim();
 };  
+
+const formatInterestName = (interest: string) => {
+  if (!interest) return '';
+  
+  // Remove section numbers and headers
+  let cleaned = interest.replace(/###\s*\d+\.\s*/, '');
+  cleaned = cleaned.replace(/Social Behavior Metrics$/, '');
+  
+  // Clean up special characters while preserving some meaningful ones
+  cleaned = cleaned
+    .replace(/[*_]/g, '') // Remove markdown formatting
+    .replace(/\s+/g, ' ') // Normalize spaces
+    .trim();
+    
+  // Handle special cases for cryptocurrency and NFT terms
+  cleaned = cleaned
+    .replace(/cryptocurrency\/nfts/i, 'Cryptocurrency/NFTs')
+    .replace(/nft/i, 'NFT')
+    .replace(/defi/i, 'DeFi')
+    .replace(/dao/i, 'DAO');
+    
+  // Capitalize first letter of each word except for special terms
+  return cleaned.split(' ')
+    .map(word => {
+      // Skip capitalization for known acronyms and special terms
+      if (/^(NFT|DeFi|DAO|dApp)s?$/i.test(word)) {
+        return word.toUpperCase();
+      }
+      // Handle words with slashes
+      if (word.includes('/')) {
+        return word.split('/')
+          .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+          .join('/');
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(' ');
+};
 
 export default function ChatBox({ tweets: initialTweets, profile, onClose, onTweetsUpdate }: ChatBoxProps) {
   const queryClient = useQueryClient();
@@ -333,6 +385,9 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
         content: msg.text
       }))
 
+      // Get the current tuning state directly instead of using ref
+      const currentTuning = tuning;
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -342,7 +397,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           message: userMessage,
           profile,
           analysis,
-          tuning: latestTuning.current,
+          tuning: currentTuning, // Use current tuning state
           conversationHistory,
           conversationId: activeConversationId
         }),
@@ -2045,7 +2100,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                             key={interestName}
                             className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
                           >
-                            {interestName}
+                            {formatInterestName(interestName)}
                           </button>
                         );
                       })}
@@ -2754,7 +2809,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                               key={interestName}
                               className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
                             >
-                              {interestName}
+                              {formatInterestName(interestName)}
                             </button>
                           );
                         })}
