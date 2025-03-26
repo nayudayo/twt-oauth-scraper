@@ -186,7 +186,7 @@ export default function Home() {
           
           {/* Content container with hero text and button */}
           <div className={`relative z-10 flex flex-col items-center gap-8 transition-opacity duration-1000 ${showHeroContent ? 'opacity-100' : 'opacity-0'}`}>
-            <h1 className="text-4xl md:text-6xl font-press-start title-glow">
+            <h1 className="text-4xl text-center md:text-6xl font-press-start title-glow">
               Push The Button
             </h1>
             <button

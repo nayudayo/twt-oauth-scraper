@@ -1664,19 +1664,19 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
         <div className="w-full backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow ancient-border rune-pattern overflow-hidden relative z-10 mb-4 sm:mb-6 md:mb-8">
           <div className="flex flex-col h-[85vh] sm:h-[80vh] md:h-[75vh]">
             {/* Chat Header */}
-            <div className="flex-none flex items-center justify-between px-3 sm:px-4 py-5 sm:py-5 bg-black/40 backdrop-blur-sm border-b border-red-500/10 rounded-t-lg cryptic-shadow relative z-20">
+            <div className="flex-none flex items-center justify-between px-3 sm:px-4 py-5 sm:py-5 bg-black/40 backdrop-blur-sm border-b border-red-500/10 rounded-t-lg cryptic-shadow relative z-40">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
                 <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">NEURAL INTERFACE</h3>
               </div>
-              <ConversationList
-                conversations={conversations}
-                activeConversationId={activeConversationId}
-                onSelectConversation={handleSelectConversation}
-                onNewChat={handleNewChat}
-                onDeleteConversation={handleDeleteConversation}
-                isLoading={isLoadingConversations}
-              />
+                <ConversationList
+                  conversations={conversations}
+                  activeConversationId={activeConversationId}
+                  onSelectConversation={handleSelectConversation}
+                  onNewChat={handleNewChat}
+                  onDeleteConversation={handleDeleteConversation}
+                  isLoading={isLoadingConversations}
+                />
             </div>
 
             {/* Chat Messages Container */}
@@ -2707,7 +2707,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       </div>
 
         {/* Right Side Panels Container */}
-        <div className="fixed top-20 right-0 md:right-6 lg:right-8 h-[calc(100vh-104px)] w-[26vw] lg:w-[22vw] xl:w-[20vw] min-w-[280px] max-w-[400px] flex flex-col gap-6 px-4 md:px-0 overflow-y-auto md:overflow-visible transition-all duration-300">
+        <div className="fixed top-20 right-0 md:right-6 lg:right-8 h-[calc(100vh-104px)] w-[26vw] lg:w-[22vw] xl:w-[20vw] min-w-[280px] max-w-[400px] flex flex-col gap-6 px-4 md:px-0 overflow-y-auto md:overflow-hidden transition-all duration-300">
           {/* Archives Panel - Top Half */}
           <div className="h-[calc(50%-2px)] min-h-[300px] bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
             <div className="flex-none flex items-center px-6 py-4 bg-black/40 backdrop-blur-sm border-b border-red-500/10 cryptic-shadow">
@@ -2762,7 +2762,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
               <TweetList
                 username={profile.name || ''}
                 includeReplies={true}
-                className="flex-1"
+                className="flex-1 overflow-y-auto overflow-x-hidden"
                 isScrapingActive={loading}
                 scrapingProgress={scanProgress}
                 tweets={accumulatedTweets} // Add this line

@@ -53,7 +53,7 @@ export function Header() {
               <h1 className="text-sm sm:text-base lg:text-lg tracking-[0.2em] uppercase font-bold title-glow text-center">
                 PUSH THE BUTTON Terminal
               </h1>
-              <div className="text-[9px] sm:text-[10px] text-red-500/40 tracking-[0.3em] uppercase ancient-text">
+              <div className="text-[9px] text-center sm:text-[10px] text-red-500/40 tracking-[0.3em] uppercase ancient-text">
                 AI Cloning System v1.0.3
               </div>
             </Link>
