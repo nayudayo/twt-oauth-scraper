@@ -110,6 +110,7 @@ export function PsychoanalysisModal({ isOpen, onClose, analysis }: Psychoanalysi
   const [chartData, setChartData] = useState(DEFAULT_CHART_DATA)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 0);
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -246,6 +247,15 @@ export function PsychoanalysisModal({ isOpen, onClose, analysis }: Psychoanalysi
     }
   }, [analysis]);
 
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   if (!isOpen) return null;
 
   const handleShare = async () => {
@@ -302,7 +312,7 @@ export function PsychoanalysisModal({ isOpen, onClose, analysis }: Psychoanalysi
         pointLabels: {
           color: 'rgba(255, 0, 0, 0.8)',
           font: {
-            size: 12,
+            size: windowWidth < 640 ? 8 : windowWidth < 768 ? 10 : 12,
             family: "'Share Tech Mono', monospace",
             weight: 'normal'
           }
@@ -314,7 +324,7 @@ export function PsychoanalysisModal({ isOpen, onClose, analysis }: Psychoanalysi
           backdropColor: 'transparent',
           z: 1,
           font: {
-            size: 10,
+            size: windowWidth < 640 ? 8 : windowWidth < 768 ? 9 : 10,
             family: "'Share Tech Mono', monospace"
           },
           callback: function(tickValue: number | string) {
@@ -335,9 +345,11 @@ export function PsychoanalysisModal({ isOpen, onClose, analysis }: Psychoanalysi
         padding: 12,
         boxPadding: 6,
         titleFont: {
+          size: windowWidth < 640 ? 10 : windowWidth < 768 ? 12 : 14,
           family: "'Share Tech Mono', monospace"
         },
         bodyFont: {
+          size: windowWidth < 640 ? 9 : windowWidth < 768 ? 11 : 13,
           family: "'Share Tech Mono', monospace"
         },
         callbacks: {
@@ -352,18 +364,18 @@ export function PsychoanalysisModal({ isOpen, onClose, analysis }: Psychoanalysi
 
   return (
     <div 
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[999999] p-4 sm:p-6"
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[999999] p-2 sm:p-4 md:p-6"
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-[800px] bg-black/40 backdrop-blur-md border border-red-500/20 rounded-lg shadow-2xl hover-glow ancient-border relative p-4 sm:p-6"
+        className="w-full max-w-[95%] sm:max-w-[90%] md:max-w-[800px] bg-black/40 backdrop-blur-md border border-red-500/20 rounded-lg shadow-2xl hover-glow ancient-border relative p-2 sm:p-4 md:p-6"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-6 border-b border-red-500/20 pb-4">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-            <h2 className="text-lg font-bold text-red-500/90 tracking-wider glow-text">
+            <h2 className="text-base sm:text-lg md:text-xl font-bold text-red-500/90 tracking-wider glow-text">
               PSYCHOANALYSIS {isLoading ? 'PROCESSING' : error ? 'ERROR' : 'COMPLETE'}
             </h2>
           </div>
@@ -400,7 +412,7 @@ export function PsychoanalysisModal({ isOpen, onClose, analysis }: Psychoanalysi
               className="bg-black/95 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow"
             >
               <h3 className="text-red-500/90 font-medium mb-4 text-center">Social Behavior Analysis</h3>
-              <div className="w-full max-w-[600px] mx-auto" style={{ height: '600px' }}>
+              <div className="w-full max-w-[600px] mx-auto" style={{ height: 'clamp(300px, 55vh, 600px)'}}>
                 <Radar data={chartData} options={chartOptions} />
               </div>
             </div>
