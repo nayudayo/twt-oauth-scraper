@@ -447,8 +447,9 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     }
   };
 
+  // Update the generatePersonalityResponse function to handle mobile timeouts
   const generatePersonalityResponse = async (userMessage: string) => {
-    setIsChatLoading(true) // Use chat-specific loading state
+    setIsChatLoading(true)
     setError(null)
     try {
       setIsTyping(true)
@@ -462,50 +463,67 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       // Get the current tuning state directly instead of using ref
       const currentTuning = tuning;
 
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          message: userMessage,
-          profile,
-          analysis,
-          tuning: currentTuning, // Use current tuning state
-          conversationHistory,
-          conversationId: activeConversationId
-        }),
-      })
-      
-      if (!response.ok) {
-        throw new Error('Failed to get response')
-      }
-      
-      const data = await response.json()
-      
-      // Update active conversation ID if this is a new conversation
-      if (data.conversationId && !activeConversationId) {
-        setActiveConversationId(data.conversationId)
-        // Fetch updated conversation list
-        const convsResponse = await fetch('/api/conversations')
-        if (convsResponse.ok) {
-          const convsData = await convsResponse.json()
-          if (convsData.success && Array.isArray(convsData.data)) {
-            setConversations(convsData.data)
+      // Add timeout handling for mobile/tablet
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 seconds for mobile/tablet
+
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            message: userMessage,
+            profile,
+            analysis,
+            tuning: currentTuning,
+            conversationHistory,
+            conversationId: activeConversationId
+          }),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error('Failed to get response');
+        }
+        
+        const data = await response.json();
+        
+        // Update active conversation ID if this is a new conversation
+        if (data.conversationId && !activeConversationId) {
+          setActiveConversationId(data.conversationId);
+          // Fetch updated conversation list
+          const convsResponse = await fetch('/api/conversations');
+          if (convsResponse.ok) {
+            const convsData = await convsResponse.json();
+            if (convsData.success && Array.isArray(convsData.data)) {
+              setConversations(convsData.data);
+            }
           }
         }
+
+        setIsTyping(false);
+        return data.response;
+
+      } catch (error: unknown) {
+        clearTimeout(timeoutId);
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error('Response timed out - please try again');
+        }
+        throw error;
       }
 
-      setIsTyping(false)
-      return data.response
     } catch (err) {
-      setIsTyping(false)
-      setError(err instanceof Error ? err.message : 'Failed to get response')
-      return null
+      setIsTyping(false);
+      setError(err instanceof Error ? err.message : 'Failed to get response');
+      return null;
     } finally {
-      setIsChatLoading(false) // Clear chat loading state
+      setIsChatLoading(false);
     }
-  }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -550,7 +568,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     }
   }
 
-  // Update handleAnalyze to use cache
+  // Update handleAnalyze to handle mobile/tablet loading states
   const handleAnalyze = async () => {
     if (!accumulatedTweets || accumulatedTweets.length === 0) {
       setError('No tweets available for analysis');
@@ -633,89 +651,104 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
         return;
       }
 
-      // No cache, perform new analysis
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tweets: accumulatedTweets,
-          profile
-        })
-      });
+      // No cache, perform new analysis with mobile/tablet timeout handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes for mobile/tablet
 
-      if (!response.ok) {
-        throw new Error('Failed to analyze personality');
+      try {
+        const response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tweets: accumulatedTweets,
+            profile
+          }),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error('Failed to analyze personality');
+        }
+
+        const newAnalysis = await response.json();
+        
+        // Update tuning with new analysis values
+        const newTraitModifiers = newAnalysis.traits.reduce((acc: Record<string, number>, trait: { name: string; score: number }) => ({
+          ...acc,
+          // Convert analysis score (0-10) to UI score (0-100)
+          [trait.name]: Math.round(trait.score * 10)
+        }), {});
+
+        // Initialize weights based on expertise levels in the interest strings
+        const newInterestWeights = newAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => {
+          const [interestName, expertiseLevel] = interest.split(':').map(s => s.trim());
+          let weight = 50; // Default to medium
+          
+          if (expertiseLevel) {
+            const level = expertiseLevel.toLowerCase();
+            if (level.includes('advanced') || level.includes('high') || level.includes('strong')) {
+              weight = 75;
+            } else if (level.includes('intermediate') || level.includes('moderate')) {
+              weight = 50;
+            } else if (level.includes('basic') || level.includes('low')) {
+              weight = 25;
+            }
+          }
+          
+          return { ...acc, [interestName]: weight };
+        }, {});
+
+        setTuning(prev => ({
+          ...prev,
+          traitModifiers: newTraitModifiers, // Replace entirely instead of merging
+          interestWeights: {
+            ...prev.interestWeights,
+            ...newInterestWeights
+          },
+          communicationStyle: {
+            formality: newAnalysis.communicationStyle.formality ?? 'medium',
+            enthusiasm: newAnalysis.communicationStyle.enthusiasm ?? 'medium',
+            technicalLevel: newAnalysis.communicationStyle.technicalLevel ?? 'medium',
+            emojiUsage: newAnalysis.communicationStyle.emojiUsage ?? 'medium',
+            verbosity: newAnalysis.communicationStyle.verbosity ?? 'medium'
+          }
+        }));
+
+        setAnalysis(newAnalysis);
+        setShowPsychoanalysis(true);
+
+        // Save new analysis and tuning to cache
+        await personalityCache.saveToCache({
+          ...newAnalysis,
+          traits: (Object.entries(newTraitModifiers) as [string, number][]).map(([name, score]) => ({
+            name: name.replace(/[*-]/g, '').trim(),
+            score: Math.round(score / 10),
+            explanation: newAnalysis.traits.find((t: { name: string }) => t.name === name)?.explanation?.replace(/[*-]/g, '').trim()
+          })),
+          interests: Object.keys(newInterestWeights).map(interest => interest.replace(/[*-]/g, '').trim()),
+          communicationStyle: {
+            ...newAnalysis.communicationStyle,
+            description: newAnalysis.communicationStyle.description?.replace(/[*-]/g, '').trim()
+          },
+          thoughtProcess: {
+            ...newAnalysis.thoughtProcess,
+            initialApproach: newAnalysis.thoughtProcess.initialApproach?.replace(/[*-]/g, '').trim(),
+            processingStyle: newAnalysis.thoughtProcess.processingStyle?.replace(/[*-]/g, '').trim(),
+            expressionStyle: newAnalysis.thoughtProcess.expressionStyle?.replace(/[*-]/g, '').trim()
+          }
+        });
+
+      } catch (error: unknown) {
+        clearTimeout(timeoutId);
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error('Analysis timed out - please try again');
+        }
+        throw error;
       }
 
-      const newAnalysis = await response.json();
-      
-      // Update tuning with new analysis values
-      const newTraitModifiers = newAnalysis.traits.reduce((acc: Record<string, number>, trait: { name: string; score: number }) => ({
-        ...acc,
-        // Convert analysis score (0-10) to UI score (0-100)
-        [trait.name]: Math.round(trait.score * 10)
-      }), {});
-
-      // Initialize weights based on expertise levels in the interest strings
-      const newInterestWeights = newAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => {
-        const [interestName, expertiseLevel] = interest.split(':').map(s => s.trim());
-        let weight = 50; // Default to medium
-        
-        if (expertiseLevel) {
-          const level = expertiseLevel.toLowerCase();
-          if (level.includes('advanced') || level.includes('high') || level.includes('strong')) {
-            weight = 75;
-          } else if (level.includes('intermediate') || level.includes('moderate')) {
-            weight = 50;
-          } else if (level.includes('basic') || level.includes('low')) {
-            weight = 25;
-          }
-        }
-        
-        return { ...acc, [interestName]: weight };
-      }, {});
-
-      setTuning(prev => ({
-        ...prev,
-        traitModifiers: newTraitModifiers, // Replace entirely instead of merging
-        interestWeights: {
-          ...prev.interestWeights,
-          ...newInterestWeights
-        },
-        communicationStyle: {
-          formality: newAnalysis.communicationStyle.formality ?? 'medium',
-          enthusiasm: newAnalysis.communicationStyle.enthusiasm ?? 'medium',
-          technicalLevel: newAnalysis.communicationStyle.technicalLevel ?? 'medium',
-          emojiUsage: newAnalysis.communicationStyle.emojiUsage ?? 'medium',
-          verbosity: newAnalysis.communicationStyle.verbosity ?? 'medium'
-        }
-      }));
-
-      setAnalysis(newAnalysis);
-      setShowPsychoanalysis(true);
-
-      // Save new analysis and tuning to cache
-      await personalityCache.saveToCache({
-        ...newAnalysis,
-        traits: (Object.entries(newTraitModifiers) as [string, number][]).map(([name, score]) => ({
-          name: name.replace(/[*-]/g, '').trim(),
-          score: Math.round(score / 10),
-          explanation: newAnalysis.traits.find((t: { name: string }) => t.name === name)?.explanation?.replace(/[*-]/g, '').trim()
-        })),
-        interests: Object.keys(newInterestWeights).map(interest => interest.replace(/[*-]/g, '').trim()),
-        communicationStyle: {
-          ...newAnalysis.communicationStyle,
-          description: newAnalysis.communicationStyle.description?.replace(/[*-]/g, '').trim()
-        },
-        thoughtProcess: {
-          ...newAnalysis.thoughtProcess,
-          initialApproach: newAnalysis.thoughtProcess.initialApproach?.replace(/[*-]/g, '').trim(),
-          processingStyle: newAnalysis.thoughtProcess.processingStyle?.replace(/[*-]/g, '').trim(),
-          expressionStyle: newAnalysis.thoughtProcess.expressionStyle?.replace(/[*-]/g, '').trim()
-        }
-      });
-
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Analysis error:', error);
       setError(error instanceof Error ? error.message : 'Failed to analyze personality');
     } finally {
@@ -1240,6 +1273,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     adjustTextareaHeight()
   }, [input])
 
+  // Update handleUpdateAnalysis to handle mobile/tablet loading states
   const handleUpdateAnalysis = async () => {
     try {
       // Reset analysis state but preserve tuning
@@ -1249,134 +1283,149 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       setError(null);
       setAnalysisStartTime(Date.now());
 
-      // Perform new analysis with current tuning values
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tweets: accumulatedTweets,
-          profile,
-          currentTuning // Pass current tuning to preserve values
-        })
-      });
+      // Add timeout handling for mobile/tablet
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes for mobile/tablet
 
-      if (!response.ok) {
-        throw new Error('Failed to analyze personality');
-      }
-
-      const newAnalysis = await response.json();
-      
-      // Preserve existing communication style values
-      const preservedCommunicationStyle = {
-        ...newAnalysis.communicationStyle,
-        formality: currentTuning.communicationStyle.formality,
-        enthusiasm: currentTuning.communicationStyle.enthusiasm,
-        technicalLevel: currentTuning.communicationStyle.technicalLevel,
-        emojiUsage: currentTuning.communicationStyle.emojiUsage,
-        verbosity: currentTuning.communicationStyle.verbosity ?? 'medium'
-      };
-
-      // Update analysis with preserved values
-      const finalAnalysis = {
-        ...newAnalysis,
-        communicationStyle: preservedCommunicationStyle,
-        // Preserve tuning parameters
-        traitModifiers: currentTuning.traitModifiers,
-        interestWeights: currentTuning.interestWeights,
-        customInterests: currentTuning.customInterests
-      };
-
-      // Convert traits to toggle states - traits should be ON by default when detected
-      const traitModifiers = newAnalysis.traits.reduce((acc: Record<string, number>, trait: { name: string; score: number }) => ({
-        ...acc,
-        [trait.name]: 100 // Set to 100 (ON) for detected traits
-      }), {});
-
-      // Combine existing and new interests, preserving existing weights and setting new ones to ON
-      const newInterests = newAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => {
-        const [interestName] = interest.split(':').map(s => s.trim());
-        // If interest already exists in currentTuning, preserve its weight, otherwise set to 100 (ON)
-        const weight = currentTuning.interestWeights[interestName] ?? 100;
-        return { ...acc, [interestName]: weight };
-      }, {});
-
-      setTuning(prev => ({
-        ...prev,
-        traitModifiers,
-        interestWeights: {
-          ...prev.interestWeights, // Keep existing interest weights
-          ...newInterests // Add new interests
-        },
-        communicationStyle: {
-          ...currentTuning.communicationStyle,
-          verbosity: currentTuning.communicationStyle.verbosity ?? 'medium'
-        }
-      }));
-
-      setAnalysis(finalAnalysis);
-      setShowPsychoanalysis(true);
-
-      // Update the cache with preserved values
-      await personalityCache.saveToCache({
-        ...finalAnalysis,
-        traits: newAnalysis.traits.map((trait: { name: string; score: number; explanation?: string }) => ({
-          name: trait.name.replace(/[*-]/g, '').trim(),
-          score: traitModifiers[trait.name] ? 10 : 0, // Convert toggle state to score
-          explanation: trait.explanation?.replace(/[*-]/g, '').trim()
-        })),
-        interests: Object.keys(newInterests),
-        interestWeights: newInterests,
-        customInterests: currentTuning.customInterests,
-        communicationStyle: {
-          ...preservedCommunicationStyle,
-          description: newAnalysis.communicationStyle.description?.replace(/[*-]/g, '').trim()
-        },
-        thoughtProcess: {
-          ...newAnalysis.thoughtProcess,
-          initialApproach: newAnalysis.thoughtProcess.initialApproach?.replace(/[*-]/g, '').trim(),
-          processingStyle: newAnalysis.thoughtProcess.processingStyle?.replace(/[*-]/g, '').trim(),
-          expressionStyle: newAnalysis.thoughtProcess.expressionStyle?.replace(/[*-]/g, '').trim()
-        }
-      });
-
-      // Create a new chat with the updated personality
       try {
-        const createChatResponse = await fetch('/api/conversations', {
+        const response = await fetch('/api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            analysis: finalAnalysis,
-            tuning: {
-              traitModifiers,
-              interestWeights: newInterests,
-              customInterests: currentTuning.customInterests,
-              communicationStyle: {
-                ...preservedCommunicationStyle,
-                verbosity: currentTuning.communicationStyle.verbosity ?? 'medium'
-              }
-            }
-          })
+            tweets: accumulatedTweets,
+            profile,
+            currentTuning
+          }),
+          signal: controller.signal
         });
 
-        if (!createChatResponse.ok) {
-          throw new Error('Failed to create new chat');
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error('Failed to analyze personality');
         }
 
-        const chatData = await createChatResponse.json();
-        if (chatData.success && chatData.data) {
-          // Update conversations list with new chat
-          setConversations(prev => [chatData.data, ...prev]);
-          // Set new chat as active
-          setActiveConversationId(chatData.data.id);
-          // Clear messages for new chat
-          setMessages([]);
+        const newAnalysis = await response.json();
+        
+        // Preserve existing communication style values
+        const preservedCommunicationStyle = {
+          ...newAnalysis.communicationStyle,
+          formality: currentTuning.communicationStyle.formality,
+          enthusiasm: currentTuning.communicationStyle.enthusiasm,
+          technicalLevel: currentTuning.communicationStyle.technicalLevel,
+          emojiUsage: currentTuning.communicationStyle.emojiUsage,
+          verbosity: currentTuning.communicationStyle.verbosity ?? 'medium'
+        };
+
+        // Update analysis with preserved values
+        const finalAnalysis = {
+          ...newAnalysis,
+          communicationStyle: preservedCommunicationStyle,
+          // Preserve tuning parameters
+          traitModifiers: currentTuning.traitModifiers,
+          interestWeights: currentTuning.interestWeights,
+          customInterests: currentTuning.customInterests
+        };
+
+        // Convert traits to toggle states - traits should be ON by default when detected
+        const traitModifiers = newAnalysis.traits.reduce((acc: Record<string, number>, trait: { name: string; score: number }) => ({
+          ...acc,
+          [trait.name]: 100 // Set to 100 (ON) for detected traits
+        }), {});
+
+        // Combine existing and new interests, preserving existing weights and setting new ones to ON
+        const newInterests = newAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => {
+          const [interestName] = interest.split(':').map(s => s.trim());
+          // If interest already exists in currentTuning, preserve its weight, otherwise set to 100 (ON)
+          const weight = currentTuning.interestWeights[interestName] ?? 100;
+          return { ...acc, [interestName]: weight };
+        }, {});
+
+        setTuning(prev => ({
+          ...prev,
+          traitModifiers,
+          interestWeights: {
+            ...prev.interestWeights, // Keep existing interest weights
+            ...newInterests // Add new interests
+          },
+          communicationStyle: {
+            ...currentTuning.communicationStyle,
+            verbosity: currentTuning.communicationStyle.verbosity ?? 'medium'
+          }
+        }));
+
+        setAnalysis(finalAnalysis);
+        setShowPsychoanalysis(true);
+
+        // Update the cache with preserved values
+        await personalityCache.saveToCache({
+          ...finalAnalysis,
+          traits: newAnalysis.traits.map((trait: { name: string; score: number; explanation?: string }) => ({
+            name: trait.name.replace(/[*-]/g, '').trim(),
+            score: traitModifiers[trait.name] ? 10 : 0, // Convert toggle state to score
+            explanation: trait.explanation?.replace(/[*-]/g, '').trim()
+          })),
+          interests: Object.keys(newInterests),
+          interestWeights: newInterests,
+          customInterests: currentTuning.customInterests,
+          communicationStyle: {
+            ...preservedCommunicationStyle,
+            description: newAnalysis.communicationStyle.description?.replace(/[*-]/g, '').trim()
+          },
+          thoughtProcess: {
+            ...newAnalysis.thoughtProcess,
+            initialApproach: newAnalysis.thoughtProcess.initialApproach?.replace(/[*-]/g, '').trim(),
+            processingStyle: newAnalysis.thoughtProcess.processingStyle?.replace(/[*-]/g, '').trim(),
+            expressionStyle: newAnalysis.thoughtProcess.expressionStyle?.replace(/[*-]/g, '').trim()
+          }
+        });
+
+        // Create a new chat with the updated personality
+        try {
+          const createChatResponse = await fetch('/api/conversations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              analysis: finalAnalysis,
+              tuning: {
+                traitModifiers,
+                interestWeights: newInterests,
+                customInterests: currentTuning.customInterests,
+                communicationStyle: {
+                  ...preservedCommunicationStyle,
+                  verbosity: currentTuning.communicationStyle.verbosity ?? 'medium'
+                }
+              }
+            })
+          });
+
+          if (!createChatResponse.ok) {
+            throw new Error('Failed to create new chat');
+          }
+
+          const chatData = await createChatResponse.json();
+          if (chatData.success && chatData.data) {
+            // Update conversations list with new chat
+            setConversations(prev => [chatData.data, ...prev]);
+            // Set new chat as active
+            setActiveConversationId(chatData.data.id);
+            // Clear messages for new chat
+            setMessages([]);
+          }
+        } catch (error) {
+          console.error('Failed to create new chat:', error);
+          setError('Failed to create new chat with updated personality');
         }
-      } catch (error) {
-        console.error('Failed to create new chat:', error);
-        setError('Failed to create new chat with updated personality');
+
+      } catch (error: unknown) {
+        clearTimeout(timeoutId);
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error('Analysis update timed out - please try again');
+        }
+        throw error;
       }
 
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Analysis error:', error);
       setError(error instanceof Error ? error.message : 'Failed to analyze personality');
     } finally {
