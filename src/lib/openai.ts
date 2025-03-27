@@ -263,12 +263,33 @@ function consolidateInterests(interests: string[]): string[] {
   );
 }
 
-// Add timeout configuration
+// Add timeout configuration with device-specific settings
 const API_TIMEOUT = {
-  personality: 120000,  // 2 minutes for personality analysis
-  chat: 60000,         // 1 minute for chat responses
-  base: 30000          // 30 seconds base timeout
+  personality: {
+    desktop: 120000,    // 2 minutes for desktop
+    mobile: 180000,     // 3 minutes for mobile
+    tablet: 180000      // 3 minutes for tablet
+  },
+  chat: {
+    desktop: 60000,     // 1 minute for desktop
+    mobile: 90000,      // 1.5 minutes for mobile
+    tablet: 90000       // 1.5 minutes for tablet
+  },
+  base: {
+    desktop: 30000,     // 30 seconds for desktop
+    mobile: 45000,      // 45 seconds for mobile
+    tablet: 45000       // 45 seconds for tablet
+  }
 };
+
+// Add device detection helper
+function getDeviceType(): 'mobile' | 'tablet' | 'desktop' {
+  if (typeof window === 'undefined') return 'desktop';
+  const width = window.innerWidth;
+  if (width < 768) return 'mobile';
+  if (width < 1024) return 'tablet';
+  return 'desktop';
+}
 
 // Add interface for regeneration tracking
 interface RegenerationContext {
@@ -680,6 +701,20 @@ function categorizeWord(word: string): 'pronoun' | 'modal' | 'adjective' | 'verb
   return 'other';
 }
 
+// Add progressive loading state
+interface ProgressiveLoadingState {
+  stage: 'initial' | 'traits' | 'interests' | 'social' | 'communication' | 'complete';
+  progress: number;
+}
+
+// Add retry constants
+const MAX_ANALYSIS_RETRIES = 3;
+const MAX_INTERESTS_RETRIES = 5;
+const MAX_PSYCHO_RETRIES = 5;
+const MAX_SOCIAL_METRICS_RETRIES = 5;
+const MAX_EMOTIONAL_TONE_RETRIES = 5;
+
+// Update the analyzePersonality function to support progressive loading
 export async function analyzePersonality(
   tweets: Tweet[], 
   profile: OpenAITwitterProfile,
@@ -691,15 +726,22 @@ export async function analyzePersonality(
   psychoRetryCount: number = 0,
   socialMetricsRetryCount: number = 0,
   emotionalToneRetryCount: number = 0,
-  currentTuning?: PersonalityTuning
+  currentTuning?: PersonalityTuning,
+  onProgress?: (state: ProgressiveLoadingState) => void
 ): Promise<PersonalityAnalysis | { response: string }> {
-  const MAX_ANALYSIS_RETRIES = 3;
-  const MAX_INTERESTS_RETRIES = 5;
-  const MAX_PSYCHO_RETRIES = 5;
-  const MAX_SOCIAL_METRICS_RETRIES = 5;
-  const MAX_EMOTIONAL_TONE_RETRIES = 5;
-  
+  const deviceType = getDeviceType();
+  const isMobileOrTablet = deviceType !== 'desktop';
+
+  // Update progress if on mobile/tablet
+  const updateProgress = (stage: ProgressiveLoadingState['stage'], progress: number) => {
+    if (isMobileOrTablet && onProgress) {
+      onProgress({ stage, progress });
+    }
+  };
+
   try {
+    updateProgress('initial', 0);
+    
     // Filter out tweets with less than MIN_WORDS words
     const validTweets = tweets.filter((t): t is Tweet & { text: string } => 
       typeof t.text === 'string' && 
@@ -1044,7 +1086,23 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
 
           try {
             const abortController = new AbortController();
-            const timeoutId = setTimeout(() => abortController.abort(), API_TIMEOUT.personality);
+            const deviceType = getDeviceType();
+            const timeoutId = setTimeout(() => abortController.abort(), API_TIMEOUT.personality[deviceType]);
+
+            // Progressive loading stages
+            if (isMobileOrTablet) {
+              updateProgress('traits', 20);
+              await new Promise(resolve => setTimeout(resolve, 500)); // Small delay for UI
+              
+              updateProgress('interests', 40);
+              await new Promise(resolve => setTimeout(resolve, 500));
+              
+              updateProgress('social', 60);
+              await new Promise(resolve => setTimeout(resolve, 500));
+              
+              updateProgress('communication', 80);
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
 
             const result = await openai.chat.completions.create({
               model: "gpt-4o-mini",
@@ -1088,6 +1146,10 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
               regen.previousResponses.push(result.choices[0].message.content);
             }
 
+            if (isMobileOrTablet) {
+              updateProgress('complete', 100);
+            }
+
             return result;
 
           } catch (error: unknown) {
@@ -1103,7 +1165,7 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
             }
             throw error;
           }
-        }, FALLBACK_CONFIG.maxRetries, 2000, API_TIMEOUT.personality); // Increased base delay and timeout
+        }, FALLBACK_CONFIG.maxRetries, 2000, 'personality'); // Increased base delay and timeout
 
         const responseContent = completion.choices[0].message.content;
         if (!responseContent) {
@@ -1339,11 +1401,13 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
   } catch (error) {
     console.error('Error in personality analysis:', error);
     
-    // Add timeout handling to error checks
-    if (error instanceof PersonalityAnalysisTimeoutError) {
-      console.warn('Personality analysis timed out - will retry with longer timeout');
-      // Retry with increased timeout
-      return analyzePersonality(tweets, profile, prompt, context, regenerationKey, retryCount, interestsRetryCount, psychoRetryCount, socialMetricsRetryCount, emotionalToneRetryCount);
+    // Add mobile/tablet specific error handling
+    if (error instanceof PersonalityAnalysisTimeoutError && isMobileOrTablet) {
+      console.warn('Mobile/tablet timeout - will retry with increased timeout');
+      // Increase timeout for this attempt
+      const currentTimeout = API_TIMEOUT.personality[deviceType];
+      API_TIMEOUT.personality[deviceType] = currentTimeout * 1.5;
+      return analyzePersonality(tweets, profile, prompt, context, regenerationKey, retryCount, interestsRetryCount, psychoRetryCount, socialMetricsRetryCount, emotionalToneRetryCount, currentTuning, onProgress);
     }
     
     // If we hit max retries or get a PersonalityAnalysisError, throw it up
@@ -1360,7 +1424,7 @@ Focus on quality over quantity. Provide specific examples from tweets where poss
     if (retryCount < MAX_ANALYSIS_RETRIES) {
       console.log(`Retrying personality analysis due to error (attempt ${retryCount + 1}/${MAX_ANALYSIS_RETRIES})...`);
       await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
-      return analyzePersonality(tweets, profile, prompt, context, regenerationKey, retryCount + 1, interestsRetryCount, psychoRetryCount, socialMetricsRetryCount, emotionalToneRetryCount);
+      return analyzePersonality(tweets, profile, prompt, context, regenerationKey, retryCount + 1, interestsRetryCount, psychoRetryCount, socialMetricsRetryCount, emotionalToneRetryCount, currentTuning, onProgress);
     }
 
     // If all retries fail, return safe default
@@ -2502,7 +2566,6 @@ function parseAnalysisResponse(response: string): PersonalityAnalysis {
   return analysis
 }
 
-// Add response quality assessment
 function assessResponseQuality(
   response: string,
   previousResponses?: string[]
@@ -2587,9 +2650,11 @@ async function retryWithExponentialBackoff<T>(
   operation: () => Promise<T>,
   maxRetries: number = 3,
   baseDelay: number = 1000,
-  timeout: number = API_TIMEOUT.base
+  timeoutType: keyof typeof API_TIMEOUT = 'base'
 ): Promise<T> {
   let lastError: Error | null = null;
+  const deviceType = getDeviceType();
+  const timeout = API_TIMEOUT[timeoutType][deviceType];
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
@@ -2610,9 +2675,10 @@ async function retryWithExponentialBackoff<T>(
       console.warn(`Attempt ${attempt + 1} failed:`, lastError.message);
       
       if (attempt < maxRetries - 1) {
-        // Increase delay for timeout errors
+        // Increase delay for timeout errors and mobile/tablet
         const isTimeout = error instanceof TimeoutError;
-        const delay = baseDelay * Math.pow(2, attempt) + (isTimeout ? 5000 : Math.random() * 1000);
+        const mobileMultiplier = deviceType !== 'desktop' ? 1.5 : 1;
+        const delay = baseDelay * Math.pow(2, attempt) * mobileMultiplier + (isTimeout ? 5000 : Math.random() * 1000);
         console.log(`Retrying in ${Math.round(delay / 1000)} seconds...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
