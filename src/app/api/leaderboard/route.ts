@@ -53,9 +53,14 @@ export async function GET() {
         const user = await db.getUserById(referrer.userId);
         const referralStats = await db.access.getReferralStats(referrer.userId);
         
+        // Filter for the actual referral code (not neural code)
+        // Neural codes typically start with 'NEURAL-' or similar
+        const referralCode = referralStats.codes
+          .find(code => !code.code.startsWith('NEURAL-'))?.code || 'N/A';
+        
         return {
           username: user?.username || 'Unknown',
-          referralCode: referralStats.codes[0]?.code || 'N/A',
+          referralCode,
           totalReferrals: referrer.totalReferrals,
           lastUsed: referralStats.usages[0]?.used_at
         };

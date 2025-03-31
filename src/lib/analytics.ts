@@ -109,49 +109,63 @@ export class AnalyticsService {
       const userId = userResult.rows[0].id;
       console.log('Found user ID:', userId);
 
-      // Then get their tweets with all metrics
-      console.log('Fetching tweets for user ID:', userId);
-      const result = await this.pool.query(
-        `SELECT 
-          id,
-          text,
-          created_at,
-          view_count,
-          retweet_count,
-          reply_count,
-          like_count,
-          quote_count
-        FROM tweets 
-        WHERE user_id = $1 
-        ORDER BY created_at DESC`,
+      // Get total count first
+      const countResult = await this.pool.query(
+        'SELECT COUNT(*) as total FROM tweets WHERE user_id = $1',
         [userId]
       );
+      const totalTweets = parseInt(countResult.rows[0].total);
+      console.log(`Total tweets found: ${totalTweets}`);
 
-      const rows = result.rows;
+      // Then get their tweets with all metrics using pagination
+      const batchSize = 100;
+      let allTweets: Tweet[] = [];
       
-      if (rows.length === 0) {
+      for (let offset = 0; offset < totalTweets; offset += batchSize) {
+        console.log(`Fetching batch of tweets: offset ${offset}, limit ${batchSize}`);
+        const result = await this.pool.query<Tweet>(
+          `SELECT 
+            id,
+            text,
+            created_at,
+            view_count,
+            retweet_count,
+            reply_count,
+            like_count,
+            quote_count
+          FROM tweets 
+          WHERE user_id = $1 
+          ORDER BY created_at DESC
+          LIMIT $2 OFFSET $3`,
+          [userId, batchSize, offset]
+        );
+        
+        allTweets = [...allTweets, ...result.rows];
+      }
+
+      if (allTweets.length === 0) {
         console.log('No tweets found for user:', username);
       } else {
-        console.log(`Found ${rows.length} tweets for user:`, username);
+        console.log(`Found ${allTweets.length} tweets for user:`, username);
         // Log first tweet metrics for debugging
         console.log('First tweet metrics:', {
-          id: rows[0].id,
-          text: rows[0].text?.substring(0, 50) + '...',
-          view_count: rows[0].view_count,
-          retweet_count: rows[0].retweet_count,
-          reply_count: rows[0].reply_count,
-          like_count: rows[0].like_count,
-          quote_count: rows[0].quote_count,
+          id: allTweets[0].id,
+          text: allTweets[0].text?.substring(0, 50) + '...',
+          view_count: allTweets[0].view_count,
+          retweet_count: allTweets[0].retweet_count,
+          reply_count: allTweets[0].reply_count,
+          like_count: allTweets[0].like_count,
+          quote_count: allTweets[0].quote_count,
           total_engagement: (
-            (rows[0].retweet_count ?? 0) + 
-            (rows[0].reply_count ?? 0) + 
-            (rows[0].like_count ?? 0) + 
-            (rows[0].quote_count ?? 0)
+            (allTweets[0].retweet_count ?? 0) + 
+            (allTweets[0].reply_count ?? 0) + 
+            (allTweets[0].like_count ?? 0) + 
+            (allTweets[0].quote_count ?? 0)
           )
         });
       }
       
-      return rows;
+      return allTweets;
     } catch (error) {
       console.error('Error in getUserTweets:', error);
       throw error;

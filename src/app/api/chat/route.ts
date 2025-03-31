@@ -9,6 +9,7 @@ import { ChatCompletionMessage } from 'openai/resources/chat/completions'
 import { initDB } from '@/lib/db'
 import { CommunicationLevel } from '@/lib/openai'
 import { detectSpecialPrompt, formatSpecialPrompt } from './special-prompting'
+import { ConversationMetadata as DBConversationMetadata } from '@/types/conversation'
 
 interface RequestBody {
   message: string
@@ -35,6 +36,12 @@ interface RequestBody {
   regenerationKey?: string
   isRegeneration?: boolean
   specialPromptInputs?: Record<string, string | string[]>
+}
+
+interface ChatMetadata extends DBConversationMetadata {
+  analysis: string;  // Store as JSON string
+  tuning: string;    // Store as JSON string
+  lastTuningUpdate: Date;
 }
 
 // Calculate dynamic temperature based on style settings
@@ -162,35 +169,59 @@ export async function POST(req: Request) {
     }
     console.log(`User found/created with ID: ${user.id}`)
 
-    // Get or create conversation with proper error handling
-    let activeConversationId: number
+    // Update the conversation creation section
+    let activeConversationId: number | undefined;
+    let conversationMetadata: ChatMetadata | undefined;
+
     if (conversationId) {
       // Verify the conversation exists and belongs to the user
-      const conversation = await db.conversation.getConversation(conversationId, user.id)
+      const conversation = await db.conversation.getConversation(conversationId, user.id);
       if (!conversation) {
         // Instead of returning 404, create a new conversation
         try {
+          const metadata: ChatMetadata = {
+            profileName: profile.name || '',
+            lastMessageAt: new Date(),
+            isActive: true,
+            analysis: JSON.stringify(analysis),
+            tuning: JSON.stringify(tuning),
+            lastTuningUpdate: new Date()
+          };
+          
           const newConversation = await db.conversation.startNewChat({
             userId: user.id,
             initialMessage: message,
             title: `Chat with ${profile.name || 'AI'}`,
-            metadata: {
-              profileName: profile.name,
-              lastMessageAt: new Date(),
-              messageCount: 0
-            }
-          })
-          activeConversationId = newConversation.id
-          console.log(`Created new conversation with ID: ${activeConversationId}`)
+            metadata
+          });
+          activeConversationId = newConversation.id;
+          conversationMetadata = metadata;
         } catch (error) {
-          console.error('Failed to create conversation:', error)
-          return NextResponse.json(
-            { error: 'Failed to create conversation' },
-            { status: 500 }
-          )
+          console.error('Failed to create new conversation:', error);
+          throw error;
         }
       } else {
-        activeConversationId = conversationId
+        activeConversationId = conversation.id;
+        const currentMetadata = conversation.metadata as ChatMetadata;
+        
+        // Update conversation metadata with latest tuning if it has changed
+        if (!currentMetadata.tuning || 
+            currentMetadata.tuning !== JSON.stringify(tuning)) {
+          const updatedMetadata: ChatMetadata = {
+            ...currentMetadata,
+            tuning: JSON.stringify(tuning),
+            lastTuningUpdate: new Date()
+          };
+          
+          await db.conversation.updateConversation(
+            conversation.id,
+            user.id,
+            { metadata: updatedMetadata }
+          );
+          conversationMetadata = updatedMetadata;
+        } else {
+          conversationMetadata = currentMetadata;
+        }
       }
     } else {
       // Create a new conversation
@@ -215,6 +246,11 @@ export async function POST(req: Request) {
         )
       }
     }
+
+    // Use the stored tuning state for message processing
+    const activeTuning = conversationMetadata?.tuning ? 
+      JSON.parse(conversationMetadata.tuning) : 
+      tuning;
 
     // Save user message with error handling
     try {
@@ -663,7 +699,7 @@ Previous response: ${msg.content}`
       // Add active tuning state reminder before user message
       { role: "system", content: `ACTIVE TUNING STATE REMINDER:
 1. Currently enabled traits: ${analysis.traits
-  .filter(trait => tuning.traitModifiers[trait.name] > 50)
+  .filter(trait => activeTuning.traitModifiers[trait.name] > 50)
   .map(trait => trait.name)
   .join(', ')}
 
@@ -736,7 +772,7 @@ ESPECIALLY CHECK THE EMOJI REQUIREMENT - your response MUST contain the correct 
                   state: generateConsciousnessInstructions(config),
                   effects
                 },
-                regenerationKey: isRegeneration ? (regenerationKey || activeConversationId.toString()) : undefined
+                regenerationKey: isRegeneration ? (regenerationKey || activeConversationId?.toString()) : undefined
               } as ChatRequestWithRegeneration,
               username,
               (result) => {
@@ -799,7 +835,7 @@ ESPECIALLY CHECK THE EMOJI REQUIREMENT - your response MUST contain the correct 
     return NextResponse.json({
       response,
       conversationId: activeConversationId,
-      regenerationKey: isRegeneration ? (regenerationKey || activeConversationId.toString()) : undefined
+      regenerationKey: isRegeneration ? (regenerationKey || activeConversationId?.toString()) : undefined
     })
   } catch (error) {
     console.error('Chat error:', error)
