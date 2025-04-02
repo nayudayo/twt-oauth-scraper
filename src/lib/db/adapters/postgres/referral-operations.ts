@@ -337,7 +337,6 @@ export class PostgresReferralOperations implements ReferralOperations {
           owner_user_id as "userId",
           SUM(usage_count) as "totalReferrals"
          FROM referral_codes
-         WHERE code NOT LIKE 'NEURAL-%'
          GROUP BY owner_user_id
          ORDER BY "totalReferrals" DESC
          LIMIT $1`,

@@ -109,63 +109,110 @@ export class AnalyticsService {
       const userId = userResult.rows[0].id;
       console.log('Found user ID:', userId);
 
-      // Get total count first
+      // First check if we have any tweets at all for this user
       const countResult = await this.pool.query(
         'SELECT COUNT(*) as total FROM tweets WHERE user_id = $1',
         [userId]
       );
-      const totalTweets = parseInt(countResult.rows[0].total);
-      console.log(`Total tweets found: ${totalTweets}`);
+      console.log('Total tweets for user:', countResult.rows[0].total);
 
-      // Then get their tweets with all metrics using pagination
-      const batchSize = 100;
-      let allTweets: Tweet[] = [];
-      
-      for (let offset = 0; offset < totalTweets; offset += batchSize) {
-        console.log(`Fetching batch of tweets: offset ${offset}, limit ${batchSize}`);
-        const result = await this.pool.query<Tweet>(
-          `SELECT 
-            id,
-            text,
-            created_at,
-            view_count,
-            retweet_count,
-            reply_count,
-            like_count,
-            quote_count
-          FROM tweets 
-          WHERE user_id = $1 
-          ORDER BY created_at DESC
-          LIMIT $2 OFFSET $3`,
-          [userId, batchSize, offset]
-        );
-        
-        allTweets = [...allTweets, ...result.rows];
+      // Check tweets with metrics
+      const metricsCountResult = await this.pool.query(
+        `SELECT COUNT(*) as total FROM tweets 
+         WHERE user_id = $1 
+         AND view_count IS NOT NULL 
+         AND retweet_count IS NOT NULL 
+         AND reply_count IS NOT NULL 
+         AND like_count IS NOT NULL 
+         AND quote_count IS NOT NULL`,
+        [userId]
+      );
+      console.log('Tweets with metrics:', metricsCountResult.rows[0].total);
+
+      // Get a sample tweet to check metric values
+      const sampleResult = await this.pool.query(
+        `SELECT 
+          view_count, retweet_count, reply_count, like_count, quote_count
+         FROM tweets 
+         WHERE user_id = $1 
+         LIMIT 1`,
+        [userId]
+      );
+      if (sampleResult.rows.length > 0) {
+        console.log('Sample tweet metrics:', sampleResult.rows[0]);
       }
 
-      if (allTweets.length === 0) {
+      // Then get their tweets with all metrics
+      console.log('Fetching tweets for user ID:', userId);
+      const result = await this.pool.query(
+        `SELECT 
+          id,
+          user_id,
+          text,
+          created_at,
+          url,
+          is_reply,
+          COALESCE(view_count, 0) as view_count,
+          COALESCE(retweet_count, 0) as retweet_count,
+          COALESCE(reply_count, 0) as reply_count,
+          COALESCE(like_count, 0) as like_count,
+          COALESCE(quote_count, 0) as quote_count,
+          metadata,
+          created_in_db
+        FROM tweets 
+        WHERE user_id = $1 
+        ORDER BY created_at DESC`,
+        [userId]
+      );
+
+      const rows = result.rows;
+      
+      if (rows.length === 0) {
         console.log('No tweets found for user:', username);
       } else {
-        console.log(`Found ${allTweets.length} tweets for user:`, username);
+        console.log(`Found ${rows.length} tweets for user:`, username);
         // Log first tweet metrics for debugging
         console.log('First tweet metrics:', {
-          id: allTweets[0].id,
-          text: allTweets[0].text?.substring(0, 50) + '...',
-          view_count: allTweets[0].view_count,
-          retweet_count: allTweets[0].retweet_count,
-          reply_count: allTweets[0].reply_count,
-          like_count: allTweets[0].like_count,
-          quote_count: allTweets[0].quote_count,
+          id: rows[0].id,
+          text: rows[0].text?.substring(0, 50) + '...',
+          view_count: rows[0].view_count,
+          retweet_count: rows[0].retweet_count,
+          reply_count: rows[0].reply_count,
+          like_count: rows[0].like_count,
+          quote_count: rows[0].quote_count,
           total_engagement: (
-            (allTweets[0].retweet_count ?? 0) + 
-            (allTweets[0].reply_count ?? 0) + 
-            (allTweets[0].like_count ?? 0) + 
-            (allTweets[0].quote_count ?? 0)
+            rows[0].retweet_count + 
+            rows[0].reply_count + 
+            rows[0].like_count + 
+            rows[0].quote_count
           )
+        });
+
+        // Log summary of metrics
+        const totalEngagement = rows.reduce((sum, tweet) => sum + (
+          tweet.retweet_count +
+          tweet.reply_count +
+          tweet.like_count +
+          tweet.quote_count
+        ), 0);
+        const totalViews = rows.reduce((sum, tweet) => sum + tweet.view_count, 0);
+        console.log('Metrics Summary:', {
+          totalTweets: rows.length,
+          totalEngagement,
+          totalViews,
+          averageEngagement: totalEngagement / rows.length,
+          averageViews: totalViews / rows.length,
+          tweetsWithEngagement: rows.filter(t => 
+            t.retweet_count > 0 || 
+            t.reply_count > 0 || 
+            t.like_count > 0 || 
+            t.quote_count > 0
+          ).length,
+          tweetsWithViews: rows.filter(t => t.view_count > 0).length
         });
       }
       
-      return allTweets;
+      return rows;
     } catch (error) {
       console.error('Error in getUserTweets:', error);
       throw error;

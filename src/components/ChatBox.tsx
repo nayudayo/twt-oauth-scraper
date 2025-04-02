@@ -28,7 +28,6 @@ interface ChatBoxProps {
 interface PersonalityTuning {
   traitModifiers: { [key: string]: number }  // trait name -> adjustment (-2 to +2)
   interestWeights: { [key: string]: number } // interest -> weight (0 to 100)
-  customInterests: string[]
   communicationStyle: {
     formality: CommunicationLevel
     enthusiasm: CommunicationLevel
@@ -153,7 +152,6 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
   const [tuning, setTuning] = useState<PersonalityTuning>({
     traitModifiers: {},
     interestWeights: {},
-    customInterests: [],
     communicationStyle: {
       formality: 'medium',
       enthusiasm: 'medium',
@@ -162,35 +160,33 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       verbosity: 'medium'
     }
   })
-  const [newInterest, setNewInterest] = useState('')
   const [isTyping, setIsTyping] = useState(false)
-  // Add elapsed time states
   const [analysisStartTime, setAnalysisStartTime] = useState<number | null>(null)
   const [analysisElapsedTime, setAnalysisElapsedTime] = useState<string | null>(null)
   const [scrapingStartTime, setScrapingStartTime] = useState<number | null>(null)
   const [scrapingElapsedTime, setScrapingElapsedTime] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConversationId, setActiveConversationId] = useState<number>();
-  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
-  const [isLoadingInitialData, setIsLoadingInitialData] = useState(false);
-  const [isLoadingTweets, setIsLoadingTweets] = useState(false);
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [activeConversationId, setActiveConversationId] = useState<number>()
+  const [isLoadingConversations, setIsLoadingConversations] = useState(false)
+  const [isLoadingInitialData, setIsLoadingInitialData] = useState(false)
+  const [isLoadingTweets, setIsLoadingTweets] = useState(false)
   const [accumulatedTweets, setAccumulatedTweets] = useState<Tweet[]>([])
   const [showProfile, setShowProfile] = useState(true)
 
   // Add cache hook
   const personalityCache = usePersonalityCache({
     username: profile.name || ''
-  });
+  })
 
   // Add ref to track latest tuning state
   const latestTuning = useRef<PersonalityTuning>(tuning)
 
   // Update ref whenever tuning changes
   useEffect(() => {
-    latestTuning.current = tuning;
-  }, [tuning]);
+    latestTuning.current = tuning
+  }, [tuning])
 
   // Add escape key handler for modals
   useEffect(() => {
@@ -257,23 +253,43 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
   }, [isAnalyzing, loading, analysisStartTime, scrapingStartTime]);
 
   const handleTraitAdjustment = async (traitName: string, enabled: boolean) => {
-    // Convert boolean to score (true = 100, false = 0)
     const score = enabled ? 100 : 0;
     const analysisScore = enabled ? 10 : 0;
     
-    setTuning(prev => ({
-      ...prev,
-      traitModifiers: {
-        ...prev.traitModifiers,
-        [traitName]: score
+    setTuning(prevTuning => {
+      const newTuning = {
+        ...prevTuning,
+        traitModifiers: {
+          ...prevTuning.traitModifiers,
+          [traitName]: score
+        }
+      };
+
+      if (activeConversationId && analysis) {
+        fetch(`/api/conversations/${activeConversationId}/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            analysis: {
+              ...analysis,
+              traits: analysis.traits.map(trait => 
+                trait.name === traitName 
+                  ? { ...trait, score: analysisScore }
+                  : trait
+              )
+            },
+            tuning: newTuning
+          })
+        }).catch(error => {
+          console.warn('Failed to update active chat session with new trait settings:', error);
+        });
       }
-    }));
+
+      return newTuning;
+    });
 
     if (analysis) {
-      const existingTrait = analysis.traits.find(t => t.name === traitName);
-      if (!existingTrait) return;
-
-      const updatedAnalysis = {
+      const updatedAnalysis: PersonalityAnalysis = {
         ...analysis,
         traits: analysis.traits.map(trait => 
           trait.name === traitName 
@@ -281,168 +297,102 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
             : trait
         )
       };
-
       setAnalysis(updatedAnalysis);
-
-      // Update active chat session if we have one
-      if (activeConversationId) {
-        const updateResponse = await fetch(`/api/conversations/${activeConversationId}/update`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            analysis: updatedAnalysis,
-            tuning: {
-              ...tuning,
-              traitModifiers: {
-                ...tuning.traitModifiers,
-                [traitName]: score
-              }
-            }
-          })
-        });
-
-        if (!updateResponse.ok) {
-          console.warn('Failed to update active chat session with new trait settings');
-        }
-      }
     }
-  }
+  };
 
   const handleInterestWeight = async (interest: string, enabled: boolean) => {
     const weight = enabled ? 100 : 0;
     
-    setTuning(prev => ({
-      ...prev,
-      interestWeights: {
-        ...prev.interestWeights,
-        [interest]: weight
+    setTuning(prevTuning => {
+      const newTuning = {
+        ...prevTuning,
+        interestWeights: {
+          ...prevTuning.interestWeights,
+          [interest]: weight
+        }
+      };
+
+      if (activeConversationId && analysis) {
+        fetch(`/api/conversations/${activeConversationId}/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            analysis: {
+              ...analysis,
+              interestWeights: {
+                ...analysis.interestWeights,
+                [interest]: weight
+              }
+            },
+            tuning: newTuning
+          })
+        }).catch(error => {
+          console.warn('Failed to update active chat session with new interest settings:', error);
+        });
       }
-    }));
+
+      return newTuning;
+    });
 
     if (analysis) {
-      const updatedAnalysis = {
+      // Save to cache with updated values
+      personalityCache.saveToCache({
         ...analysis,
         interestWeights: {
           ...analysis.interestWeights,
           [interest]: weight
         }
-      };
-
-      setAnalysis(updatedAnalysis);
-
-      // Update active chat session if we have one
-      if (activeConversationId) {
-        const updateResponse = await fetch(`/api/conversations/${activeConversationId}/update`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            analysis: updatedAnalysis,
-            tuning: {
-              ...tuning,
-              interestWeights: {
-                ...tuning.interestWeights,
-                [interest]: weight
-              }
-            }
-          })
-        });
-
-        if (!updateResponse.ok) {
-          console.warn('Failed to update active chat session with new interest settings');
-        }
-      }
-
-      await personalityCache.saveToCache({
-        ...analysis,
-        interestWeights: {
-          ...tuning.interestWeights,
-          [interest]: weight
-        },
-        customInterests: tuning.customInterests
+      }).catch(error => {
+        console.warn('Failed to update personality cache:', error);
       });
     }
-  }
-
-  const handleAddCustomInterest = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newInterest.trim()) return
-    
-    const newInterestTrimmed = newInterest.trim();
-    
-    setTuning(prev => ({
-      ...prev,
-      customInterests: [...prev.customInterests, newInterestTrimmed],
-      interestWeights: {
-        ...prev.interestWeights,
-        [newInterestTrimmed]: 50 // default weight
-      }
-    }));
-    setNewInterest('');
-
-    // Save to cache if we have analysis
-    if (analysis) {
-      await personalityCache.saveToCache({
-        ...analysis,
-        interestWeights: {
-          ...tuning.interestWeights,
-          [newInterestTrimmed]: 50
-        },
-        customInterests: [...tuning.customInterests, newInterestTrimmed]
-      });
-    }
-  }
+  };
 
   const handleStyleAdjustment = async (aspect: keyof PersonalityTuning['communicationStyle'], value: CommunicationLevel) => {
-    // Update tuning state
-    setTuning(prev => ({
-      ...prev,
-      communicationStyle: {
-        ...prev.communicationStyle,
-        [aspect]: value
+    setTuning(prevTuning => {
+      const newTuning = {
+        ...prevTuning,
+        communicationStyle: {
+          ...prevTuning.communicationStyle,
+          [aspect]: value
+        }
+      };
+
+      if (activeConversationId && analysis) {
+        fetch(`/api/conversations/${activeConversationId}/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            analysis: {
+              ...analysis,
+              communicationStyle: {
+                ...analysis.communicationStyle,
+                [aspect]: value
+              }
+            },
+            tuning: newTuning
+          })
+        }).catch(error => {
+          console.warn('Failed to update active chat session with new communication style settings:', error);
+        });
       }
-    }));
+
+      return newTuning;
+    });
 
     if (analysis) {
-      // Update analysis state immediately
-      const updatedAnalysis = {
+      const updatedAnalysis: PersonalityAnalysis = {
         ...analysis,
         communicationStyle: {
           ...analysis.communicationStyle,
           [aspect]: value
         }
       };
-      
       setAnalysis(updatedAnalysis);
 
-      // Update active chat session if we have one
-      if (activeConversationId) {
-        const updateResponse = await fetch(`/api/conversations/${activeConversationId}/update`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            analysis: updatedAnalysis,
-            tuning: {
-              ...tuning,
-              communicationStyle: {
-                ...tuning.communicationStyle,
-                [aspect]: value
-              }
-            }
-          })
-        });
-
-        if (!updateResponse.ok) {
-          console.warn('Failed to update active chat session with new communication style settings');
-        }
-      }
-
-      // Save to cache with updated values
-      await personalityCache.saveToCache({
-        ...analysis,
-        communicationStyle: {
-          ...analysis.communicationStyle,
-          [aspect]: value
-        }
+      personalityCache.saveToCache(updatedAnalysis).catch(error => {
+        console.warn('Failed to update personality cache:', error);
       });
     }
   };
@@ -525,9 +475,10 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     }
   };
 
+  // Handle message submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim() || isChatLoading) return // Use chat loading state here
+    if (!input.trim() || isChatLoading) return
 
     const userMessage = input.trim()
     setInput('')
@@ -1273,7 +1224,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     adjustTextareaHeight()
   }, [input])
 
-  // Update handleUpdateAnalysis to handle mobile/tablet loading states
+  // Update handleUpdateAnalysis to not handle custom interests
   const handleUpdateAnalysis = async () => {
     try {
       // Reset analysis state but preserve tuning
@@ -1283,7 +1234,6 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       setError(null);
       setAnalysisStartTime(Date.now());
 
-      // Add timeout handling for mobile/tablet
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes for mobile/tablet
 
@@ -1323,8 +1273,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           communicationStyle: preservedCommunicationStyle,
           // Preserve tuning parameters
           traitModifiers: currentTuning.traitModifiers,
-          interestWeights: currentTuning.interestWeights,
-          customInterests: currentTuning.customInterests
+          interestWeights: currentTuning.interestWeights
         };
 
         // Convert traits to toggle states - traits should be ON by default when detected
@@ -1333,7 +1282,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           [trait.name]: 100 // Set to 100 (ON) for detected traits
         }), {});
 
-        // Combine existing and new interests, preserving existing weights and setting new ones to ON
+        // Initialize weights for new interests, preserving existing weights
         const newInterests = newAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => {
           const [interestName] = interest.split(':').map(s => s.trim());
           // If interest already exists in currentTuning, preserve its weight, otherwise set to 100 (ON)
@@ -1367,7 +1316,6 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           })),
           interests: Object.keys(newInterests),
           interestWeights: newInterests,
-          customInterests: currentTuning.customInterests,
           communicationStyle: {
             ...preservedCommunicationStyle,
             description: newAnalysis.communicationStyle.description?.replace(/[*-]/g, '').trim()
@@ -1390,7 +1338,6 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
               tuning: {
                 traitModifiers,
                 interestWeights: newInterests,
-                customInterests: currentTuning.customInterests,
                 communicationStyle: {
                   ...preservedCommunicationStyle,
                   verbosity: currentTuning.communicationStyle.verbosity ?? 'medium'
@@ -1673,31 +1620,6 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     };
   }, [profile.name, loading]);
 
-  const handleRemoveCustomInterest = async (interest: string) => {
-    setTuning(prev => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { [interest]: _, ...remainingWeights } = prev.interestWeights;
-      return {
-        ...prev,
-        customInterests: prev.customInterests.filter(i => i !== interest),
-        interestWeights: remainingWeights
-      }
-    });
-
-    // Save to cache if we have analysis
-    if (analysis) {
-      const updatedCustomInterests = tuning.customInterests.filter(i => i !== interest);
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { [interest]: _, ...remainingWeights } = tuning.interestWeights;
-      
-      await personalityCache.saveToCache({
-        ...analysis,
-        interestWeights: remainingWeights,
-        customInterests: updatedCustomInterests
-      });
-    }
-  }
-
   // Add scroll handler to hide profile when scrolled past it
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const scrollTop = e.currentTarget.scrollTop;
@@ -1943,7 +1865,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     <span className="glow-text">Interests</span>
                   </h4>
                   <div className="space-y-3">
-                    {analysis.interests
+                    {analysis?.interests
                       .filter(interest => {
                         // Filter out social behavior metrics and other non-interest items
                         const nonInterests = [
@@ -1962,10 +1884,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                           'Doom Poster',
                           'Early Adopter',
                           'Knowledge Dropper',
-                          'Hype Beast',
-                          'Evidence',
-                          'Evidences',
-                          'Level'
+                          'Hype Beast'
                         ];
                         const [interestName] = interest.split(':').map(s => s.trim());
                         return !nonInterests.includes(interestName);
@@ -1983,43 +1902,6 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                           </div>
                         );
                       })}
-                  </div>
-                </div>
-
-                {/* Custom Interests */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                    <span className="glow-text">Custom Interests</span>
-                  </h4>
-                  <div className="space-y-3">
-                    {tuning.customInterests.map((interest: string, index: number) => (
-                      <div key={`custom-interest-${index}-${interest}`} className="space-y-1">
-                        <ToggleButton
-                          value={Boolean(tuning.interestWeights[interest] || 0)}
-                          onChange={(enabled) => handleInterestWeight(interest, enabled)}
-                          label={interest}
-                          onRemove={() => handleRemoveCustomInterest(interest)}
-                          className={`w-full ${tuning.interestWeights[interest] === 0 ? 'opacity-50' : ''}`}
-                        />
-                      </div>
-                    ))}
-                    <form onSubmit={handleAddCustomInterest} className="flex gap-2">
-                      <input
-                        type="text"
-                        value={newInterest}
-                        onChange={(e) => setNewInterest(e.target.value)}
-                        placeholder="Add custom interest..."
-                        className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow"
-                      />
-                      <button
-                        type="submit"
-                        disabled={!newInterest.trim()}
-                        className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow"
-                      >
-                        Add
-                      </button>
-                    </form>
                   </div>
                 </div>
 
@@ -2253,9 +2135,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                           'Doom Poster',
                           'Early Adopter',
                           'Knowledge Dropper',
-                          'Hype Beast',
-                          'Evidence',
-                          'Evidences'
+                          'Hype Beast'
                         ];
                         const [interestName] = interest.split(':').map(s => s.trim());
                         return !nonInterests.includes(interestName);
@@ -2300,9 +2180,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                           'Doom Poster',
                           'Early Adopter',
                           'Knowledge Dropper',
-                          'Hype Beast',
-                          'Evidence',
-                          'Evidences'
+                          'Hype Beast'
                         ];
                         return !nonInterests.some(metric => topic.includes(metric));
                       })
@@ -2615,7 +2493,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     <span className="glow-text">Interests</span>
                   </h4>
                   <div className="space-y-3">
-                    {analysis.interests
+                    {analysis?.interests
                       .filter(interest => {
                         // Filter out social behavior metrics and other non-interest items
                         const nonInterests = [
@@ -2652,43 +2530,6 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                           </div>
                         );
                       })}
-                  </div>
-                </div>
-
-                {/* Custom Interests */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                    <span className="glow-text">Custom Interests</span>
-                  </h4>
-                  <div className="space-y-3">
-                    {tuning.customInterests.map((interest: string, index: number) => (
-                      <div key={`custom-interest-${index}-${interest}`} className="space-y-1">
-                        <ToggleButton
-                          value={Boolean(tuning.interestWeights[interest] || 0)}
-                          onChange={(enabled) => handleInterestWeight(interest, enabled)}
-                          label={interest}
-                          onRemove={() => handleRemoveCustomInterest(interest)}
-                          className={`w-full ${tuning.interestWeights[interest] === 0 ? 'opacity-50' : ''}`}
-                        />
-                      </div>
-                    ))}
-                    <form onSubmit={handleAddCustomInterest} className="flex gap-2">
-                      <input
-                        type="text"
-                        value={newInterest}
-                        onChange={(e) => setNewInterest(e.target.value)}
-                        placeholder="Add custom interest..."
-                        className="flex-1 bg-black/20 text-red-400/90 border border-red-500/20 rounded px-3 py-1.5 text-sm placeholder:text-red-500/30 focus:outline-none focus:border-red-500/40 hover-glow"
-                      />
-                      <button
-                        type="submit"
-                        disabled={!newInterest.trim()}
-                        className="px-3 py-1.5 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow"
-                      >
-                        Add
-                      </button>
-                    </form>
                   </div>
                 </div>
 

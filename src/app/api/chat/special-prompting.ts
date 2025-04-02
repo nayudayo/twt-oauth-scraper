@@ -252,12 +252,7 @@ CRITICAL REMINDER:
       const quote = inputs.quote as string | undefined;
       const contact = inputs.contact as string;
 
-      // Check if this type of content aligns with personality interests
-      const isComfortableWithTask = analysis.interests.some(interest => 
-        ['business', 'corporate', 'communications', 'media', 'public relations'].includes(interest.toLowerCase())
-      );
-
-      return `Based on my personality analysis ${isComfortableWithTask ? 'and expertise' : 'though this isn\'t my usual style'}, I'll write a press release for ${company} about ${announcement}.
+      return `Based on my personality analysis and current communication style settings (${analysis.communicationStyle.description}), I'll write a press release for ${company} about ${announcement}.
 
 Key Components to Include:
 1. Headline and dateline
@@ -267,17 +262,15 @@ Key Components to Include:
 5. Contact information: ${contact}
 
 Remember to:
-- ${isComfortableWithTask ? 'Leverage' : 'Attempt'} my ${analysis.communicationStyle.formality} formality level
-- Express my ${analysis.communicationStyle.enthusiasm} enthusiasm ${isComfortableWithTask ? 'confidently' : 'carefully'}
-- Apply my ${analysis.communicationStyle.technicalLevel} technical expertise where relevant
-- Use industry terms ${isComfortableWithTask ? 'extensively' : 'as best I can'}
-- Structure paragraphs in my ${analysis.communicationStyle.patterns.lineBreaks} style
-- Follow my typical ${analysis.communicationStyle.patterns.punctuation.join(', ')} patterns
-- Express my personality traits while acknowledging my ${isComfortableWithTask ? 'strengths' : 'limitations'} in this area
+- Maintain my ${analysis.communicationStyle.formality} formality level throughout
+- Use my characteristic ${analysis.communicationStyle.enthusiasm} enthusiasm markers
+- Apply my ${analysis.communicationStyle.technicalLevel} technical expertise consistently
+- Use my typical industry terms and phrases from my vocabulary
+- Structure paragraphs in my usual ${analysis.communicationStyle.patterns.lineBreaks} style
+- Follow my ${analysis.communicationStyle.patterns.punctuation.join(', ')} punctuation patterns
+- Express my active personality traits naturally
 
-Note: ${isComfortableWithTask ? 
-  'I\'ll create this press release with my full expertise and style.' : 
-  'While this isn\'t my typical content type, I\'ll do my best to create a professional press release while staying true to my personality.'}`;
+The press release should sound like I wrote it personally, not like a generic press release.`;
     }
   },
   "project-proposal": {
@@ -307,12 +300,7 @@ Note: ${isComfortableWithTask ?
       const budget = inputs.budget as string | undefined;
       const team = inputs.team as string | undefined;
 
-      // Check if this aligns with personality interests
-      const isComfortableWithTask = analysis.interests.some(interest => 
-        ['business', 'project management', 'planning', 'strategy', 'development'].includes(interest.toLowerCase())
-      );
-
-      return `Based on my personality analysis ${isComfortableWithTask ? 'and expertise' : 'though this isn\'t my usual domain'}, I'll create a project proposal for ${project_name}.
+      return `Based on my personality analysis and current communication style settings (${analysis.communicationStyle.description}), I'll create a project proposal for ${project_name}.
 
 Project Overview:
 - Name: ${project_name}
@@ -322,16 +310,16 @@ Project Overview:
 ${budget ? `- Budget: ${budget}` : ''}
 ${team ? `- Team Requirements: ${team}` : ''}
 
-Approach:
-- ${isComfortableWithTask ? 'Utilize' : 'Attempt'} my ${analysis.communicationStyle.formality} formality level
-- Maintain my ${analysis.communicationStyle.enthusiasm} enthusiasm ${isComfortableWithTask ? 'throughout' : 'where appropriate'}
-- Apply my ${analysis.communicationStyle.technicalLevel} expertise ${isComfortableWithTask ? 'extensively' : 'as best I can'}
-- Structure using my typical patterns ${isComfortableWithTask ? 'confidently' : 'while maintaining clarity'}
-- Express my personality while acknowledging my ${isComfortableWithTask ? 'strengths' : 'limitations'} in this area
+Remember to:
+- Use my ${analysis.communicationStyle.formality} formality level in all sections
+- Maintain my ${analysis.communicationStyle.enthusiasm} enthusiasm consistently
+- Apply my ${analysis.communicationStyle.technicalLevel} technical expertise appropriately
+- Structure the proposal using my ${analysis.communicationStyle.patterns.messageStructure.framing.join(', ')} patterns
+- Use my typical vocabulary and ${analysis.vocabulary.commonPhrases.slice(0, 3).join(', ')} phrases
+- Follow my ${analysis.communicationStyle.patterns.punctuation.join(', ')} punctuation patterns
+- Express my active personality traits throughout
 
-Note: ${isComfortableWithTask ? 
-  'I\'ll create this proposal leveraging my expertise in this domain.' : 
-  'While project proposals aren\'t my primary strength, I\'ll create a professional document that reflects my personality.'}`;
+The proposal should reflect my personal communication style while maintaining professional standards.`;
     }
   },
   "marketing-campaign": {
@@ -361,16 +349,7 @@ Note: ${isComfortableWithTask ?
       const budget = inputs.budget as string | undefined;
       const timeline = inputs.timeline as string | undefined;
 
-      // Check if this aligns with personality interests
-      const isComfortableWithTask = analysis.interests.some(interest => 
-        ['marketing', 'advertising', 'social media', 'content creation', 'branding'].includes(interest.toLowerCase())
-      );
-
-      // Determine emoji usage based on both style and task comfort
-      const shouldUseEmojis = analysis.communicationStyle.emojiUsage === 'high' && 
-                             (isComfortableWithTask || analysis.communicationStyle.formality === 'low');
-
-      return `Based on my personality analysis ${isComfortableWithTask ? 'and marketing expertise' : 'though marketing isn\'t my primary focus'}, I'll create a campaign plan for ${product}${shouldUseEmojis ? ' 🚀' : ''}.
+      return `Based on my personality analysis and current communication style settings (${analysis.communicationStyle.description}), I'll create a marketing campaign plan for ${product}.
 
 Campaign Elements:
 - Product/Service: ${product}
@@ -380,16 +359,17 @@ Campaign Elements:
 ${budget ? `- Budget: ${budget}` : ''}
 ${timeline ? `- Timeline: ${timeline}` : ''}
 
-Approach:
-- ${isComfortableWithTask ? 'Leverage' : 'Apply'} my ${analysis.communicationStyle.formality} communication style
-- Express my ${analysis.communicationStyle.enthusiasm} enthusiasm ${isComfortableWithTask ? 'confidently' : 'appropriately'}
-- Use my ${analysis.communicationStyle.technicalLevel} expertise ${isComfortableWithTask ? 'extensively' : 'where relevant'}
-- Structure ideas using my typical patterns ${isComfortableWithTask ? 'effectively' : 'while maintaining clarity'}
-- Incorporate my personality while acknowledging my ${isComfortableWithTask ? 'marketing expertise' : 'learning curve in marketing'}
+Remember to:
+- Maintain my ${analysis.communicationStyle.formality} formality level throughout the plan
+- Use my ${analysis.communicationStyle.enthusiasm} enthusiasm markers consistently
+- Apply my ${analysis.communicationStyle.technicalLevel} technical expertise appropriately
+- Structure ideas using my ${analysis.communicationStyle.patterns.messageStructure.framing.join(', ')} patterns
+- Use my typical ${analysis.vocabulary.industryTerms.slice(0, 3).join(', ')} terminology
+- Follow my ${analysis.communicationStyle.patterns.punctuation.join(', ')} punctuation rules
+- Express my active personality traits in the strategy
+- Incorporate my relevant interests and expertise from my profile
 
-Note: ${isComfortableWithTask ? 
-  'I\'ll create this campaign plan with confidence in my marketing expertise.' : 
-  'While marketing isn\'t my primary strength, I\'ll create a solid campaign plan that reflects my personality.'}${shouldUseEmojis ? ' ✨' : ''}`;
+The campaign plan should reflect my personal style while being strategically sound.`;
     }
   }
 };

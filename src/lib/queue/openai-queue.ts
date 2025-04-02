@@ -187,9 +187,10 @@ export class OpenAIQueueManager {
       model: "gpt-4o-mini",
       messages,
       temperature: tuning?.temperature ?? 0.7,
-      max_tokens: tuning?.maxTokens ?? 150,
+      max_tokens: tuning?.maxTokens ?? 500,
       presence_penalty: tuning?.presencePenalty ?? 0.6,
-      frequency_penalty: tuning?.frequencyPenalty ?? 0.3
+      frequency_penalty: tuning?.frequencyPenalty ?? 0.3,
+      top_p: 0.9
     })
 
     return response.choices[0].message

@@ -52,6 +52,10 @@ next-env.d.ts
 /logs
 *.log
 
-/dist/*
+dist/*
 
 /exports/*
+
+/dist/*
+/dist/lib/*
+/dist/lib/

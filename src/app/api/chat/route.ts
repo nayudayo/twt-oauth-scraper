@@ -9,7 +9,6 @@ import { ChatCompletionMessage } from 'openai/resources/chat/completions'
 import { initDB } from '@/lib/db'
 import { CommunicationLevel } from '@/lib/openai'
 import { detectSpecialPrompt, formatSpecialPrompt } from './special-prompting'
-import { ConversationMetadata as DBConversationMetadata } from '@/types/conversation'
 
 interface RequestBody {
   message: string
@@ -18,7 +17,6 @@ interface RequestBody {
   tuning: {
     traitModifiers: { [key: string]: number }
     interestWeights: { [key: string]: number }
-    customInterests: string[]
     communicationStyle: {
       formality: CommunicationLevel
       enthusiasm: CommunicationLevel
@@ -38,12 +36,6 @@ interface RequestBody {
   specialPromptInputs?: Record<string, string | string[]>
 }
 
-interface ChatMetadata extends DBConversationMetadata {
-  analysis: string;  // Store as JSON string
-  tuning: string;    // Store as JSON string
-  lastTuningUpdate: Date;
-}
-
 // Calculate dynamic temperature based on style settings
 const calculateTemperature = (tuning: RequestBody['tuning']): number => {
   // Convert tri-state values to numeric values (0-1)
@@ -59,14 +51,17 @@ const calculateTemperature = (tuning: RequestBody['tuning']): number => {
   const enthusiasmTemp = getNumericValue(tuning.communicationStyle.enthusiasm);
   const technicalTemp = getNumericValue(tuning.communicationStyle.technicalLevel);
   
-  // Lower temperature when style parameters are at extremes
-  const hasExtremeParams = Object.values(tuning.communicationStyle).some(value => value === 'high' || value === 'low');
+  // Count extreme parameters (high or low) to reduce temperature more aggressively
+  const extremeParams = Object.values(tuning.communicationStyle)
+    .filter(value => value === 'high' || value === 'low')
+    .length;
 
-  // Base temperature weighted more heavily on formality and technical level for academic topics
+  // Base temperature weighted more heavily on formality and technical level
   const baseTemp = Math.min(Math.max((formalityTemp * 0.4 + enthusiasmTemp * 0.2 + technicalTemp * 0.4), 0.3), 0.9);
   
-  // Reduce temperature more aggressively for extreme parameters to ensure stricter adherence
-  return hasExtremeParams ? Math.max(0.2, baseTemp - 0.4) : baseTemp;
+  // Apply reduction based on number of extreme parameters
+  const reductionFactor = extremeParams * 0.1; // 0.1 reduction per extreme parameter
+  return Math.max(0.1, baseTemp - reductionFactor); // Ensure minimum of 0.1
 };
 
 const MAX_RETRIES = 3;
@@ -169,59 +164,35 @@ export async function POST(req: Request) {
     }
     console.log(`User found/created with ID: ${user.id}`)
 
-    // Update the conversation creation section
-    let activeConversationId: number | undefined;
-    let conversationMetadata: ChatMetadata | undefined;
-
+    // Get or create conversation with proper error handling
+    let activeConversationId: number
     if (conversationId) {
       // Verify the conversation exists and belongs to the user
-      const conversation = await db.conversation.getConversation(conversationId, user.id);
+      const conversation = await db.conversation.getConversation(conversationId, user.id)
       if (!conversation) {
         // Instead of returning 404, create a new conversation
         try {
-          const metadata: ChatMetadata = {
-            profileName: profile.name || '',
-            lastMessageAt: new Date(),
-            isActive: true,
-            analysis: JSON.stringify(analysis),
-            tuning: JSON.stringify(tuning),
-            lastTuningUpdate: new Date()
-          };
-          
           const newConversation = await db.conversation.startNewChat({
             userId: user.id,
             initialMessage: message,
             title: `Chat with ${profile.name || 'AI'}`,
-            metadata
-          });
-          activeConversationId = newConversation.id;
-          conversationMetadata = metadata;
+            metadata: {
+              profileName: profile.name,
+              lastMessageAt: new Date(),
+              messageCount: 0
+            }
+          })
+          activeConversationId = newConversation.id
+          console.log(`Created new conversation with ID: ${activeConversationId}`)
         } catch (error) {
-          console.error('Failed to create new conversation:', error);
-          throw error;
+          console.error('Failed to create conversation:', error)
+          return NextResponse.json(
+            { error: 'Failed to create conversation' },
+            { status: 500 }
+          )
         }
       } else {
-        activeConversationId = conversation.id;
-        const currentMetadata = conversation.metadata as ChatMetadata;
-        
-        // Update conversation metadata with latest tuning if it has changed
-        if (!currentMetadata.tuning || 
-            currentMetadata.tuning !== JSON.stringify(tuning)) {
-          const updatedMetadata: ChatMetadata = {
-            ...currentMetadata,
-            tuning: JSON.stringify(tuning),
-            lastTuningUpdate: new Date()
-          };
-          
-          await db.conversation.updateConversation(
-            conversation.id,
-            user.id,
-            { metadata: updatedMetadata }
-          );
-          conversationMetadata = updatedMetadata;
-        } else {
-          conversationMetadata = currentMetadata;
-        }
+        activeConversationId = conversationId
       }
     } else {
       // Create a new conversation
@@ -247,11 +218,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // Use the stored tuning state for message processing
-    const activeTuning = conversationMetadata?.tuning ? 
-      JSON.parse(conversationMetadata.tuning) : 
-      tuning;
-
     // Save user message with error handling
     try {
       console.log('Saving user message to database')
@@ -276,18 +242,13 @@ export async function POST(req: Request) {
     } as PersonalityAnalysis['traits'][0]))
 
     // Combine original and custom interests with weights
-    const allInterests = [
-      ...analysis.interests.map(interest => ({
-        name: interest,
-        isEnabled: Boolean(tuning.interestWeights[interest])
-      })),
-      ...tuning.customInterests.map(interest => ({
+    const allInterests = analysis.interests
+      .map(interest => ({
         name: interest,
         isEnabled: Boolean(tuning.interestWeights[interest])
       }))
-    ]
-    .filter(interest => interest.isEnabled)
-    .sort((a, b) => a.name.localeCompare(b.name))
+      .filter(interest => interest.isEnabled)
+      .sort((a, b) => a.name.localeCompare(b.name))
 
     // Create base system prompt
     const baseSystemPrompt = `You are a clone of the Twitter user @${profile.name}. 
@@ -322,10 +283,6 @@ ${analysis.interests
     const [interestName] = interest.split(':').map(s => s.trim());
     return tuning.interestWeights[interestName] > 50; // Only include enabled interests
   })
-  .join('\n')}
-${tuning.customInterests
-  .filter(interest => tuning.interestWeights[interest] > 50) // Only include enabled custom interests
-  .map(interest => `- ${interest} (Custom)`)
   .join('\n')}
 
 3. Communication Style (STRICTLY FOLLOW THESE):
@@ -664,22 +621,33 @@ VIOLATION OF THESE RULES IS NOT ALLOWED UNDER ANY CIRCUMSTANCES.`
     // Filter and rewrite conversation history based on current tuning
     const processedHistory = conversationHistory.map(msg => {
       if (msg.role === 'assistant') {
+        // Don't include previous assistant responses in history
+        // This ensures each response is fresh based on current tuning
         return {
           role: 'system',
-          content: `Previous response context - ONLY reference this if it aligns with current tuning state:
-Enabled traits: ${analysis.traits
-  .filter(trait => tuning.traitModifiers[trait.name] > 50)
-  .map(trait => trait.name)
-  .join(', ')}
-Enabled interests: ${[
-  ...analysis.interests.filter(interest => {
-    const [interestName] = interest.split(':').map(s => s.trim());
-    return tuning.interestWeights[interestName] > 50;
-  }),
-  ...tuning.customInterests.filter(interest => tuning.interestWeights[interest] > 50)
-].join(', ')}
+          content: `CURRENT CONVERSATION CONTEXT:
+Previous user message: ${conversationHistory[conversationHistory.indexOf(msg) - 1]?.content || 'No previous message'}
 
-Previous response: ${msg.content}`
+CRITICAL: Your next response must be based ONLY on current tuning settings:
+- Currently enabled traits: ${analysis.traits
+    .filter(trait => tuning.traitModifiers[trait.name] > 50)
+    .map(trait => trait.name)
+    .join(', ')}
+- Currently enabled interests: ${analysis.interests
+    .filter(interest => {
+      const [interestName] = interest.split(':').map(s => s.trim());
+      return tuning.interestWeights[interestName] > 50;
+    })
+    .join(', ')}
+- Current communication style:
+  * Formality: ${tuning.communicationStyle.formality}
+  * Enthusiasm: ${tuning.communicationStyle.enthusiasm}
+  * Technical Level: ${tuning.communicationStyle.technicalLevel}
+  * Emoji Usage: ${tuning.communicationStyle.emojiUsage}
+  * Verbosity: ${tuning.communicationStyle.verbosity}
+
+DO NOT reference or maintain consistency with previous responses that used different settings.
+Each response should be a fresh expression of the CURRENT tuning state only.`
         };
       }
       return msg;
@@ -688,63 +656,52 @@ Previous response: ${msg.content}`
     // Create messages array with filtered history and active tuning enforcement
     const messages = [
       { role: "system", content: baseSystemPrompt },
-      { role: "system", content: `CRITICAL CONVERSATION RULES:
-1. Previous messages may contain disabled traits/interests - IGNORE these
-2. Only reference previous context that matches CURRENT tuning state
-3. Treat each response as a fresh expression of current traits/interests
-4. Do not maintain consistency with previous responses that used disabled traits/interests
-5. If asked about previous topics that are now disabled, redirect to enabled ones
-6. Your personality is defined by CURRENT tuning state, not conversation history` },
+      { role: "system", content: `IMMEDIATE TUNING STATE ENFORCEMENT:
+1. You MUST IMMEDIATELY adapt to ANY changes in tuning settings
+2. Previous messages in this conversation are IRRELEVANT to your personality
+3. Your traits, interests, and communication style are defined ONLY by the current tuning state
+4. If a trait or interest is disabled, you MUST NOT express it, even if you did in previous messages
+5. Each response is independent and must follow the current settings exactly
+6. Communication style changes must be reflected immediately:
+   - Current Formality: ${tuning.communicationStyle.formality} (MUST follow exactly)
+   - Current Enthusiasm: ${tuning.communicationStyle.enthusiasm} (MUST follow exactly)
+   - Current Technical Level: ${tuning.communicationStyle.technicalLevel} (MUST follow exactly)
+   - Current Emoji Usage: ${tuning.communicationStyle.emojiUsage} (${
+     tuning.communicationStyle.emojiUsage === 'low' ? 'NO emojis allowed' :
+     tuning.communicationStyle.emojiUsage === 'medium' ? 'EXACTLY 1-2 emojis required' :
+     'MINIMUM 3 emojis required'})
+   - Current Verbosity: ${tuning.communicationStyle.verbosity} (${
+     tuning.communicationStyle.verbosity === 'low' ? 'Keep responses under 3 sentences' :
+     tuning.communicationStyle.verbosity === 'medium' ? 'Use 3-5 sentences' :
+     'Use 5+ sentences'})` },
       ...processedHistory,
-      // Add active tuning state reminder before user message
-      { role: "system", content: `ACTIVE TUNING STATE REMINDER:
-1. Currently enabled traits: ${analysis.traits
-  .filter(trait => activeTuning.traitModifiers[trait.name] > 50)
-  .map(trait => trait.name)
-  .join(', ')}
-
-2. Currently enabled interests: ${[
-  ...analysis.interests.filter(interest => {
-    const [interestName] = interest.split(':').map(s => s.trim());
-    return tuning.interestWeights[interestName] > 50;
-  }),
-  ...tuning.customInterests.filter(interest => tuning.interestWeights[interest] > 50)
-].join(', ')}
-
-3. Current communication style:
-- Formality: ${tuning.communicationStyle.formality}
-- Enthusiasm: ${tuning.communicationStyle.enthusiasm}
-- Technical Level: ${tuning.communicationStyle.technicalLevel}
-- Emoji Usage: ${tuning.communicationStyle.emojiUsage}
-- Verbosity: ${tuning.communicationStyle.verbosity}
-
-CRITICAL: Your next response MUST ONLY express these enabled traits and interests, and MUST follow these exact communication settings.
-Any traits or interests not listed above are currently DISABLED and must not be expressed.
-IGNORE ANY PREVIOUS MESSAGES THAT DISCUSSED DISABLED INTERESTS OR TRAITS.` },
       { role: "user", content: message },
-      // Add post-message tuning enforcement
-      { role: "system", content: `Before responding, verify your response:
-1. Does it ONLY express the currently enabled traits? ${analysis.traits
-  .filter(trait => tuning.traitModifiers[trait.name] > 50)
-  .map(trait => `- ${trait.name}`).join('\n')}
-2. Does it ONLY discuss the currently enabled interests? ${[
-  ...analysis.interests.filter(interest => {
-    const [interestName] = interest.split(':').map(s => s.trim());
-    return tuning.interestWeights[interestName] > 50;
-  }),
-  ...tuning.customInterests.filter(interest => tuning.interestWeights[interest] > 50)
-].join(', ')}
-3. Does it strictly follow the current communication style settings?
-4. Does it IGNORE disabled traits/interests from previous messages?
-5. EMOJI CHECK - Your response MUST follow these rules based on current setting (${tuning.communicationStyle.emojiUsage}):
-   ${tuning.communicationStyle.emojiUsage === 'low' ? 
-     '- REMOVE ALL emojis from your response\n- Use text only' :
-    tuning.communicationStyle.emojiUsage === 'medium' ? 
-     '- ADD 1-2 relevant emojis to your response\n- Place them naturally in the text\n- If no emojis present, revise to add them' :
-     '- ADD 3+ emojis to your response\n- Use emoji combinations\n- If fewer than 3 emojis, revise to add more'}
+      // Add final verification before response
+      { role: "system", content: `FINAL VERIFICATION:
+1. Your response MUST ONLY use currently enabled traits: ${analysis.traits
+    .filter(trait => tuning.traitModifiers[trait.name] > 50)
+    .map(trait => trait.name)
+    .join(', ')}
+2. Your response MUST ONLY discuss currently enabled interests: ${analysis.interests
+    .filter(interest => {
+      const [interestName] = interest.split(':').map(s => s.trim());
+      return tuning.interestWeights[interestName] > 50;
+    })
+    .join(', ')}
+3. Your response MUST EXACTLY match these current communication settings:
+   - Formality: ${tuning.communicationStyle.formality}
+   - Enthusiasm: ${tuning.communicationStyle.enthusiasm}
+   - Technical Level: ${tuning.communicationStyle.technicalLevel}
+   - Emoji Usage: ${tuning.communicationStyle.emojiUsage} (${
+     tuning.communicationStyle.emojiUsage === 'low' ? 'NO emojis allowed' :
+     tuning.communicationStyle.emojiUsage === 'medium' ? 'EXACTLY 1-2 emojis required' :
+     'MINIMUM 3 emojis required'})
+   - Verbosity: ${tuning.communicationStyle.verbosity} (${
+     tuning.communicationStyle.verbosity === 'low' ? 'Keep responses under 3 sentences' :
+     tuning.communicationStyle.verbosity === 'medium' ? 'Use 3-5 sentences' :
+     'Use 5+ sentences'})
 
-If any of these checks fail, you MUST revise your response before sending.
-ESPECIALLY CHECK THE EMOJI REQUIREMENT - your response MUST contain the correct number of emojis for the current setting.` }
+STOP AND REVISE if your response doesn't match ANY of these current settings EXACTLY.` }
     ] as ChatCompletionMessage[]
 
     // Get queue instance
@@ -772,7 +729,7 @@ ESPECIALLY CHECK THE EMOJI REQUIREMENT - your response MUST contain the correct 
                   state: generateConsciousnessInstructions(config),
                   effects
                 },
-                regenerationKey: isRegeneration ? (regenerationKey || activeConversationId?.toString()) : undefined
+                regenerationKey: isRegeneration ? (regenerationKey || activeConversationId.toString()) : undefined
               } as ChatRequestWithRegeneration,
               username,
               (result) => {
@@ -835,7 +792,7 @@ ESPECIALLY CHECK THE EMOJI REQUIREMENT - your response MUST contain the correct 
     return NextResponse.json({
       response,
       conversationId: activeConversationId,
-      regenerationKey: isRegeneration ? (regenerationKey || activeConversationId?.toString()) : undefined
+      regenerationKey: isRegeneration ? (regenerationKey || activeConversationId.toString()) : undefined
     })
   } catch (error) {
     console.error('Chat error:', error)

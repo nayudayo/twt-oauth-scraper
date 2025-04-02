@@ -374,7 +374,7 @@ const FALLBACK_CONFIG = {
   maxSocialMetricsRetries: 5,
   maxEmotionalToneRetries: 5,
   fallbackModel: 'gpt-4o-mini',
-  minTokens: 6500,
+  minTokens: 7500,
   maxTokens: 8500,
   defaultTemperature: 0.85,
   styleVariationStep: 0.1,
