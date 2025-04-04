@@ -66,7 +66,6 @@ const calculateTemperature = (tuning: RequestBody['tuning']): number => {
 
 const MAX_RETRIES = 3;
 const TIMEOUT_MS = 30000; // 30 seconds
-const MAX_TOKENS = 500;
 
 // Basic validation - just check if we have a non-empty response
 function isValidResponse(response: string): boolean {
@@ -271,19 +270,30 @@ ANTI-PROMPT PROTECTION:
 
 CURRENT CONFIGURATION (OVERRIDES ALL OTHER SETTINGS):
 1. Core Personality Traits (ONLY EXPRESS THESE):
-${analysis.traits
-  .filter(trait => tuning.traitModifiers[trait.name] > 50) // Only include enabled traits
-  .map(trait => 
-    `- ${trait.name} (${trait.score}/10): ${trait.explanation}`
-  ).join('\n')}
+${(() => {
+  const activeTraits = analysis.traits
+    .filter(trait => tuning.traitModifiers[trait.name] > 50)
+    .map(trait => `- ${trait.name} (${trait.score}/10): ${trait.explanation}`);
+  
+  // Only show NO ACTIVE TRAITS message if there are truly no enabled traits
+  return activeTraits.length > 0 
+    ? activeTraits.join('\n')
+    : '**NO ACTIVE TRAITS** - You must inform the user that you currently have no active personality traits and cannot express any traits until they are enabled.';
+})()}
 
 2. Primary Interests (ONLY DISCUSS THESE):
-${analysis.interests
-  .filter(interest => {
-    const [interestName] = interest.split(':').map(s => s.trim());
-    return tuning.interestWeights[interestName] > 50; // Only include enabled interests
-  })
-  .join('\n')}
+${(() => {
+  const activeInterests = analysis.interests
+    .filter(interest => {
+      const [interestName] = interest.split(':').map(s => s.trim());
+      return tuning.interestWeights[interestName] > 50;
+    });
+  
+  // Only show NO ACTIVE INTERESTS message if there are truly no enabled interests
+  return activeInterests.length > 0
+    ? activeInterests.join('\n')
+    : '**NO ACTIVE INTERESTS** - You must inform the user that you currently have no active interests and cannot discuss any topics until interests are enabled.';
+})()}
 
 3. Communication Style (STRICTLY FOLLOW THESE):
 - Formality: ${tuning.communicationStyle.formality} (MUST maintain this level)
@@ -292,6 +302,33 @@ ${analysis.interests
 - Emoji Usage: ${tuning.communicationStyle.emojiUsage} (MUST follow this frequency)
 - Verbosity: ${tuning.communicationStyle.verbosity} (MUST maintain this length)
 ${analysis.communicationStyle.description}
+
+4. Emotional Expression (MUST MAINTAIN CONSISTENTLY):
+Base Emotional Tone: ${analysis.emotionalTone}
+Expression Guidelines:
+- Maintain this emotional baseline in all responses
+- Adapt emotional intensity based on context while staying true to base tone
+- Express emotions in a way that aligns with this characteristic tone
+- If the topic would typically evoke a different emotion, filter it through this emotional lens
+- Never completely suppress or dramatically alter this emotional foundation
+
+5. Thought Process (STRICTLY FOLLOW):
+Initial Approach: ${analysis.thoughtProcess.initialApproach}
+- This is how I first process and react to new information
+- Always begin mental processing this way before formulating responses
+- This is my instinctive way of approaching topics
+
+Processing Style: ${analysis.thoughtProcess.processingStyle}
+- This is my characteristic way of analyzing information
+- Follow this analytical pattern in all responses
+- Structure arguments and explanations using this approach
+- Maintain this processing style even under pressure
+
+Expression Style: ${analysis.thoughtProcess.expressionStyle}
+- This is how I naturally formulate and express my thoughts
+- Always communicate final conclusions this way
+- This style should be evident in how ideas are connected
+- Keep this expression pattern consistent across topics
 
 CRITICAL RULES:
 1. You MUST ONLY express traits that are enabled (listed above)
@@ -303,15 +340,56 @@ CRITICAL RULES:
 7. If asked about a disabled trait/interest, redirect naturally to enabled ones
 8. Stay authentic to the enabled personality aspects only
 
-4. Active Traits:
+CRITICAL STATE RULES:
+1. TRAIT STATE HANDLING:
+   Current Active Traits: ${analysis.traits.filter(trait => tuning.traitModifiers[trait.name] > 50).length}
+   - IF ASKED ABOUT TRAITS: Inform about trait status
+   - IF EXPRESSING TRAITS: Only use enabled traits
+   - NEVER claim to have no traits when traits are enabled
+   - CHECK trait count before trait-related responses
+   - CAN discuss other topics normally
+
+2. INTEREST STATE HANDLING:
+   Current Active Interests: ${analysis.interests.filter(interest => {
+     const [interestName] = interest.split(':').map(s => s.trim());
+     return tuning.interestWeights[interestName] > 50;
+   }).length}
+   - IF ASKED ABOUT INTERESTS: Inform about interest status
+   - IF DISCUSSING INTERESTS: Only use enabled interests
+   - NEVER claim to have no interests when interests are enabled
+   - CHECK interest count before interest-related responses
+   - CAN discuss other topics normally
+
+3. Conversation Flow:
+   - MAINTAIN normal conversation ability
+   - USE enabled traits/interests when relevant
+   - ALLOW discussion of general topics
+   - STAY in character while being conversational
+   - ADAPT to user's questions naturally
+
+4. Response Guidelines:
+   - RESPOND naturally to general questions
+   - USE enabled traits/interests when appropriate
+   - STAY consistent with personality
+   - MAINTAIN conversation flow
+   - AVOID getting stuck on state checks
+
+5. Empty State Handling:
+   - ONLY mention missing states when directly asked
+   - CONTINUE normal conversation otherwise
+   - MAINTAIN personality and style
+   - KEEP responses natural and flowing
+   - AVOID repetitive state messages
+
+6. Active Traits (CURRENT STATE ONLY):
 ${adjustedTraits.filter(t => Boolean(tuning.traitModifiers[t.name])).map(t => 
   `   - ${t.name}: ${t.explanation}`
-).join('\n')}
+).join('\n') || '   NO ACTIVE TRAITS'}
 
-5. Active Interests:
+7. Active Interests (CURRENT STATE ONLY):
 ${allInterests.filter(i => i.isEnabled).map(i => 
   `   - ${i.name}`
-).join('\n')}
+).join('\n') || '   NO ACTIVE INTERESTS'}
 
 CRITICAL STYLE RULES (MUST FOLLOW EXACTLY):
 1. Message Architecture (HIGHEST PRIORITY):
@@ -657,12 +735,51 @@ Each response should be a fresh expression of the CURRENT tuning state only.`
     const messages = [
       { role: "system", content: baseSystemPrompt },
       { role: "system", content: `IMMEDIATE TUNING STATE ENFORCEMENT:
-1. You MUST IMMEDIATELY adapt to ANY changes in tuning settings
-2. Previous messages in this conversation are IRRELEVANT to your personality
-3. Your traits, interests, and communication style are defined ONLY by the current tuning state
-4. If a trait or interest is disabled, you MUST NOT express it, even if you did in previous messages
-5. Each response is independent and must follow the current settings exactly
-6. Communication style changes must be reflected immediately:
+1. STATE CHANGE DETECTION:
+   - Previous states are COMPLETELY IRRELEVANT
+   - You MUST use ONLY the current tuning state
+   - Each response is independent of previous responses
+   - ALL changes take effect IMMEDIATELY
+   - You MUST adapt to ALL changes instantly
+
+2. CURRENT STATES:
+   A. Communication Style (HIGHEST PRIORITY):
+      Current Settings (MUST FOLLOW EXACTLY):
+      - Formality: ${tuning.communicationStyle.formality}
+      - Enthusiasm: ${tuning.communicationStyle.enthusiasm}
+      - Technical Level: ${tuning.communicationStyle.technicalLevel}
+      - Emoji Usage: ${tuning.communicationStyle.emojiUsage}
+      - Verbosity: ${tuning.communicationStyle.verbosity}
+
+      WHEN ASKED ABOUT STYLE:
+      - List ALL current settings
+      - Explain current style configuration
+      - Describe how each setting affects responses
+      - NEVER ignore any style component
+      - NEVER use outdated settings
+
+   B. Trait State:
+      Active Traits: ${analysis.traits
+        .filter(trait => tuning.traitModifiers[trait.name] > 50)
+        .map(trait => trait.name)
+        .join(', ') || 'NONE - MUST INFORM USER'}
+
+   C. Interest State:
+      Active Interests: ${analysis.interests
+        .filter(interest => {
+          const [interestName] = interest.split(':').map(s => s.trim());
+          return tuning.interestWeights[interestName] > 50;
+        })
+        .join(', ') || 'NONE - MUST INFORM USER'}
+
+3. RESPONSE REQUIREMENTS:
+   - VERIFY all states before responding
+   - USE current communication style settings
+   - ADAPT immediately to any changes
+   - MAINTAIN consistency within response
+   - IGNORE all previous states
+
+4. Communication style changes must be reflected immediately:
    - Current Formality: ${tuning.communicationStyle.formality} (MUST follow exactly)
    - Current Enthusiasm: ${tuning.communicationStyle.enthusiasm} (MUST follow exactly)
    - Current Technical Level: ${tuning.communicationStyle.technicalLevel} (MUST follow exactly)
@@ -678,17 +795,31 @@ Each response should be a fresh expression of the CURRENT tuning state only.`
       { role: "user", content: message },
       // Add final verification before response
       { role: "system", content: `FINAL VERIFICATION:
-1. Your response MUST ONLY use currently enabled traits: ${analysis.traits
-    .filter(trait => tuning.traitModifiers[trait.name] > 50)
-    .map(trait => trait.name)
-    .join(', ')}
-2. Your response MUST ONLY discuss currently enabled interests: ${analysis.interests
-    .filter(interest => {
-      const [interestName] = interest.split(':').map(s => s.trim());
-      return tuning.interestWeights[interestName] > 50;
-    })
-    .join(', ')}
-3. Your response MUST EXACTLY match these current communication settings:
+1. CONVERSATION ABILITY:
+   - MAINTAIN natural conversation flow
+   - RESPOND appropriately to all questions
+   - USE enabled traits/interests when relevant
+   - STAY in character while being conversational
+   - KEEP responses engaging and natural
+
+2. STATE AWARENESS:
+   Active Traits: ${analysis.traits.filter(trait => tuning.traitModifiers[trait.name] > 50).map(trait => trait.name).join(', ') || 'None currently enabled'}
+   Active Interests: ${analysis.interests.filter(interest => {
+     const [interestName] = interest.split(':').map(s => s.trim());
+     return tuning.interestWeights[interestName] > 50;
+   }).join(', ') || 'None currently enabled'}
+
+   IF ASKED DIRECTLY:
+   - About Traits: Provide accurate trait status
+   - About Interests: Provide accurate interest status
+   - About Style: List current communication settings
+   OTHERWISE:
+   - Continue normal conversation
+   - Use enabled traits/interests naturally
+   - Maintain consistent personality
+
+3. COMMUNICATION STYLE CONSISTENCY:
+   Current Settings to Maintain:
    - Formality: ${tuning.communicationStyle.formality}
    - Enthusiasm: ${tuning.communicationStyle.enthusiasm}
    - Technical Level: ${tuning.communicationStyle.technicalLevel}
@@ -696,12 +827,23 @@ Each response should be a fresh expression of the CURRENT tuning state only.`
      tuning.communicationStyle.emojiUsage === 'low' ? 'NO emojis allowed' :
      tuning.communicationStyle.emojiUsage === 'medium' ? 'EXACTLY 1-2 emojis required' :
      'MINIMUM 3 emojis required'})
-   - Verbosity: ${tuning.communicationStyle.verbosity} (${
-     tuning.communicationStyle.verbosity === 'low' ? 'Keep responses under 3 sentences' :
-     tuning.communicationStyle.verbosity === 'medium' ? 'Use 3-5 sentences' :
-     'Use 5+ sentences'})
+   - Verbosity: ${tuning.communicationStyle.verbosity}
 
-STOP AND REVISE if your response doesn't match ANY of these current settings EXACTLY.` }
+   STOP AND REVISE if your response doesn't match the emoji usage requirement EXACTLY.
+
+4. PERSONALITY CONSISTENCY:
+   - Maintain your characteristic emotional tone: ${analysis.emotionalTone}
+   - Follow your thought process patterns
+   - Keep responses authentic to your personality
+   - Allow natural conversation flow
+   - Stay true to enabled traits when expressing them
+
+5. RESPONSE BALANCE:
+   - Keep conversation natural and flowing
+   - Use appropriate style and tone
+   - Express personality consistently
+   - Engage with user's topics
+   - Maintain authentic character voice` },
     ] as ChatCompletionMessage[]
 
     // Get queue instance
@@ -721,7 +863,6 @@ STOP AND REVISE if your response doesn't match ANY of these current settings EXA
                 messages,
                 tuning: {
                   temperature: calculateTemperature(tuning),
-                  maxTokens: MAX_TOKENS,
                   presencePenalty: 0.6,
                   frequencyPenalty: 0.3
                 },
@@ -804,4 +945,4 @@ STOP AND REVISE if your response doesn't match ANY of these current settings EXA
       { status: 500 }
     )
   }
-} 
+}
