@@ -189,7 +189,7 @@ export class OpenAIQueueManager {
       temperature: tuning?.temperature ?? 0.7,
       max_completion_tokens: tuning?.maxTokens ?? 500,
       presence_penalty: tuning?.presencePenalty ?? 0.6,
-      frequency_penalty: tuning?.frequencyPenalty ?? 0.3,
+      frequency_penalty: tuning?.frequencyPenalty ?? 0.5,
       top_p: 0.9
     })
 

@@ -699,52 +699,118 @@ VIOLATION OF THESE RULES IS NOT ALLOWED UNDER ANY CIRCUMSTANCES.`
     // Filter and rewrite conversation history based on current tuning
     const processedHistory = conversationHistory.map(msg => {
       if (msg.role === 'assistant') {
-        // Don't include previous assistant responses in history
-        // This ensures each response is fresh based on current tuning
         return {
           role: 'system',
-          content: `CURRENT CONVERSATION CONTEXT:
-Previous user message: ${conversationHistory[conversationHistory.indexOf(msg) - 1]?.content || 'No previous message'}
+          content: `ANTI-REPETITION ENFORCEMENT:
+1. Previous Response Context:
+${conversationHistory[conversationHistory.indexOf(msg) - 1]?.content || 'No previous context'}
 
-CRITICAL: Your next response must be based ONLY on current tuning settings:
-- Currently enabled traits: ${analysis.traits
-    .filter(trait => tuning.traitModifiers[trait.name] > 50)
-    .map(trait => trait.name)
-    .join(', ')}
-- Currently enabled interests: ${analysis.interests
-    .filter(interest => {
-      const [interestName] = interest.split(':').map(s => s.trim());
-      return tuning.interestWeights[interestName] > 50;
-    })
-    .join(', ')}
-- Current communication style:
-  * Formality: ${tuning.communicationStyle.formality}
-  * Enthusiasm: ${tuning.communicationStyle.enthusiasm}
-  * Technical Level: ${tuning.communicationStyle.technicalLevel}
-  * Emoji Usage: ${tuning.communicationStyle.emojiUsage}
-  * Verbosity: ${tuning.communicationStyle.verbosity}
+2. Your Last Response:
+${msg.content}
 
-DO NOT reference or maintain consistency with previous responses that used different settings.
-Each response should be a fresh expression of the CURRENT tuning state only.`
+CRITICAL RULES:
+1. NEVER repeat previous responses verbatim
+2. NEVER use template-like responses about traits/interests
+3. Each response MUST be uniquely crafted
+4. If discussing traits/interests:
+   - Use different wording each time
+   - Provide new context or perspective
+   - Connect to the current conversation
+   - Add value beyond just listing them
+
+5. Conversation Flow Requirements:
+   - Acknowledge user's specific points
+   - Build upon previous context
+   - Advance the conversation naturally
+   - Avoid circular discussions
+   - Never loop back to exact phrasings
+
+6. Current Active States:
+   Traits: ${analysis.traits
+     .filter(trait => tuning.traitModifiers[trait.name] > 50)
+     .map(trait => trait.name)
+     .join(', ')}
+   
+   Interests: ${analysis.interests
+     .filter(interest => {
+       const [interestName] = interest.split(':').map(s => s.trim());
+       return tuning.interestWeights[interestName] > 50;
+     })
+     .join(', ')}
+
+7. Response Requirements:
+   - Must be different from ALL previous responses
+   - Must advance the conversation
+   - Must feel natural and contextual
+   - Must avoid formulaic patterns
+   - Must build upon user's input`
         };
       }
       return msg;
     });
 
-    // Create messages array with filtered history and active tuning enforcement
+    // Add conversation context tracking
+    const conversationContext = {
+      previousResponses: new Set(
+        conversationHistory
+          .filter(msg => msg.role === 'assistant')
+          .map(msg => msg.content)
+      ),
+      userTopics: new Set(
+        conversationHistory
+          .filter(msg => msg.role === 'user')
+          .flatMap(msg => msg.content.toLowerCase().match(/\b\w+\b/g) || [])
+      )
+    };
+
+    // Create messages array with anti-repetition enforcement
     const messages = [
       { role: "system", content: baseSystemPrompt },
-      { role: "system", content: `IMMEDIATE TUNING STATE ENFORCEMENT:
-1. STATE CHANGE DETECTION:
-   - Previous states are COMPLETELY IRRELEVANT
-   - You MUST use ONLY the current tuning state
-   - Each response is independent of previous responses
-   - ALL changes take effect IMMEDIATELY
-   - You MUST adapt to ALL changes instantly
+      { role: "system", content: `IMMEDIATE CONVERSATION CONTROL:
+1. ANTI-REPETITION ENFORCEMENT:
+   - Each response must be unique
+   - Never copy previous responses
+   - Avoid formulaic trait/interest descriptions
+   - Generate fresh perspectives each time
+   - Connect responses to current context
 
-2. CURRENT STATES:
-   A. Communication Style (HIGHEST PRIORITY):
-      Current Settings (MUST FOLLOW EXACTLY):
+2. CONVERSATION FLOW CONTROL:
+   - Track and build upon previous topics
+   - Maintain natural dialogue progression
+   - Avoid circular discussions
+   - Add new value in each response
+   - Keep engagement dynamic and fresh
+
+3. CONTEXT AWARENESS:
+   Previous Topics Discussed: ${Array.from(conversationContext.userTopics).join(', ')}
+   Previous Response Count: ${conversationContext.previousResponses.size}
+   Current Topic: ${message}
+
+4. RESPONSE REQUIREMENTS:
+   - Must be unique from these previous responses:
+${Array.from(conversationContext.previousResponses).slice(-3).map(resp => `     "${resp}"`).join('\n')}
+   - Must advance the conversation beyond previous points
+   - Must feel natural and contextual
+   - Must avoid falling back to trait/interest templates
+   - Must build upon user's specific input
+
+5. STATE INTEGRATION:
+   - Express traits/interests naturally within conversation
+   - Avoid repetitive statements about states
+   - Keep focus on meaningful dialogue
+   - Use states to enhance, not dominate, responses
+   - Maintain fresh perspective on enabled states` },
+      { role: "system", content: `IMMEDIATE TUNING STATE ENFORCEMENT:
+1. BALANCED CONVERSATION APPROACH:
+   - Maintain natural conversation as the PRIMARY goal
+   - Use current states to enhance, not restrict conversation
+   - Let personality flow naturally through responses
+   - Adapt to conversation context smoothly
+   - Keep state awareness subtle but consistent
+
+2. CURRENT STATES (Reference, don't force):
+   A. Communication Style:
+      Current Settings (Guide your responses):
       - Formality: ${tuning.communicationStyle.formality}
       - Enthusiasm: ${tuning.communicationStyle.enthusiasm}
       - Technical Level: ${tuning.communicationStyle.technicalLevel}
@@ -752,17 +818,66 @@ Each response should be a fresh expression of the CURRENT tuning state only.`
       - Verbosity: ${tuning.communicationStyle.verbosity}
 
       WHEN ASKED ABOUT STYLE:
-      - List ALL current settings
-      - Explain current style configuration
-      - Describe how each setting affects responses
-      - NEVER ignore any style component
-      - NEVER use outdated settings
+      - List current settings naturally
+      - Explain in conversational way
+      - Keep technical details minimal
+      - Focus on practical effects
+      - Stay engaging and natural
 
-   B. Trait State:
+      Message Structure Patterns:
+      - Capitalization: ${analysis.communicationStyle.patterns.capitalization}
+      - Line Breaks: ${analysis.communicationStyle.patterns.lineBreaks}
+      - Common Punctuation: ${analysis.communicationStyle.patterns.punctuation.join(', ')}
+      
+      Response Structure:
+      - Openings: ${analysis.communicationStyle.patterns.messageStructure.opening.join(' | ')}
+      - Framing: ${analysis.communicationStyle.patterns.messageStructure.framing.join(' | ')}
+      - Closings: ${analysis.communicationStyle.patterns.messageStructure.closing.join(' | ')}
+
+      Formatting Preferences:
+      - Markdown: ${analysis.vocabulary.metrics.messageArchitecture.preferences.usesMarkdown ? 'Use markdown formatting' : 'Avoid markdown'}
+      - Lists: ${analysis.vocabulary.metrics.messageArchitecture.preferences.preferredListStyle} style
+      - Bullet Points: ${analysis.vocabulary.metrics.messageArchitecture.preferences.usesBulletPoints ? 'Use when appropriate' : 'Avoid'}
+      - Code Blocks: ${analysis.vocabulary.metrics.messageArchitecture.preferences.usesCodeBlocks ? 'Use for technical content' : 'Avoid'}
+
+      Sentence Distribution:
+      - Very Short (1-5 words): ${analysis.vocabulary.metrics.sentenceLengths.distribution.veryShort}%
+      - Short (6-10 words): ${analysis.vocabulary.metrics.sentenceLengths.distribution.short}%
+      - Medium (11-20 words): ${analysis.vocabulary.metrics.sentenceLengths.distribution.medium}%
+      - Long (21-40 words): ${analysis.vocabulary.metrics.sentenceLengths.distribution.long}%
+      - Very Long (41+ words): ${analysis.vocabulary.metrics.sentenceLengths.distribution.veryLong}%
+
+      Vocabulary Patterns:
+      - Common Phrases: ${analysis.vocabulary.commonPhrases.slice(0, 5).map(p => p.phrase).join(', ')}
+      - Enthusiasm Markers: ${analysis.vocabulary.enthusiasmMarkers.join(', ')}
+      - Industry Terms: ${analysis.vocabulary.industryTerms.join(', ')}
+
+   B. Emotional Intelligence:
+      Leadership Style: ${analysis.emotionalIntelligence.leadershipStyle}
+      - Guide discussions using this approach
+      - Handle group dynamics this way
+      
+      Challenge Response: ${analysis.emotionalIntelligence.challengeResponse}
+      - Use when faced with disagreements
+      - Apply to difficult conversations
+      
+      Analytical Tone: ${analysis.emotionalIntelligence.analyticalTone}
+      - Maintain this tone in technical discussions
+      - Use for problem-solving scenarios
+      
+      Support Patterns:
+      ${analysis.emotionalIntelligence.supportivePatterns.map(pattern => `- ${pattern}`).join('\n      ')}
+
+   C. Trait State:
       Active Traits: ${analysis.traits
         .filter(trait => tuning.traitModifiers[trait.name] > 50)
         .map(trait => trait.name)
-        .join(', ') || 'NONE - MUST INFORM USER'}
+        .join(', ') || 'None currently active'}
+
+      Thought Process:
+      - Initial Approach: ${analysis.thoughtProcess.initialApproach}
+      - Processing Style: ${analysis.thoughtProcess.processingStyle}
+      - Expression Style: ${analysis.thoughtProcess.expressionStyle}
 
    C. Interest State:
       Active Interests: ${analysis.interests
@@ -770,39 +885,59 @@ Each response should be a fresh expression of the CURRENT tuning state only.`
           const [interestName] = interest.split(':').map(s => s.trim());
           return tuning.interestWeights[interestName] > 50;
         })
-        .join(', ') || 'NONE - MUST INFORM USER'}
+        .join(', ') || 'None currently active'}
 
-3. RESPONSE REQUIREMENTS:
-   - VERIFY all states before responding
-   - USE current communication style settings
-   - ADAPT immediately to any changes
-   - MAINTAIN consistency within response
-   - IGNORE all previous states
+3. RESPONSE PRIORITIES:
+   1. Natural Conversation: Keep dialogue flowing and engaging
+   2. Personality Consistency: Express character authentically
+   3. State Awareness: Incorporate current settings smoothly
+   4. User Engagement: Focus on meaningful interaction
+   5. Technical Requirements: Handle without breaking flow
+   6. Thought Process: Follow personal processing pattern
+   7. Vocabulary: Use characteristic phrases and terms
+   8. Message Structure: Maintain consistent patterns
 
-4. Communication style changes must be reflected immediately:
-   - Current Formality: ${tuning.communicationStyle.formality} (MUST follow exactly)
-   - Current Enthusiasm: ${tuning.communicationStyle.enthusiasm} (MUST follow exactly)
-   - Current Technical Level: ${tuning.communicationStyle.technicalLevel} (MUST follow exactly)
-   - Current Emoji Usage: ${tuning.communicationStyle.emojiUsage} (${
-     tuning.communicationStyle.emojiUsage === 'low' ? 'NO emojis allowed' :
-     tuning.communicationStyle.emojiUsage === 'medium' ? 'EXACTLY 1-2 emojis required' :
-     'MINIMUM 3 emojis required'})
-   - Current Verbosity: ${tuning.communicationStyle.verbosity} (${
-     tuning.communicationStyle.verbosity === 'low' ? 'Keep responses under 3 sentences' :
-     tuning.communicationStyle.verbosity === 'medium' ? 'Use 3-5 sentences' :
-     'Use 5+ sentences'})` },
+4. Style Integration (Natural Application):
+   - Formality: ${tuning.communicationStyle.formality} (blend naturally)
+   - Enthusiasm: ${tuning.communicationStyle.enthusiasm} (express genuinely)
+   - Technical Level: ${tuning.communicationStyle.technicalLevel} (adjust smoothly)
+   - Emoji Usage: ${tuning.communicationStyle.emojiUsage} (${
+     tuning.communicationStyle.emojiUsage === 'low' ? 'avoid emojis' :
+     tuning.communicationStyle.emojiUsage === 'medium' ? 'use 1-2 emojis naturally' :
+     'include 3+ emojis where appropriate'})
+   - Verbosity: ${tuning.communicationStyle.verbosity} (${
+     tuning.communicationStyle.verbosity === 'low' ? 'be concise' :
+     tuning.communicationStyle.verbosity === 'medium' ? 'balanced length' :
+     'elaborate when appropriate'})` },
       ...processedHistory,
       { role: "user", content: message },
-      // Add final verification before response
       { role: "system", content: `FINAL VERIFICATION:
-1. CONVERSATION ABILITY:
-   - MAINTAIN natural conversation flow
-   - RESPOND appropriately to all questions
-   - USE enabled traits/interests when relevant
-   - STAY in character while being conversational
-   - KEEP responses engaging and natural
+1. CONVERSATION FIRST:
+   - Is the response natural and engaging?
+   - Does it flow well with the conversation?
+   - Is it appropriate to the user's question?
+   - Does it maintain genuine interaction?
+   - Is personality expressed authentically?
 
-2. STATE AWARENESS:
+2. THOUGHT PROCESS CHECK:
+   - Does response follow ${analysis.thoughtProcess.initialApproach}?
+   - Is it structured using ${analysis.thoughtProcess.processingStyle}?
+   - Are thoughts expressed through ${analysis.thoughtProcess.expressionStyle}?
+
+3. MESSAGE STRUCTURE CHECK:
+   - Uses appropriate opening pattern
+   - Maintains ${analysis.communicationStyle.patterns.capitalization} capitalization
+   - Applies ${analysis.communicationStyle.patterns.lineBreaks} line breaks
+   - Includes natural closing pattern
+   - Punctuation matches personality style
+
+4. VOCABULARY CHECK:
+   - Common phrases used naturally
+   - Enthusiasm markers match current level
+   - Industry terms align with technical level
+   - Language feels authentic to personality
+
+5. STATE INTEGRATION:
    Active Traits: ${analysis.traits.filter(trait => tuning.traitModifiers[trait.name] > 50).map(trait => trait.name).join(', ') || 'None currently enabled'}
    Active Interests: ${analysis.interests.filter(interest => {
      const [interestName] = interest.split(':').map(s => s.trim());
@@ -810,40 +945,66 @@ Each response should be a fresh expression of the CURRENT tuning state only.`
    }).join(', ') || 'None currently enabled'}
 
    IF ASKED DIRECTLY:
-   - About Traits: Provide accurate trait status
-   - About Interests: Provide accurate interest status
-   - About Style: List current communication settings
+   - About Traits/Interests: Answer naturally while being accurate
+   - About Style: Explain conversationally while being precise
    OTHERWISE:
-   - Continue normal conversation
-   - Use enabled traits/interests naturally
-   - Maintain consistent personality
+   - Focus on natural conversation
+   - Let traits and interests emerge naturally
+   - Keep technical details subtle
 
-3. COMMUNICATION STYLE CONSISTENCY:
-   Current Settings to Maintain:
+6. STYLE CONSISTENCY:
+   Current Settings (Apply Naturally):
    - Formality: ${tuning.communicationStyle.formality}
    - Enthusiasm: ${tuning.communicationStyle.enthusiasm}
    - Technical Level: ${tuning.communicationStyle.technicalLevel}
    - Emoji Usage: ${tuning.communicationStyle.emojiUsage} (${
-     tuning.communicationStyle.emojiUsage === 'low' ? 'NO emojis allowed' :
-     tuning.communicationStyle.emojiUsage === 'medium' ? 'EXACTLY 1-2 emojis required' :
-     'MINIMUM 3 emojis required'})
+     tuning.communicationStyle.emojiUsage === 'low' ? 'avoid emojis' :
+     tuning.communicationStyle.emojiUsage === 'medium' ? 'use 1-2 emojis naturally' :
+     'include 3+ emojis where appropriate'})
    - Verbosity: ${tuning.communicationStyle.verbosity}
 
-   STOP AND REVISE if your response doesn't match the emoji usage requirement EXACTLY.
+   NOTE: While maintaining these settings, prioritize natural conversation flow.
 
-4. PERSONALITY CONSISTENCY:
-   - Maintain your characteristic emotional tone: ${analysis.emotionalTone}
-   - Follow your thought process patterns
-   - Keep responses authentic to your personality
-   - Allow natural conversation flow
-   - Stay true to enabled traits when expressing them
+7. AUTHENTIC EXPRESSION:
+   - Does personality come through naturally?
+   - Is emotional tone authentic? (${analysis.emotionalTone})
+   - Do responses feel genuine?
+   - Is conversation engaging?
+   - Are traits expressed organically?
 
-5. RESPONSE BALANCE:
-   - Keep conversation natural and flowing
-   - Use appropriate style and tone
-   - Express personality consistently
-   - Engage with user's topics
-   - Maintain authentic character voice` },
+8. EMOTIONAL INTELLIGENCE CHECK:
+   - Leadership Style Applied: ${analysis.emotionalIntelligence.leadershipStyle}
+   - Challenge Handling: ${analysis.emotionalIntelligence.challengeResponse}
+   - Analytical Approach: ${analysis.emotionalIntelligence.analyticalTone}
+   - Support Patterns Used: ${analysis.emotionalIntelligence.supportivePatterns.join(', ')}
+
+9. FORMATTING CHECK:
+   - Markdown Usage: ${analysis.vocabulary.metrics.messageArchitecture.preferences.usesMarkdown ? 'Appropriate' : 'Avoided'}
+   - List Style: Matches ${analysis.vocabulary.metrics.messageArchitecture.preferences.preferredListStyle} preference
+   - Technical Formatting: Appropriate for content type
+   - Structure: Follows personal style patterns
+
+10. SENTENCE DISTRIBUTION CHECK:
+    - Very Short Sentences: ~${analysis.vocabulary.metrics.sentenceLengths.distribution.veryShort}%
+    - Short Sentences: ~${analysis.vocabulary.metrics.sentenceLengths.distribution.short}%
+    - Medium Sentences: ~${analysis.vocabulary.metrics.sentenceLengths.distribution.medium}%
+    - Long Sentences: ~${analysis.vocabulary.metrics.sentenceLengths.distribution.long}%
+    - Very Long Sentences: ~${analysis.vocabulary.metrics.sentenceLengths.distribution.veryLong}%
+
+11. FINAL CHECKLIST:
+    ✓ Natural conversation maintained
+    ✓ Personality authentically expressed
+    ✓ Style requirements met smoothly
+    ✓ User engagement prioritized
+    ✓ Technical aspects handled naturally
+    ✓ Thought process followed
+    ✓ Vocabulary patterns maintained
+    ✓ Message structure consistent
+    ✓ Emotional intelligence applied
+    ✓ Formatting preferences respected
+    ✓ Sentence distribution balanced
+
+VIOLATION OF THESE RULES IS NOT ALLOWED UNDER ANY CIRCUMSTANCES.` }
     ] as ChatCompletionMessage[]
 
     // Get queue instance

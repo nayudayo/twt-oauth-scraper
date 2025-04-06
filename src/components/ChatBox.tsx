@@ -492,6 +492,22 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       const response = await generatePersonalityResponse(userMessage)
       if (response) {
         setMessages(prev => [...prev, { text: response, isUser: false }])
+        
+        // Update conversation metadata with new message count only
+        if (activeConversationId) {
+          setConversations(prev => prev.map(conv => 
+            conv.id === activeConversationId 
+              ? {
+                  ...conv,
+                  metadata: {
+                    ...conv.metadata,
+                    messageCount: (conv.metadata.messageCount || 0) + 2 // +2 for user message and AI response
+                  }
+                }
+              : conv
+          ))
+        }
+
         // Focus the textarea after response is generated
         if (textareaRef.current) {
           textareaRef.current.focus()
@@ -1470,11 +1486,26 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       
       const data = await response.json();
       if (data.success && Array.isArray(data.data)) {
-        setMessages(data.data.map((msg: Message) => ({
+        const messages = data.data.map((msg: Message) => ({
           text: msg.content,
           isUser: msg.role === 'user'
-        })));
+        }));
+        
+        setMessages(messages);
         setActiveConversationId(conversation.id);
+        
+        // Update conversation metadata with accurate message count only
+        setConversations(prev => prev.map(conv => 
+          conv.id === conversation.id 
+            ? {
+                ...conv,
+                metadata: {
+                  ...conv.metadata,
+                  messageCount: messages.length
+                }
+              }
+            : conv
+        ));
       }
     } catch (error) {
       console.error('Error loading messages:', error);
@@ -1502,8 +1533,18 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
 
       const data = await response.json();
       if (data.success && data.data) {
-        setConversations(prev => [data.data, ...prev]);
-        setActiveConversationId(data.data.id);
+        // Ensure new chat has proper metadata without preview
+        const newChat = {
+          ...data.data,
+          metadata: {
+            ...data.data.metadata,
+            messageCount: 0,
+            isActive: true
+          }
+        };
+        
+        setConversations(prev => [newChat, ...prev]);
+        setActiveConversationId(newChat.id);
         setMessages([]);
       }
     } catch (error) {
@@ -1627,6 +1668,40 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     setShowProfile(scrollTop < threshold);
   }, []);
 
+  // Add handleRenameConversation function
+  const handleRenameConversation = async (conversationId: number, newTitle: string) => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/conversations/${conversationId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ title: newTitle })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to rename conversation');
+      }
+
+      const data = await response.json();
+      if (data.success && data.data) {
+        setConversations(prev => 
+          prev.map(conv => 
+            conv.id === conversationId 
+              ? { ...conv, title: newTitle }
+              : conv
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error renaming conversation:', error);
+      setError(error instanceof Error ? error.message : 'Failed to rename conversation');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <>
       {/* Main Container - Mobile First Layout */}
@@ -1646,6 +1721,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                   onSelectConversation={handleSelectConversation}
                   onNewChat={handleNewChat}
                   onDeleteConversation={handleDeleteConversation}
+                  onRenameConversation={handleRenameConversation}
                   isLoading={isLoadingConversations}
                 />
             </div>
@@ -2961,6 +3037,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                   onSelectConversation={handleSelectConversation}
                   onNewChat={handleNewChat}
                   onDeleteConversation={handleDeleteConversation}
+                  onRenameConversation={handleRenameConversation}
                   isLoading={isLoadingConversations}
                 />
               </div>

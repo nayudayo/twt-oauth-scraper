@@ -7,6 +7,7 @@ interface ConversationListProps {
   onSelectConversation: (conversation: Conversation) => void;
   onNewChat: () => void;
   onDeleteConversation: (conversationId: number) => void;
+  onRenameConversation: (conversationId: number, newTitle: string) => void;
   isLoading?: boolean;
 }
 
@@ -16,10 +17,13 @@ export function ConversationList({
   onSelectConversation,
   onNewChat,
   onDeleteConversation,
+  onRenameConversation,
   isLoading = false
 }: ConversationListProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState('');
 
   const handleDelete = async (conversationId: number, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent conversation selection
@@ -32,6 +36,31 @@ export function ConversationList({
     } finally {
       setDeletingId(null);
     }
+  };
+
+  const handleStartRename = (conversation: Conversation, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent conversation selection
+    setEditingId(conversation.id);
+    setEditTitle(conversation.title);
+  };
+
+  const handleRename = async (conversationId: number, e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTitle.trim()) return;
+
+    try {
+      await onRenameConversation(conversationId, editTitle.trim());
+      setEditingId(null);
+      setEditTitle('');
+    } catch (error) {
+      console.error('Failed to rename conversation:', error);
+    }
+  };
+
+  const handleCancelRename = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent conversation selection
+    setEditingId(null);
+    setEditTitle('');
   };
 
   return (
@@ -67,7 +96,7 @@ export function ConversationList({
         >
           {/* Modal Content */}
           <div 
-            className="w-full max-w-md bg-black/40 backdrop-blur-md border border-red-500/20 rounded-lg shadow-2xl hover-glow ancient-border relative z-[1000000] overflow-hidden"
+            className="w-full max-w-md bg-black/80 backdrop-blur-md border border-red-500/20 rounded-lg shadow-2xl hover-glow ancient-border relative z-[1000000] overflow-hidden"
             onClick={e => e.stopPropagation()}
             style={{ transform: 'translate3d(0,0,0)', willChange: 'transform', isolation: 'isolate' }}
           >
@@ -135,28 +164,76 @@ export function ConversationList({
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => {
-                            onSelectConversation(conversation);
-                            setIsOpen(false);
-                          }}
-                          className="flex-1 text-left"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-red-400/90 text-sm truncate group-hover:text-red-400">
-                              {conversation.title}
-                            </h4>
-                            {conversation.metadata.lastMessagePreview && (
-                              <p className="text-red-500/50 text-xs truncate mt-0.5">
-                                {conversation.metadata.lastMessagePreview}
-                              </p>
-                            )}
-                          </div>
-                        </button>
+                        {editingId === conversation.id ? (
+                          <form 
+                            className="flex-1 flex items-center gap-2"
+                            onSubmit={(e) => handleRename(conversation.id, e)}
+                          >
+                            <input
+                              type="text"
+                              value={editTitle}
+                              onChange={(e) => setEditTitle(e.target.value)}
+                              className="flex-1 bg-black/40 text-red-400/90 text-sm border border-red-500/20 rounded px-2 py-1 focus:outline-none focus:border-red-500/40"
+                              placeholder="Enter chat title..."
+                              autoFocus
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            <button
+                              type="submit"
+                              className="text-red-500/70 hover:text-red-500/90 p-1 rounded transition-colors"
+                              title="Save new title"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-4 h-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              className="text-red-500/70 hover:text-red-500/90 p-1 rounded transition-colors"
+                              title="Cancel rename"
+                              onClick={handleCancelRename}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-4 h-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </form>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              onSelectConversation(conversation);
+                              setIsOpen(false);
+                            }}
+                            className="flex-1 text-left"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-red-400/90 text-sm truncate group-hover:text-red-400">
+                                {conversation.title}
+                              </h4>
+                              {conversation.metadata.lastMessagePreview && (
+                                <p className="text-red-500/50 text-xs truncate mt-0.5">
+                                  {conversation.metadata.lastMessagePreview}
+                                </p>
+                              )}
+                            </div>
+                          </button>
+                        )}
                         <div className="flex items-center gap-2">
                           <div className="text-red-500/30 text-xs">
                             {conversation.metadata.messageCount || 0}
                           </div>
+                          {!editingId && (
+                            <button
+                              onClick={(e) => handleStartRename(conversation, e)}
+                              className="text-red-500/50 hover:text-red-500/70 p-1 rounded transition-colors"
+                              title="Rename conversation"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-4 h-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                          )}
                           <button
                             onClick={(e) => handleDelete(conversation.id, e)}
                             disabled={deletingId === conversation.id}

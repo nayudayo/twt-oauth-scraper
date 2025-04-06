@@ -378,25 +378,42 @@ The campaign plan should reflect my personal style while being strategically sou
 export function detectSpecialPrompt(message: string): SpecialPrompt | null {
   const normalizedMessage = message.toLowerCase();
   
-  // Skip detection for simple questions about communication style
-  if (normalizedMessage.match(/^what\s+is\s+your\s+communication\s+style\??$/i)) {
+  // Skip detection for various types of simple queries
+  if (normalizedMessage.match(/^(what|how|why|when|where|who|tell me about|can you|do you|are you|is your|what's your)\s+.+\??$/i)) {
     return null;
   }
   
+  // Skip if the message is too short or conversational
+  if (message.length < 20 || message.split(' ').length < 5) {
+    return null;
+  }
+
   for (const promptId in SPECIAL_PROMPTS) {
     const prompt = SPECIAL_PROMPTS[promptId];
-    // Make keyword matching more precise by checking for more context
-    if (prompt.keywords.some(keyword => {
+    
+    // More precise keyword matching with context
+    const hasKeywords = prompt.keywords.some(keyword => {
       const keywordLower = keyword.toLowerCase();
-      // Only match if the keyword is a complete word and has relevant context
       const keywordRegex = new RegExp(`\\b${keywordLower}\\b`, 'i');
+      
+      // Check for task-specific context
+      const hasTaskContext = message.toLowerCase().includes('create') ||
+                           message.toLowerCase().includes('generate') ||
+                           message.toLowerCase().includes('make') ||
+                           message.toLowerCase().includes('develop') ||
+                           message.toLowerCase().includes('plan');
+      
+      // Only match if it's clearly a task request
       return keywordRegex.test(normalizedMessage) && 
-             // Additional context checks for specific prompt types
-             ((promptId === 'press-release' && normalizedMessage.includes('write') || normalizedMessage.includes('create') || normalizedMessage.includes('generate')) ||
-              (promptId === 'content-calendar' && normalizedMessage.includes('plan') || normalizedMessage.includes('schedule')) ||
-              (promptId === 'project-proposal' && normalizedMessage.includes('proposal') || normalizedMessage.includes('project')) ||
-              (promptId === 'marketing-campaign' && normalizedMessage.includes('campaign') || normalizedMessage.includes('marketing')));
-    })) {
+             hasTaskContext &&
+             // Additional context checks
+             ((promptId === 'press-release' && /\b(announcement|news|media)\b/i.test(message)) ||
+              (promptId === 'content-calendar' && /\b(schedule|timeline|content plan)\b/i.test(message)) ||
+              (promptId === 'project-proposal' && /\b(project|proposal|plan)\b/i.test(message)) ||
+              (promptId === 'marketing-campaign' && /\b(marketing|campaign|promotion)\b/i.test(message)));
+    });
+
+    if (hasKeywords) {
       return prompt;
     }
   }
@@ -408,23 +425,29 @@ export function detectSpecialPrompt(message: string): SpecialPrompt | null {
 export function extractInputsFromMessage(message: string): Partial<Record<string, string | string[]>> {
   const inputs: Partial<Record<string, string | string[]>> = {};
   
-  // Simple extraction based on common patterns
-  // Product name: look for phrases after "for" or "about"
-  const productMatch = message.match(/(?:for|about)\s+([^,.]+)/i);
+  // Only extract if clear indicators are present
+  const hasExplicitIndicators = /\b(for|about|targeting|goals|objectives|audience)\b/i.test(message);
+  
+  if (!hasExplicitIndicators) {
+    return inputs;
+  }
+
+  // More precise extraction patterns
+  const productMatch = message.match(/\b(?:for|about)\s+(?:the\s+)?([^,.]+?)(?=\s+(?:to|that|which|with|and|but|or|$))/i);
   if (productMatch) {
     inputs['PRODUCT_NAME'] = productMatch[1].trim();
   }
 
-  // Target audience: look for phrases after "targeting" or "for"
-  const audienceMatch = message.match(/(?:targeting|for)\s+([^,.]+)(?:\s+audience|\s+users|\s+customers)?/i);
+  const audienceMatch = message.match(/\b(?:targeting|for)\s+(?:the\s+)?([^,.]+?)(?:\s+(?:audience|users|customers|market))(?=\s+(?:to|that|which|with|and|but|or|$))/i);
   if (audienceMatch) {
     inputs['TARGET_AUDIENCE'] = audienceMatch[1].trim();
   }
 
-  // Goals: look for phrases after "goals are" or "want to"
-  const goalsMatch = message.match(/(?:goals are|want to|aiming to)\s+([^,.]+)/i);
+  const goalsMatch = message.match(/\b(?:goals?|objectives?)\s+(?:is|are|include[s]?)\s+([^.]+)/i);
   if (goalsMatch) {
-    inputs['KEY_GOALS'] = goalsMatch[1].trim().split(/\s*(?:and|,)\s*/);
+    inputs['KEY_GOALS'] = goalsMatch[1].trim()
+      .split(/\s*(?:and|,)\s*/)
+      .filter(goal => goal.length > 0);
   }
 
   return inputs;
@@ -444,6 +467,49 @@ export function formatSpecialPrompt(
   
   // Merge extracted inputs with provided inputs
   const mergedInputs = { ...messageInputs, ...inputs };
+
+  // Get the original user message
+  const originalMessage = inputs.message as string || '';
   
-  return prompt.formatResponse(mergedInputs, analysis);
+  // Instead of replacing the message, add special task guidance as context
+  return `${originalMessage}
+
+TASK CONTEXT (Enhance natural conversation, don't override it):
+1. Special Task Type: ${prompt.name}
+2. Task Requirements:
+   - Maintain natural conversation flow
+   - Address user's message directly first
+   - Incorporate task elements naturally
+   - Keep personality consistent
+   - Don't use templated responses
+
+3. Available Information:
+${Object.entries(mergedInputs)
+  .filter(([key]) => key !== 'message')
+  .map(([key, value]) => `   - ${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+  .join('\n')}
+
+4. Task Guidelines:
+   - Respond to user's message first
+   - Weave task elements into natural dialogue
+   - Keep focus on user interaction
+   - Use task structure as guidance only
+   - Maintain conversation authenticity
+
+5. Integration Requirements:
+   - Never ignore user's original message
+   - Don't switch to template mode
+   - Keep responses personal and contextual
+   - Use task elements to enhance, not replace
+   - Stay true to personality and style
+
+6. Personality Integration:
+   Communication Style: ${analysis.communicationStyle.description}
+   Active Traits: ${analysis.traits.map(t => t.name).join(', ')}
+   Writing Patterns:
+   - Capitalization: ${analysis.communicationStyle.patterns.capitalization}
+   - Line Breaks: ${analysis.communicationStyle.patterns.lineBreaks}
+   - Message Structure: ${analysis.communicationStyle.patterns.messageStructure.framing.join(', ')}
+
+Remember: This is a conversation first, task second. Maintain natural dialogue while incorporating task elements smoothly.`;
 } 
