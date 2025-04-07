@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/config';
-import { initDB } from '@/lib/db';
-import { ConversationError } from '@/lib/db/conversation';
-import type { ConversationResponse } from '@/types/conversation';
+import { authOptions } from '../../../../lib/auth/config';
+import { initDB } from '../../../../lib/db';
+import { ConversationError } from '../../../../lib/db/conversation';
+import type { ConversationResponse } from '../../../../types/conversation';
 
 // Helper to generate API response metadata
 function generateResponseMetadata() {
@@ -15,9 +15,10 @@ function generateResponseMetadata() {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.username) {
       return NextResponse.json(
@@ -46,7 +47,7 @@ export async function GET(
     }
 
     // Get the conversation
-    const conversation = await db.conversation.getConversation(parseInt(params.id), user.id);
+    const conversation = await db.conversation.getConversation(parseInt(id), user.id);
 
     return NextResponse.json({
       success: true,
@@ -80,9 +81,10 @@ export async function GET(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.username) {
       return NextResponse.json(
@@ -111,7 +113,7 @@ export async function DELETE(
     }
 
     // Delete the conversation
-    await db.conversation.deleteConversation(parseInt(params.id), user.id);
+    await db.conversation.deleteConversation(parseInt(id), user.id);
 
     return NextResponse.json({
       success: true,
@@ -144,9 +146,10 @@ export async function DELETE(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.username) {
       return NextResponse.json(
@@ -188,7 +191,7 @@ export async function PATCH(
 
     // Update the conversation
     const conversation = await db.conversation.updateConversation(
-      parseInt(params.id),
+      parseInt(id),
       user.id,
       { title: body.title }
     );
