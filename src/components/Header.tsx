@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 export function Header() {
   const [time, setTime] = useState(new Date())
   const [showColon, setShowColon] = useState(true)
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
   const intelligenceLevel = DEFAULT_CONSCIOUSNESS.intelligenceLevel
   const pathname = usePathname()
 
@@ -42,7 +43,7 @@ export function Header() {
           </div>
 
           {/* Center - Title */}
-          <div className="col-span-12 lg:col-span-6 flex flex-col items-center justify-center py-1 sm:py-2">
+          <div className="col-span-10 lg:col-span-6 flex flex-col items-center justify-center py-1 sm:py-2">
             <Link 
               href="/"
               className={cn(
@@ -57,6 +58,46 @@ export function Header() {
                 AI Cloning System v1.0.3
               </div>
             </Link>
+          </div>
+
+          {/* Mobile Menu Button */}
+          <div className="col-span-2 lg:hidden flex justify-end">
+            <button
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              className="text-red-500/90 hover:text-red-400 transition-colors p-2"
+            >
+              <div className="space-y-1">
+                <div className="w-4 h-0.5 bg-current"></div>
+                <div className="w-4 h-0.5 bg-current"></div>
+                <div className="w-4 h-0.5 bg-current"></div>
+              </div>
+            </button>
+            
+            {/* Mobile Dropdown Menu */}
+            {showMobileMenu && (
+              <div className="absolute top-full right-0 mt-1 w-48 py-2 bg-black/80 backdrop-blur-md border border-red-500/20 rounded shadow-lg ancient-border">
+                <Link 
+                  href="/leaderboard"
+                  className={cn(
+                    "block px-4 py-2 text-red-500/90 text-xs tracking-wider uppercase ancient-text title-glow hover:bg-red-500/10 hover:text-red-400 transition-colors",
+                    pathname === '/leaderboards' && "text-red-400 bg-red-500/5"
+                  )}
+                  onClick={() => setShowMobileMenu(false)}
+                >
+                  Leaderboards
+                </Link>
+                <Link 
+                  href="/insights"
+                  className={cn(
+                    "block px-4 py-2 text-red-500/90 text-xs tracking-wider uppercase ancient-text title-glow hover:bg-red-500/10 hover:text-red-400 transition-colors",
+                    pathname === '/insights' && "text-red-400 bg-red-500/5"
+                  )}
+                  onClick={() => setShowMobileMenu(false)}
+                >
+                  Insights
+                </Link>
+              </div>
+            )}
           </div>
 
           {/* Right section - Show only on large screens */}

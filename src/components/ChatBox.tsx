@@ -48,6 +48,13 @@ interface ScanProgress {
   rateLimitReset?: number
 }
 
+// Add cooldown types
+interface CooldownState {
+  isOnCooldown: boolean;
+  remainingTime?: number;
+  operationType?: 'scrape' | 'analyze' | 'update';
+}
+
 // Add these helper functions near the top of the file, after the imports
 const formatTraitName = (name: string) => {
   if (!name) return '';
@@ -174,6 +181,9 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
   const [isLoadingTweets, setIsLoadingTweets] = useState(false)
   const [accumulatedTweets, setAccumulatedTweets] = useState<Tweet[]>([])
   const [showProfile, setShowProfile] = useState(true)
+  const [cooldownState, setCooldownState] = useState<CooldownState>({
+    isOnCooldown: false
+  });
 
   // Add cache hook
   const personalityCache = usePersonalityCache({
@@ -535,8 +545,13 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     }
   }
 
-  // Update handleAnalyze to handle mobile/tablet loading states
+  // Update handleAnalyze to handle both initial analysis and updates
   const handleAnalyze = async () => {
+    const canProceed = await checkCooldown('analyze');
+    if (!canProceed) {
+      return;
+    }
+
     if (!accumulatedTweets || accumulatedTweets.length === 0) {
       setError('No tweets available for analysis');
       return;
@@ -550,7 +565,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       // Check cache first
       const cachedData = await personalityCache.fetchCache();
       
-      if (cachedData) {
+      if (cachedData && !analysis) { // Only use cache for initial analysis
         // Initialize trait modifiers from cached traits
         const initialTraitModifiers = cachedData.traits.reduce((acc: Record<string, number>, trait: { name: string; score: number }) => ({
           ...acc,
@@ -618,7 +633,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
         return;
       }
 
-      // No cache, perform new analysis with mobile/tablet timeout handling
+      // No cache or updating existing analysis
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes for mobile/tablet
 
@@ -628,7 +643,8 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             tweets: accumulatedTweets,
-            profile
+            profile,
+            currentTuning: analysis ? tuning : undefined // Only send tuning if updating
           }),
           signal: controller.signal
         });
@@ -707,6 +723,47 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           }
         });
 
+        // Create a new chat with the updated personality if this was an update
+        if (analysis) {
+          try {
+            const createChatResponse = await fetch('/api/conversations', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                analysis: newAnalysis,
+                tuning: {
+                  traitModifiers: newTraitModifiers,
+                  interestWeights: newInterestWeights,
+                  communicationStyle: {
+                    formality: newAnalysis.communicationStyle.formality ?? 'medium',
+                    enthusiasm: newAnalysis.communicationStyle.enthusiasm ?? 'medium',
+                    technicalLevel: newAnalysis.communicationStyle.technicalLevel ?? 'medium',
+                    emojiUsage: newAnalysis.communicationStyle.emojiUsage ?? 'medium',
+                    verbosity: newAnalysis.communicationStyle.verbosity ?? 'medium'
+                  }
+                }
+              })
+            });
+
+            if (!createChatResponse.ok) {
+              throw new Error('Failed to create new chat');
+            }
+
+            const chatData = await createChatResponse.json();
+            if (chatData.success && chatData.data) {
+              // Update conversations list with new chat
+              setConversations(prev => [chatData.data, ...prev]);
+              // Set new chat as active
+              setActiveConversationId(chatData.data.id);
+              // Clear messages for new chat
+              setMessages([]);
+            }
+          } catch (error) {
+            console.error('Failed to create new chat:', error);
+            setError('Failed to create new chat with updated personality');
+          }
+        }
+
       } catch (error: unknown) {
         clearTimeout(timeoutId);
         if (error instanceof Error && error.name === 'AbortError') {
@@ -724,11 +781,196 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     }
   };
 
+    // Update handleUpdateAnalysis to handle cooldowns
+  const handleUpdateAnalysis = async () => {
+    const canProceed = await checkCooldown('analyze');
+    if (!canProceed) {
+      return;
+    }
+
+    try {
+      // Reset analysis state but preserve tuning
+      const currentTuning = tuning;
+      setAnalysis(null);
+      setIsAnalyzing(true);
+      setError(null);
+      setAnalysisStartTime(Date.now());
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes for mobile/tablet
+
+      try {
+        const response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tweets: accumulatedTweets,
+            profile,
+            currentTuning
+          }),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error('Failed to analyze personality');
+        }
+
+        const newAnalysis = await response.json();
+        
+        // Preserve existing communication style values
+        const preservedCommunicationStyle = {
+          ...newAnalysis.communicationStyle,
+          formality: currentTuning.communicationStyle.formality,
+          enthusiasm: currentTuning.communicationStyle.enthusiasm,
+          technicalLevel: currentTuning.communicationStyle.technicalLevel,
+          emojiUsage: currentTuning.communicationStyle.emojiUsage,
+          verbosity: currentTuning.communicationStyle.verbosity ?? 'medium'
+        };
+
+        // Update analysis with preserved values
+        const finalAnalysis = {
+          ...newAnalysis,
+          communicationStyle: preservedCommunicationStyle,
+          // Preserve tuning parameters
+          traitModifiers: currentTuning.traitModifiers,
+          interestWeights: currentTuning.interestWeights
+        };
+
+        // Convert traits to toggle states - traits should be ON by default when detected
+        const traitModifiers = newAnalysis.traits.reduce((acc: Record<string, number>, trait: { name: string; score: number }) => ({
+          ...acc,
+          [trait.name]: 100 // Set to 100 (ON) for detected traits
+        }), {});
+
+        // Initialize weights for new interests, preserving existing weights
+        const newInterests = newAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => {
+          const [interestName] = interest.split(':').map(s => s.trim());
+          // If interest already exists in currentTuning, preserve its weight, otherwise set to 100 (ON)
+          const weight = currentTuning.interestWeights[interestName] ?? 100;
+          return { ...acc, [interestName]: weight };
+        }, {});
+
+        setTuning(prev => ({
+          ...prev,
+          traitModifiers,
+          interestWeights: {
+            ...prev.interestWeights, // Keep existing interest weights
+            ...newInterests // Add new interests
+          },
+          communicationStyle: {
+            ...currentTuning.communicationStyle,
+            verbosity: currentTuning.communicationStyle.verbosity ?? 'medium'
+          }
+        }));
+
+        setAnalysis(finalAnalysis);
+        setShowPsychoanalysis(true);
+
+        // Update the cache with preserved values
+        await personalityCache.saveToCache({
+          ...finalAnalysis,
+          traits: newAnalysis.traits.map((trait: { name: string; score: number; explanation?: string }) => ({
+            name: trait.name.replace(/[*-]/g, '').trim(),
+            score: traitModifiers[trait.name] ? 10 : 0, // Convert toggle state to score
+            explanation: trait.explanation?.replace(/[*-]/g, '').trim()
+          })),
+          interests: Object.keys(newInterests),
+          interestWeights: newInterests,
+          communicationStyle: {
+            ...preservedCommunicationStyle,
+            description: newAnalysis.communicationStyle.description?.replace(/[*-]/g, '').trim()
+          },
+          thoughtProcess: {
+            ...newAnalysis.thoughtProcess,
+            initialApproach: newAnalysis.thoughtProcess.initialApproach?.replace(/[*-]/g, '').trim(),
+            processingStyle: newAnalysis.thoughtProcess.processingStyle?.replace(/[*-]/g, '').trim(),
+            expressionStyle: newAnalysis.thoughtProcess.expressionStyle?.replace(/[*-]/g, '').trim()
+          }
+        });
+
+        // Create a new chat with the updated personality
+        try {
+          const createChatResponse = await fetch('/api/conversations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              analysis: finalAnalysis,
+              tuning: {
+                traitModifiers,
+                interestWeights: newInterests,
+                communicationStyle: {
+                  ...preservedCommunicationStyle,
+                  verbosity: currentTuning.communicationStyle.verbosity ?? 'medium'
+                }
+              }
+            })
+          });
+
+          if (!createChatResponse.ok) {
+            throw new Error('Failed to create new chat');
+          }
+
+          const chatData = await createChatResponse.json();
+          if (chatData.success && chatData.data) {
+            // Update conversations list with new chat
+            setConversations(prev => [chatData.data, ...prev]);
+            // Set new chat as active
+            setActiveConversationId(chatData.data.id);
+            // Clear messages for new chat
+            setMessages([]);
+          }
+        } catch (error) {
+          console.error('Failed to create new chat:', error);
+          setError('Failed to create new chat with updated personality');
+        }
+
+      } catch (error: unknown) {
+        clearTimeout(timeoutId);
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error('Analysis update timed out - please try again');
+        }
+        throw error;
+      }
+
+    } catch (error: unknown) {
+      console.error('Analysis error:', error);
+      setError(error instanceof Error ? error.message : 'Failed to analyze personality');
+    } finally {
+      setIsAnalyzing(false);
+      setAnalysisStartTime(null);
+    }
+  };
+
+  // Add cooldown check function
+  const checkCooldown = async (operation: 'scrape' | 'analyze' | 'update') => {
+    try {
+      const response = await fetch(`/api/cooldown?operation=${operation}`);
+      const data = await response.json();
+      
+      setCooldownState({
+        isOnCooldown: !data.canProceed,
+        remainingTime: data.remainingTime,
+        operationType: operation
+      });
+
+      return data.canProceed;
+    } catch (error) {
+      console.error('Error checking cooldown:', error);
+      return true; // Allow operation on error to prevent blocking
+    }
+  };
+
   // Add handlers for terminal session
   const handleScrape = async () => {
+    const canProceed = await checkCooldown('scrape');
+    if (!canProceed) {
+      return;
+    }
     // Show consent modal first
-    setShowConsent(true)
-  }
+    setShowConsent(true);
+  };
 
   // Convert TwitterAPITweet to Tweet
   const convertToTweet = (apiTweet: TwitterAPITweet): Tweet => ({
@@ -890,6 +1132,11 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
 
   // Update startScraping to use unified functions
   const startScraping = async () => {
+    const canProceed = await checkCooldown('scrape');
+    if (!canProceed) {
+      return;
+    }
+
     if (!profile.name) {
       cleanupState({ isError: true, error: 'Profile name is required' });
       return;
@@ -1240,163 +1487,6 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     adjustTextareaHeight()
   }, [input])
 
-  // Update handleUpdateAnalysis to not handle custom interests
-  const handleUpdateAnalysis = async () => {
-    try {
-      // Reset analysis state but preserve tuning
-      const currentTuning = tuning;
-      setAnalysis(null);
-      setIsAnalyzing(true);
-      setError(null);
-      setAnalysisStartTime(Date.now());
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes for mobile/tablet
-
-      try {
-        const response = await fetch('/api/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tweets: accumulatedTweets,
-            profile,
-            currentTuning
-          }),
-          signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          throw new Error('Failed to analyze personality');
-        }
-
-        const newAnalysis = await response.json();
-        
-        // Preserve existing communication style values
-        const preservedCommunicationStyle = {
-          ...newAnalysis.communicationStyle,
-          formality: currentTuning.communicationStyle.formality,
-          enthusiasm: currentTuning.communicationStyle.enthusiasm,
-          technicalLevel: currentTuning.communicationStyle.technicalLevel,
-          emojiUsage: currentTuning.communicationStyle.emojiUsage,
-          verbosity: currentTuning.communicationStyle.verbosity ?? 'medium'
-        };
-
-        // Update analysis with preserved values
-        const finalAnalysis = {
-          ...newAnalysis,
-          communicationStyle: preservedCommunicationStyle,
-          // Preserve tuning parameters
-          traitModifiers: currentTuning.traitModifiers,
-          interestWeights: currentTuning.interestWeights
-        };
-
-        // Convert traits to toggle states - traits should be ON by default when detected
-        const traitModifiers = newAnalysis.traits.reduce((acc: Record<string, number>, trait: { name: string; score: number }) => ({
-          ...acc,
-          [trait.name]: 100 // Set to 100 (ON) for detected traits
-        }), {});
-
-        // Initialize weights for new interests, preserving existing weights
-        const newInterests = newAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => {
-          const [interestName] = interest.split(':').map(s => s.trim());
-          // If interest already exists in currentTuning, preserve its weight, otherwise set to 100 (ON)
-          const weight = currentTuning.interestWeights[interestName] ?? 100;
-          return { ...acc, [interestName]: weight };
-        }, {});
-
-        setTuning(prev => ({
-          ...prev,
-          traitModifiers,
-          interestWeights: {
-            ...prev.interestWeights, // Keep existing interest weights
-            ...newInterests // Add new interests
-          },
-          communicationStyle: {
-            ...currentTuning.communicationStyle,
-            verbosity: currentTuning.communicationStyle.verbosity ?? 'medium'
-          }
-        }));
-
-        setAnalysis(finalAnalysis);
-        setShowPsychoanalysis(true);
-
-        // Update the cache with preserved values
-        await personalityCache.saveToCache({
-          ...finalAnalysis,
-          traits: newAnalysis.traits.map((trait: { name: string; score: number; explanation?: string }) => ({
-            name: trait.name.replace(/[*-]/g, '').trim(),
-            score: traitModifiers[trait.name] ? 10 : 0, // Convert toggle state to score
-            explanation: trait.explanation?.replace(/[*-]/g, '').trim()
-          })),
-          interests: Object.keys(newInterests),
-          interestWeights: newInterests,
-          communicationStyle: {
-            ...preservedCommunicationStyle,
-            description: newAnalysis.communicationStyle.description?.replace(/[*-]/g, '').trim()
-          },
-          thoughtProcess: {
-            ...newAnalysis.thoughtProcess,
-            initialApproach: newAnalysis.thoughtProcess.initialApproach?.replace(/[*-]/g, '').trim(),
-            processingStyle: newAnalysis.thoughtProcess.processingStyle?.replace(/[*-]/g, '').trim(),
-            expressionStyle: newAnalysis.thoughtProcess.expressionStyle?.replace(/[*-]/g, '').trim()
-          }
-        });
-
-        // Create a new chat with the updated personality
-        try {
-          const createChatResponse = await fetch('/api/conversations', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              analysis: finalAnalysis,
-              tuning: {
-                traitModifiers,
-                interestWeights: newInterests,
-                communicationStyle: {
-                  ...preservedCommunicationStyle,
-                  verbosity: currentTuning.communicationStyle.verbosity ?? 'medium'
-                }
-              }
-            })
-          });
-
-          if (!createChatResponse.ok) {
-            throw new Error('Failed to create new chat');
-          }
-
-          const chatData = await createChatResponse.json();
-          if (chatData.success && chatData.data) {
-            // Update conversations list with new chat
-            setConversations(prev => [chatData.data, ...prev]);
-            // Set new chat as active
-            setActiveConversationId(chatData.data.id);
-            // Clear messages for new chat
-            setMessages([]);
-          }
-        } catch (error) {
-          console.error('Failed to create new chat:', error);
-          setError('Failed to create new chat with updated personality');
-        }
-
-      } catch (error: unknown) {
-        clearTimeout(timeoutId);
-        if (error instanceof Error && error.name === 'AbortError') {
-          throw new Error('Analysis update timed out - please try again');
-        }
-        throw error;
-      }
-
-    } catch (error: unknown) {
-      console.error('Analysis error:', error);
-      setError(error instanceof Error ? error.message : 'Failed to analyze personality');
-    } finally {
-      setIsAnalyzing(false);
-      setAnalysisStartTime(null);
-    }
-  };
-
   // Load conversations and personality cache on mount
   useEffect(() => {
     const loadInitialData = async () => {
@@ -1702,6 +1792,63 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     }
   };
 
+  // Format remaining time
+  const formatRemainingTime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = seconds % 60;
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${remainingSeconds}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${remainingSeconds}s`;
+    }
+    return `${remainingSeconds}s`;
+  };
+
+  // Update button rendering to show cooldown state
+  const renderActionButton = (type: 'scrape' | 'analyze') => {
+    const isCoolingDown = cooldownState.isOnCooldown && cooldownState.operationType === type;
+    const buttonText = type === 'scrape' ? 
+      (loading ? 'ABORT SEQUENCE' : 'EXECUTE DATA EXTRACTION') : 
+      (isAnalyzing ? 'ANALYZING' : (analysis ? 'UPDATE ANALYSIS' : 'START ANALYSIS'));
+
+    if (isCoolingDown && cooldownState.remainingTime) {
+      return (
+        <div className="w-full text-center">
+          <button
+            disabled
+            className="w-full px-3 py-2 font-medium bg-red-500/5 text-red-500/50 border border-red-500/20 rounded cursor-not-allowed uppercase tracking-wider text-xs backdrop-blur-sm"
+          >
+            COOLDOWN: {formatRemainingTime(cooldownState.remainingTime)}
+          </button>
+          <p className="text-xs text-red-500/50 mt-1">
+            {type === 'scrape' ? 'Data extraction' : 'Analysis'} available in {formatRemainingTime(cooldownState.remainingTime)}
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <button
+        onClick={type === 'scrape' ? 
+          (loading ? handleCancelScraping : handleScrape) : 
+          (isAnalyzing ? undefined : (analysis ? handleUpdateAnalysis : handleAnalyze))}
+        disabled={type === 'scrape' ? false : (isAnalyzing || !accumulatedTweets.length)}
+        className={`w-full px-3 py-2 font-medium bg-red-500/5 text-red-500/90 border border-red-500/30 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text disabled:opacity-50 disabled:cursor-not-allowed ${!loading && !analysis ? 'pulse-action' : ''}`}
+      >
+        {(type === 'scrape' && loading) || (type === 'analyze' && isAnalyzing) ? (
+          <div className="flex items-center justify-center gap-2">
+            <Spinner size="sm" />
+            <span>{buttonText}</span>
+          </div>
+        ) : (
+          buttonText
+        )}
+      </button>
+    );
+  };
+
   return (
     <>
       {/* Main Container - Mobile First Layout */}
@@ -1856,21 +2003,8 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
               )}
             </div>
             <div className="flex flex-col gap-2">
-              <button
-                onClick={loading ? handleCancelScraping : handleScrape}
-                className={`w-full font-medium px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/30 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text flex items-center justify-center gap-2 ${!loading && !analysis ? 'pulse-action' : ''}`}
-              >
-                {loading && <Spinner size="sm" />}
-                {loading ? 'ABORT SEQUENCE' : 'EXECUTE DATA EXTRACTION'}
-              </button>
-              {analysis && !isAnalyzing && (
-                <button
-                  onClick={handleUpdateAnalysis}
-                  className="w-full font-medium px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/30 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text"
-                >
-                  UPDATE ANALYSIS
-                </button>
-              )}
+              {renderActionButton('scrape')}
+              {(!analysis || isAnalyzing) ? null : renderActionButton('analyze')}
               {accumulatedTweets.length > 0 && (
                 <button
                   onClick={handleClearData}
@@ -2496,20 +2630,8 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
               <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">SYSTEM CONTROLS</h3>
             </div>
             <div className="flex flex-col gap-2">
-              <button
-                onClick={loading ? handleCancelScraping : handleScrape}
-                className={`w-full px-3 py-2 font-medium bg-red-500/5 text-red-500/90 border border-red-500/30 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text ${!loading && !analysis ? 'pulse-action' : ''}`}
-              >
-                {loading ? 'ABORT SEQUENCE' : 'EXECUTE DATA EXTRACTION'}
-              </button>
-                {analysis && !isAnalyzing && (
-                  <button
-                    onClick={handleUpdateAnalysis}
-                    className="w-full font-medium px-3 py-2 bg-red-500/5 text-red-500/90 border border-red-500/30 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text"
-                  >
-                    UPDATE ANALYSIS
-                  </button>
-                )}
+              {renderActionButton('scrape')}
+              {(!analysis || isAnalyzing) ? null : renderActionButton('analyze')}
               {accumulatedTweets.length > 0 && (
                 <button
                   onClick={handleClearData}

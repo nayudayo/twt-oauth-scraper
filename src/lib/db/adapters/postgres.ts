@@ -467,4 +467,13 @@ export class PostgresAdapter implements DatabaseAdapter {
       }
     };
   }
+
+  // Add cooldown operations
+  async updateLastOperationTime(userId: string, operation: 'scrape' | 'analyze'): Promise<void> {
+    return this.userOperations.updateLastOperationTime(userId, operation);
+  }
+
+  async getCooldownStatus(userId: string, operation: 'scrape' | 'analyze'): Promise<{ canProceed: boolean; remainingTime?: number }> {
+    return this.userOperations.getCooldownStatus(userId, operation);
+  }
 } 

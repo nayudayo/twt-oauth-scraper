@@ -20,6 +20,12 @@ const AUTH_ONLY_ROUTES = [
   '/api/analytics'  // Allow analytics after sign in
 ]
 
+// Routes that require cooldown checks
+const COOLDOWN_ROUTES = {
+  '/api/scrape': 'scrape',
+  '/api/analyze': 'analyze'
+} as const;
+
 // Cache TTL in seconds
 const CACHE_TTL = 300 // 5 minutes
 
@@ -56,6 +62,37 @@ export async function middleware(request: NextRequest) {
         { error: 'Unauthorized' },
         { status: 401 }
       )
+    }
+
+    // Check for cooldown routes
+    const cooldownType = Object.entries(COOLDOWN_ROUTES).find(([route]) => 
+      request.nextUrl.pathname.startsWith(route)
+    )?.[1];
+
+    if (cooldownType) {
+      // Check cooldown via API route
+      const cooldownResponse = await fetch(
+        `${request.nextUrl.origin}/api/cooldown?operation=${cooldownType}`,
+        {
+          headers: {
+            'Cookie': request.headers.get('cookie') || '',
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      const cooldownStatus = await cooldownResponse.json();
+      
+      if (!cooldownStatus.canProceed) {
+        return NextResponse.json(
+          { 
+            error: 'Operation on cooldown',
+            remainingTime: cooldownStatus.remainingTime,
+            operationType: cooldownType
+          },
+          { status: 429 }
+        );
+      }
     }
 
     // For auth-only routes, proceed after token verification
@@ -128,11 +165,11 @@ export async function middleware(request: NextRequest) {
 // Configure which routes use this middleware
 export const config = {
   matcher: [
-    '/((?!api/access-code)api/chat)/:path*',
-    '/((?!api/access-code)api/analyze)/:path*',
-    '/((?!api/access-code)api/tweets)/:path*',
-    '/((?!api/access-code)api/conversations)/:path*',
-    '/((?!api/access-code)api/scrape)/:path*',
-    '/((?!api/access-code)api/analytics)/:path*'
+    '/((?!api/access-code|api/cooldown)api/chat)/:path*',
+    '/((?!api/access-code|api/cooldown)api/analyze)/:path*',
+    '/((?!api/access-code|api/cooldown)api/tweets)/:path*',
+    '/((?!api/access-code|api/cooldown)api/conversations)/:path*',
+    '/((?!api/access-code|api/cooldown)api/scrape)/:path*',
+    '/((?!api/access-code|api/cooldown)api/analytics)/:path*'
   ]
 } 

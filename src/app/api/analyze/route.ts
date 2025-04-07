@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth/config'
 import { CommunicationLevel, PersonalityAnalysis } from '@/lib/openai'
 import { PersonalityTuning } from '@/types/scraper'
 import { MissingInterestsError, MissingPsychoanalysisError, PersonalityAnalysisError } from '@/lib/openai'
+import { initDB } from '@/lib/db'
 
 export async function POST(req: Request) {
   try {
@@ -34,6 +35,20 @@ export async function POST(req: Request) {
     if (!profile || !profile.name) {
       return NextResponse.json({ error: 'Invalid profile data' }, { status: 400 })
     }
+
+    // Initialize database and get/create user
+    const db = await initDB();
+    let user = await db.getUserByUsername(session.username);
+    if (!user) {
+      user = await db.createUser({
+        username: session.username,
+        twitter_username: session.username,
+        created_at: new Date()
+      });
+    }
+
+    // Update last analysis time
+    await db.updateLastOperationTime(user.id, 'analyze');
 
     // Get queue instance
     const queue = OpenAIQueueManager.getInstance()

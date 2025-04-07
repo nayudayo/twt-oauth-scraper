@@ -40,6 +40,9 @@ export async function POST() {
       });
     }
 
+    // Update last scrape time
+    await db.updateLastOperationTime(user.id, 'scrape');
+
     // Create stream for SSE
     const stream = new TransformStream();
     const writer = stream.writable.getWriter();

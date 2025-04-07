@@ -14,6 +14,8 @@ interface UserOperations {
   updateUserProfile(id: string, profileData: Record<string, unknown>): Promise<void>;
   validateUsername(username: string): Promise<boolean>;
   getUserCount(): Promise<number>;
+  updateLastOperationTime(userId: string, operation: 'scrape' | 'analyze'): Promise<void>;
+  getCooldownStatus(userId: string, operation: 'scrape' | 'analyze'): Promise<{ canProceed: boolean; remainingTime?: number }>;
 }
 
 export class PostgresUserOperations implements UserOperations {
@@ -269,6 +271,64 @@ export class PostgresUserOperations implements UserOperations {
         'SELECT COUNT(*) FROM users'
       );
       return parseInt(result.rows[0].count);
+    } catch (error) {
+      if (this.isPostgresError(error)) {
+        throw DatabaseError.fromPgError(error);
+      }
+      throw error;
+    }
+  }
+
+  async updateLastOperationTime(userId: string, operation: 'scrape' | 'analyze'): Promise<void> {
+    try {
+      const column = operation === 'scrape' ? 'last_scrape_time' : 'last_analysis_time';
+      await this.monitoredQuery(
+        `UPDATE users SET ${column} = CURRENT_TIMESTAMP WHERE id = $1`,
+        [userId]
+      );
+    } catch (error) {
+      if (this.isPostgresError(error)) {
+        throw DatabaseError.fromPgError(error);
+      }
+      throw error;
+    }
+  }
+
+  async getCooldownStatus(userId: string, operation: 'scrape' | 'analyze'): Promise<{ canProceed: boolean; remainingTime?: number }> {
+    try {
+      const timeColumn = operation === 'scrape' ? 'last_scrape_time' : 'last_analysis_time';
+      const cooldownColumn = operation === 'scrape' ? 'scrape_cooldown_minutes' : 'analysis_cooldown_minutes';
+      
+      interface CooldownRow {
+        [key: string]: Date | number | null;
+      }
+
+      const result = await this.monitoredQuery<{ rows: CooldownRow[] }>(
+        `SELECT ${timeColumn}, ${cooldownColumn} FROM users WHERE id = $1`,
+        [userId]
+      );
+
+      if (!result.rows[0]) {
+        return { canProceed: false };
+      }
+
+      const lastOperationTime = result.rows[0][timeColumn] as Date | null;
+      const cooldownMinutes = result.rows[0][cooldownColumn] as number | null;
+
+      if (!lastOperationTime || !cooldownMinutes) {
+        return { canProceed: true };
+      }
+
+      const now = new Date();
+      const timeSinceLastOperation = now.getTime() - lastOperationTime.getTime();
+      const cooldownMs = cooldownMinutes * 60 * 1000;
+
+      if (timeSinceLastOperation < cooldownMs) {
+        const remainingTime = Math.ceil((cooldownMs - timeSinceLastOperation) / 1000);
+        return { canProceed: false, remainingTime };
+      }
+
+      return { canProceed: true };
     } catch (error) {
       if (this.isPostgresError(error)) {
         throw DatabaseError.fromPgError(error);

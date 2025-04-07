@@ -6,20 +6,15 @@ import { CommunicationLevel } from '../../../lib/openai';
 export interface DBUser {
   id: string;
   username: string;
-  twitter_username: string | null;
-  profile_data: {
-    bio?: string;
-    followersCount?: number;
-    followingCount?: number;
-    description?: string;
-    name?: string;
-    id?: string;
-    createdAt?: string;
-    viewCount?: number;
-  };
-  profile_picture_url: string | null;
+  twitter_username?: string;
+  profile_data?: Record<string, any>;
+  profile_picture_url?: string;
   created_at: Date;
-  last_scraped: Date | null;
+  last_scraped?: Date;
+  last_scrape_time?: Date;
+  last_analysis_time?: Date;
+  scrape_cooldown_minutes?: number;
+  analysis_cooldown_minutes?: number;
 }
 
 // Tweet Types

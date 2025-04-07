@@ -15,7 +15,8 @@
     "check-db": "bash scripts/check-db-permissions.sh",
     "inspect-db": "tsx scripts/check-db.ts",
     "purge-db": "tsx src/scripts/purge-db.ts",
-    "generate-neural-codes": "tsx src/scripts/generate-neural-codes.ts"
+    "generate-neural-codes": "tsx src/scripts/generate-neural-codes.ts",
+    "migrate": "tsx src/scripts/run-migrations.ts"
   },
   "dependencies": {
     "@auth/core": "^0.37.4",

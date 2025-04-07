@@ -24,10 +24,12 @@ export interface UserOperations {
   // Update operations
   updateUser(id: string, data: Partial<DBUser>): Promise<void>;
   updateUserProfile(id: string, profileData: Record<string, unknown>): Promise<void>;
+  updateLastOperationTime(userId: string, operation: 'scrape' | 'analyze'): Promise<void>;
   
   // Utility operations
   validateUsername(username: string): Promise<boolean>;
   getUserCount(): Promise<number>;
+  getCooldownStatus(userId: string, operation: 'scrape' | 'analyze'): Promise<{ canProceed: boolean; remainingTime?: number }>;
 }
 
 // Tweet Operations
