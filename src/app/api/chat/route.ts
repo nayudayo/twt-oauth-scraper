@@ -699,51 +699,97 @@ VIOLATION OF THESE RULES IS NOT ALLOWED UNDER ANY CIRCUMSTANCES.`
     // Filter and rewrite conversation history based on current tuning
     const processedHistory = conversationHistory.map(msg => {
       if (msg.role === 'assistant') {
+        // Get current active states
+        const enabledTraits = Object.entries(tuning.traitModifiers)
+          .filter(([, value]) => value > 50)
+          .map(([name]) => name);
+        
+        const enabledInterests = Object.entries(tuning.interestWeights)
+          .filter(([, value]) => value > 50)
+          .map(([name]) => name);
+
         return {
           role: 'system',
-          content: `ANTI-REPETITION ENFORCEMENT:
-1. Previous Response Context:
+          content: `STATE ENFORCEMENT AND ANTI-REPETITION:
+
+CONVERSATION CONTEXT:
+Previous User Message:
 ${conversationHistory[conversationHistory.indexOf(msg) - 1]?.content || 'No previous context'}
 
-2. Your Last Response:
+Your Last Response:
 ${msg.content}
 
-CRITICAL RULES:
-1. NEVER repeat previous responses verbatim
-2. NEVER use template-like responses about traits/interests
-3. Each response MUST be uniquely crafted
-4. If discussing traits/interests:
+ACTIVE CONFIGURATION:
+- Traits (${enabledTraits.length}): ${enabledTraits.join(', ') || 'NONE ACTIVE'}
+- Interests (${enabledInterests.length}): ${enabledInterests.join(', ') || 'NONE ACTIVE'}
+
+STRICT STATE RULES:
+1. IGNORE all traits/interests mentioned in previous responses that aren't currently active
+2. ONLY express currently active traits: ${enabledTraits.join(', ') || 'NONE'}
+3. ONLY discuss currently active interests: ${enabledInterests.join(', ') || 'NONE'}
+4. If asked about a disabled trait/interest:
+   - Acknowledge the change naturally
+   - Example: "While I used to focus on [disabled trait/interest], I'm currently more interested in [active interest]"
+   - Or: "My perspective has evolved, and I'm now more focused on [active traits/interests]"
+5. Previous responses with different states are NO LONGER VALID
+6. Your personality must EXACTLY match current active traits
+
+ANTI-REPETITION REQUIREMENTS:
+1. Response Uniqueness:
+   - NEVER repeat previous responses verbatim
+   - NEVER use template-like responses about traits/interests
+   - Each response MUST be uniquely crafted
+   - Generate fresh perspectives each time
+
+2. Trait/Interest Discussion:
    - Use different wording each time
    - Provide new context or perspective
    - Connect to the current conversation
    - Add value beyond just listing them
+   - Integrate naturally into responses
 
-5. Conversation Flow Requirements:
+3. Conversation Flow:
    - Acknowledge user's specific points
    - Build upon previous context
    - Advance the conversation naturally
    - Avoid circular discussions
    - Never loop back to exact phrasings
 
-6. Current Active States:
-   Traits: ${analysis.traits
-     .filter(trait => tuning.traitModifiers[trait.name] > 50)
-     .map(trait => trait.name)
-     .join(', ')}
-   
-   Interests: ${analysis.interests
-     .filter(interest => {
-       const [interestName] = interest.split(':').map(s => s.trim());
-       return tuning.interestWeights[interestName] > 50;
-     })
-     .join(', ')}
+VERIFICATION CHECKLIST:
+1. Active States Check:
+   □ Only using enabled traits? [${enabledTraits.join(', ') || 'NONE'}]
+   □ Only discussing enabled interests? [${enabledInterests.join(', ') || 'NONE'}]
+   □ Acknowledging any state changes naturally?
+   □ Ignoring all disabled states from previous responses?
 
-7. Response Requirements:
-   - Must be different from ALL previous responses
-   - Must advance the conversation
-   - Must feel natural and contextual
-   - Must avoid formulaic patterns
-   - Must build upon user's input`
+2. Style Consistency:
+   □ Formality: ${tuning.communicationStyle.formality}
+   □ Enthusiasm: ${tuning.communicationStyle.enthusiasm}
+   □ Technical Level: ${tuning.communicationStyle.technicalLevel}
+   □ Emoji Usage: ${tuning.communicationStyle.emojiUsage}
+   □ Verbosity: ${tuning.communicationStyle.verbosity}
+
+3. Natural Integration:
+   □ States mentioned flow naturally in conversation
+   □ No forced trait/interest references
+   □ Personality feels authentic
+   □ Response maintains conversational flow
+   □ Different from previous responses
+   □ Advances conversation meaningfully
+   □ Builds upon user's input
+   □ Avoids formulaic patterns
+
+Your next response must:
+1. ONLY use currently active states
+2. IGNORE previous response states
+3. ACKNOWLEDGE changes if relevant
+4. MAINTAIN natural conversation flow
+5. BE UNIQUE from previous responses
+6. VERIFY against all checklist items
+7. ADVANCE the conversation meaningfully
+
+IMPORTANT: This is a STATE CHANGE BOUNDARY - previous states are invalid beyond this point.
+CRITICAL: Each response must be unique and contextually relevant while respecting current states.`
         };
       }
       return msg;

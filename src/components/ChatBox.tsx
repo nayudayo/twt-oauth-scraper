@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, Dispatch, SetStateAction, useCallback } fr
 import { Tweet, TwitterProfile, EventData } from '@/types/scraper'
 import { TwitterAPITweet } from '@/lib/twitter/types'
 import { PersonalityAnalysis } from '@/lib/openai'
-import type { Conversation, Message } from '@/types/conversation'
+import type { Conversation } from '@/types/conversation'
+import type { Message as BaseAPIMessage } from '@/types/conversation'
 import ReactMarkdown from 'react-markdown'
 import { Spinner } from '../components/ui/spinner'
 import '../styles/glow.css'
@@ -15,8 +16,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ToggleButton } from './ToggleButton';
 import { CycleButton } from './CycleButton';
 import { CommunicationLevel } from '@/lib/openai';
-import React, { CSSProperties } from 'react';
+import React from 'react';
 import { PsychoanalysisModal } from './PsychoanalysisModal';
+import { TuningUpdateMessage } from './TuningUpdateMessage'
 
 interface ChatBoxProps {
   tweets: Tweet[]
@@ -141,9 +143,32 @@ const formatInterestName = (interest: string) => {
     .join(' ');
 };
 
+// Extend the base API message type to include our tuning info
+interface APIMessage extends BaseAPIMessage {
+  timestamp?: string;
+  tuningInfo?: {
+    tuningType: 'trait' | 'interest' | 'communication';
+    name: string;
+    value: string | boolean;
+  };
+}
+
+// Define our internal message type
+interface ChatBoxMessage {
+  text: string;
+  isUser: boolean;
+  timestamp: string;
+  type: 'chat' | 'tuning';
+  tuningInfo?: {
+    tuningType: 'trait' | 'interest' | 'communication';
+    name: string;
+    value: string | boolean;
+  };
+}
+
 export default function ChatBox({ tweets: initialTweets, profile, onClose, onTweetsUpdate }: ChatBoxProps) {
   const queryClient = useQueryClient();
-  const [messages, setMessages] = useState<Array<{text: string, isUser: boolean}>>([])
+  const [messages, setMessages] = useState<ChatBoxMessage[]>([])
   const [input, setInput] = useState('')
   const [analysis, setAnalysis] = useState<PersonalityAnalysis | null>(null)
   const [loading, setLoading] = useState(false)
@@ -266,6 +291,19 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     const score = enabled ? 100 : 0;
     const analysisScore = enabled ? 10 : 0;
     
+    // Add tuning message to main messages array
+    setMessages(prev => [...prev, {
+      text: '',
+      isUser: false,
+      timestamp: new Date().toLocaleTimeString(),
+      type: 'tuning',
+      tuningInfo: {
+        tuningType: 'trait',
+        name: formatTraitName(traitName),
+        value: enabled
+      }
+    }]);
+
     setTuning(prevTuning => {
       const newTuning = {
         ...prevTuning,
@@ -314,6 +352,19 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
   const handleInterestWeight = async (interest: string, enabled: boolean) => {
     const weight = enabled ? 100 : 0;
     
+    // Add tuning message to main messages array
+    setMessages(prev => [...prev, {
+      text: '',
+      isUser: false,
+      timestamp: new Date().toLocaleTimeString(),
+      type: 'tuning',
+      tuningInfo: {
+        tuningType: 'interest',
+        name: formatInterestName(interest),
+        value: enabled
+      }
+    }]);
+
     setTuning(prevTuning => {
       const newTuning = {
         ...prevTuning,
@@ -360,6 +411,19 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
   };
 
   const handleStyleAdjustment = async (aspect: keyof PersonalityTuning['communicationStyle'], value: CommunicationLevel) => {
+    // Add tuning message to main messages array
+    setMessages(prev => [...prev, {
+      text: '',
+      isUser: false,
+      timestamp: new Date().toLocaleTimeString(),
+      type: 'tuning',
+      tuningInfo: {
+        tuningType: 'communication',
+        name: aspect,
+        value: value
+      }
+    }]);
+
     setTuning(prevTuning => {
       const newTuning = {
         ...prevTuning,
@@ -495,13 +559,23 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
 
     // Only proceed if we have personality analysis
     if (analysis) {
-      // Add user message to UI immediately
-      setMessages(prev => [...prev, { text: userMessage, isUser: true }])
+      // Add user message to UI immediately with timestamp
+      setMessages(prev => [...prev, {
+        text: userMessage,
+        isUser: true,
+        timestamp: new Date().toLocaleTimeString(),
+        type: 'chat'
+      }])
       
       // Generate and add AI response
       const response = await generatePersonalityResponse(userMessage)
       if (response) {
-        setMessages(prev => [...prev, { text: response, isUser: false }])
+        setMessages(prev => [...prev, {
+          text: response,
+          isUser: false,
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'chat'
+        }])
         
         // Update conversation metadata with new message count only
         if (activeConversationId) {
@@ -511,7 +585,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                   ...conv,
                   metadata: {
                     ...conv.metadata,
-                    messageCount: (conv.metadata.messageCount || 0) + 2 // +2 for user message and AI response
+                    messageCount: (conv.metadata.messageCount || 0) + 2
                   }
                 }
               : conv
@@ -532,9 +606,12 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           if (response.ok) {
             const data = await response.json()
             if (data.success && Array.isArray(data.data)) {
-              setMessages(data.data.map((msg: Message) => ({
-                text: msg.content,
-                isUser: msg.role === 'user'
+              setMessages(data.data.map((msg: APIMessage) => ({
+                text: msg.content || '',
+                isUser: msg.role === 'user',
+                timestamp: new Date().toLocaleTimeString(),
+                type: 'chat' as const,
+                ...(msg.tuningInfo && { tuningInfo: msg.tuningInfo })
               })))
             }
           }
@@ -543,7 +620,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
         }
       }
     }
-  }
+  };
 
   // Update handleAnalyze to handle both initial analysis and updates
   const handleAnalyze = async () => {
@@ -1541,9 +1618,11 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
             if (messagesResponse.ok) {
               const messagesData = await messagesResponse.json();
               if (messagesData.success && Array.isArray(messagesData.data)) {
-                setMessages(messagesData.data.map((msg: Message) => ({
-                  text: msg.content,
-                  isUser: msg.role === 'user'
+                setMessages(messagesData.data.map((msg: APIMessage) => ({
+                  text: msg.content || '',
+                  isUser: msg.role === 'user',
+                  timestamp: msg.timestamp || new Date().toLocaleTimeString(),
+                  type: 'chat' as const
                 })));
               }
             }
@@ -1576,9 +1655,11 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
       
       const data = await response.json();
       if (data.success && Array.isArray(data.data)) {
-        const messages = data.data.map((msg: Message) => ({
-          text: msg.content,
-          isUser: msg.role === 'user'
+        const messages = data.data.map((msg: APIMessage) => ({
+          text: msg.content || '',
+          isUser: msg.role === 'user',
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'chat' as const
         }));
         
         setMessages(messages);
@@ -1916,23 +1997,33 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                   </div>
 
                   {/* Messages */}
-                  {messages.map((msg, i) => (
-                    <div 
-                      key={i}
-                      className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}
-                    >
+                  {messages.map((msg: ChatBoxMessage, i: number) => (
+                    msg.type === 'chat' ? (
                       <div 
-                        className={`max-w-[80%] rounded backdrop-blur-sm border border-red-500/10 shadow-lg hover-glow float
-                          ${msg.isUser 
-                            ? 'bg-red-500/5 text-red-400/90' 
-                            : 'bg-black/40 text-red-300/90'
-                          } px-4 py-2 text-sm`}
+                        key={`msg-${i}`}
+                        className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}
                       >
-                        <div className="prose prose-red prose-invert max-w-none hover-text-glow whitespace-pre-wrap">
-                          <ReactMarkdown>{msg.text}</ReactMarkdown>
+                        <div 
+                          className={`max-w-[80%] rounded backdrop-blur-sm border border-red-500/10 shadow-lg hover-glow float
+                            ${msg.isUser 
+                              ? 'bg-red-500/5 text-red-400/90' 
+                              : 'bg-black/40 text-red-300/90'
+                            } px-4 py-2 text-sm`}
+                        >
+                          <div className="prose prose-red prose-invert max-w-none hover-text-glow whitespace-pre-wrap">
+                            <ReactMarkdown>{msg.text}</ReactMarkdown>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    ) : (
+                      <TuningUpdateMessage
+                        key={`tuning-${i}`}
+                        type={msg.tuningInfo!.tuningType}
+                        name={msg.tuningInfo!.name}
+                        value={msg.tuningInfo!.value}
+                        timestamp={msg.timestamp}
+                      />
+                    )
                   ))}
                   {isTyping && (
                     <div className="flex justify-start">
@@ -2244,33 +2335,82 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                 <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                   <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                    <span className="ancient-text text-base">Key Traits</span>
+                    <span className="ancient-text text-base">Active Traits</span>
                   </h4>
                   <div className="space-y-6">
-                    {analysis.traits.map((trait: { name: string; score: number; explanation: string }, index: number) => (
-                      <div key={`trait-${index}-${trait.name}`} className="hover-glow">
-                        <div className="flex justify-between mb-2 items-center">
-                          <span className="text-red-400/90 tracking-wide text-[15px] capitalize font-bold">
-                            {formatTraitName(trait.name)}
-                          </span>
-                          <span className="text-red-500/80 text-sm">
-                            {trait.score >= 8 ? 'High' : trait.score >= 4 ? 'Medium' : 'Low'}
-                          </span>
+                    {analysis.traits
+                      .filter(trait => tuning.traitModifiers[trait.name] > 0) // Only show enabled traits
+                      .map((trait: { name: string; score: number; explanation: string }, index: number) => (
+                        <div key={`trait-${index}-${trait.name}`} className="hover-glow">
+                          <div className="flex justify-between mb-2 items-center">
+                            <span className="text-red-400/90 tracking-wide text-[15px] capitalize font-bold">
+                              {formatTraitName(trait.name)}
+                            </span>
+                          </div>
+                          <div className="text-[14px] leading-relaxed text-red-300/80 prose prose-red prose-invert max-w-none hover-text-glow pl-2 border-l border-red-500/10">
+                            <ReactMarkdown>{formatTraitExplanation(trait.explanation)}</ReactMarkdown>
+                          </div>
                         </div>
-                        <div className="h-1.5 bg-red-500/10 rounded-full overflow-hidden glow-box mb-3">
-                          <div 
-                            className={'h-full rounded-full transition-all duration-500 ease-out ' + 
-                              (trait.score >= 8 ? 'bg-red-500/80' : 
-                              trait.score >= 4 ? 'bg-red-500/50' : 
-                              'bg-red-500/30')}
-                            style={{ width: `${trait.score * 10}%` } as CSSProperties}
-                          />
-                        </div>
-                        <div className="text-[14px] leading-relaxed text-red-300/80 prose prose-red prose-invert max-w-none hover-text-glow pl-2 border-l border-red-500/10">
-                          <ReactMarkdown>{formatTraitExplanation(trait.explanation)}</ReactMarkdown>
-                        </div>
+                      ))}
+                    {analysis.traits.filter(trait => tuning.traitModifiers[trait.name] > 0).length === 0 && (
+                      <div className="text-red-400/60 text-sm italic text-center">
+                        No active traits selected
                       </div>
-                    ))}
+                    )}
+                  </div>
+                </div>
+
+                {/* Interests Section */}
+                <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                    <span className="ancient-text text-base">Active Interests</span>
+                  </h4>
+                  <div className="flex flex-wrap gap-2.5 font-bold">
+                    {analysis.interests
+                      .filter(interest => {
+                        // Filter out social behavior metrics and other non-interest items
+                        const nonInterests = [
+                          'Content Sharing Patterns',
+                          'Score',
+                          'Interaction Style',
+                          'Platform Behavior',
+                          'Oversharer',
+                          'Reply Guy',
+                          'Viral Chaser',
+                          'Thread Maker',
+                          'Retweeter',
+                          'Hot Takes',
+                          'Joker',
+                          'Debater',
+                          'Doom Poster',
+                          'Early Adopter',
+                          'Knowledge Dropper',
+                          'Hype Beast'
+                        ];
+                        const [interestName] = interest.split(':').map(s => s.trim());
+                        return !nonInterests.includes(interestName) && tuning.interestWeights[interestName] > 0;
+                      })
+                      .map((interest: string) => {
+                        const [interestName] = interest.split(':').map(s => s.trim());
+                        return (
+                          <button 
+                            key={interestName}
+                            className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
+                          >
+                            {formatInterestName(interestName)}
+                          </button>
+                        );
+                      })}
+                    {analysis.interests
+                      .filter(interest => {
+                        const [interestName] = interest.split(':').map(s => s.trim());
+                        return tuning.interestWeights[interestName] > 0;
+                      }).length === 0 && (
+                      <div className="text-red-400/60 text-sm italic text-center w-full">
+                        No active interests selected
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -2316,51 +2456,6 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                                      'No emojis'}
                       </span>
                     </div>
-                  </div>
-                </div>
-
-                {/* Interests Section */}
-                <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                    <span className="ancient-text text-base">Interests</span>
-                  </h4>
-                  <div className="flex flex-wrap gap-2.5 font-bold">
-                    {analysis.interests
-                      .filter(interest => {
-                        // Filter out social behavior metrics and other non-interest items
-                        const nonInterests = [
-                          'Content Sharing Patterns',
-                          'Score',
-                          'Interaction Style',
-                          'Platform Behavior',
-                          'Oversharer',
-                          'Reply Guy',
-                          'Viral Chaser',
-                          'Thread Maker',
-                          'Retweeter',
-                          'Hot Takes',
-                          'Joker',
-                          'Debater',
-                          'Doom Poster',
-                          'Early Adopter',
-                          'Knowledge Dropper',
-                          'Hype Beast'
-                        ];
-                        const [interestName] = interest.split(':').map(s => s.trim());
-                        return !nonInterests.includes(interestName);
-                      })
-                      .map((interest: string) => {
-                        const [interestName] = interest.split(':').map(s => s.trim());
-                        return (
-                          <button 
-                            key={interestName}
-                            className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
-                          >
-                            {formatInterestName(interestName)}
-                          </button>
-                        );
-                      })}
                   </div>
                 </div>
 
@@ -2914,21 +3009,82 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                   <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
                     <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                      <span className="ancient-text text-base">Key Traits</span>
+                      <span className="ancient-text text-base">Active Traits</span>
                     </h4>
                     <div className="space-y-6">
-                      {analysis.traits.map((trait: { name: string; score: number; explanation: string }, index: number) => (
-                        <div key={`trait-${index}-${trait.name}`} className="hover-glow">
-                          <div className="flex justify-between mb-2 items-center">
-                            <span className="text-red-400/90 font-medium tracking-wide text-[15px] capitalize">
-                              {formatTraitName(trait.name)}
-                            </span>
+                      {analysis.traits
+                        .filter(trait => tuning.traitModifiers[trait.name] > 0) // Only show enabled traits
+                        .map((trait: { name: string; score: number; explanation: string }, index: number) => (
+                          <div key={`trait-${index}-${trait.name}`} className="hover-glow">
+                            <div className="flex justify-between mb-2 items-center">
+                              <span className="text-red-400/90 tracking-wide text-[15px] capitalize font-bold">
+                                {formatTraitName(trait.name)}
+                              </span>
+                            </div>
+                            <div className="text-[14px] leading-relaxed text-red-300/80 prose prose-red prose-invert max-w-none hover-text-glow pl-2 border-l border-red-500/10">
+                              <ReactMarkdown>{formatTraitExplanation(trait.explanation)}</ReactMarkdown>
+                            </div>
                           </div>
-                          <div className="text-[14px] leading-relaxed text-red-300/80 prose prose-red prose-invert max-w-none hover-text-glow pl-2 border-l border-red-500/10">
-                            <ReactMarkdown>{trait.explanation}</ReactMarkdown>
-                          </div>
+                        ))}
+                      {analysis.traits.filter(trait => tuning.traitModifiers[trait.name] > 0).length === 0 && (
+                        <div className="text-red-400/60 text-sm italic text-center">
+                          No active traits selected
                         </div>
-                      ))}
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Interests Section */}
+                  <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
+                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
+                      <span className="ancient-text text-base">Active Interests</span>
+                    </h4>
+                    <div className="flex flex-wrap gap-2.5 font-bold">
+                      {analysis.interests
+                        .filter(interest => {
+                          // Filter out social behavior metrics and other non-interest items
+                          const nonInterests = [
+                            'Content Sharing Patterns',
+                            'Score',
+                            'Interaction Style',
+                            'Platform Behavior',
+                            'Oversharer',
+                            'Reply Guy',
+                            'Viral Chaser',
+                            'Thread Maker',
+                            'Retweeter',
+                            'Hot Takes',
+                            'Joker',
+                            'Debater',
+                            'Doom Poster',
+                            'Early Adopter',
+                            'Knowledge Dropper',
+                            'Hype Beast'
+                          ];
+                          const [interestName] = interest.split(':').map(s => s.trim());
+                          return !nonInterests.includes(interestName) && tuning.interestWeights[interestName] > 0;
+                        })
+                        .map((interest: string) => {
+                          const [interestName] = interest.split(':').map(s => s.trim());
+                          return (
+                            <button 
+                              key={interestName}
+                              className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
+                            >
+                              {formatInterestName(interestName)}
+                            </button>
+                          );
+                        })}
+                      {analysis.interests
+                        .filter(interest => {
+                          const [interestName] = interest.split(':').map(s => s.trim());
+                          return tuning.interestWeights[interestName] > 0;
+                        }).length === 0 && (
+                        <div className="text-red-400/60 text-sm italic text-center w-full">
+                          No active interests selected
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -2974,51 +3130,6 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                                        'No emojis'}
                         </span>
                       </div>
-                    </div>
-                  </div>
-
-                  {/* Interests Section */}
-                  <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                      <span className="ancient-text text-base">Interests</span>
-                    </h4>
-                    <div className="flex flex-wrap gap-2.5 font-bold">
-                      {analysis.interests
-                        .filter(interest => {
-                          // Filter out social behavior metrics and other non-interest items
-                          const nonInterests = [
-                            'Content Sharing Patterns',
-                            'Score',
-                            'Interaction Style',
-                            'Platform Behavior',
-                            'Oversharer',
-                            'Reply Guy',
-                            'Viral Chaser',
-                            'Thread Maker',
-                            'Retweeter',
-                            'Hot Takes',
-                            'Joker',
-                            'Debater',
-                            'Doom Poster',
-                            'Early Adopter',
-                            'Knowledge Dropper',
-                            'Hype Beast'
-                          ];
-                          const [interestName] = interest.split(':').map(s => s.trim());
-                          return !nonInterests.includes(interestName);
-                        })
-                        .map((interest: string) => {
-                          const [interestName] = interest.split(':').map(s => s.trim());
-                          return (
-                            <button 
-                              key={interestName}
-                              className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
-                            >
-                              {formatInterestName(interestName)}
-                            </button>
-                          );
-                        })}
                     </div>
                   </div>
 
@@ -3208,23 +3319,33 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
 
                     {/* Messages Section with padding to account for sticky header */}
                     <div className="p-4 space-y-4 relative z-30">
-                      {messages.map((msg, i) => (
-                        <div 
-                          key={i} 
-                          className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}
-                        >
+                      {messages.map((msg: ChatBoxMessage, i: number) => (
+                        msg.type === 'chat' ? (
                           <div 
-                            className={`max-w-[80%] rounded backdrop-blur-sm border border-red-500/10 shadow-lg hover-glow float
-                              ${msg.isUser 
-                                ? 'bg-red-500/5 text-red-400/90' 
-                                : 'bg-black/40 text-red-300/90'
-                              } px-4 py-2 text-sm`}
+                            key={`msg-${i}`}
+                            className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}
                           >
-                            <div className="prose prose-red prose-invert max-w-none hover-text-glow whitespace-pre-wrap">
-                              <ReactMarkdown>{msg.text}</ReactMarkdown>
+                            <div 
+                              className={`max-w-[80%] rounded backdrop-blur-sm border border-red-500/10 shadow-lg hover-glow float
+                                ${msg.isUser 
+                                  ? 'bg-red-500/5 text-red-400/90' 
+                                  : 'bg-black/40 text-red-300/90'
+                                } px-4 py-2 text-sm`}
+                            >
+                              <div className="prose prose-red prose-invert max-w-none hover-text-glow whitespace-pre-wrap">
+                                <ReactMarkdown>{msg.text}</ReactMarkdown>
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        ) : (
+                          <TuningUpdateMessage
+                            key={`tuning-${i}`}
+                            type={msg.tuningInfo!.tuningType}
+                            name={msg.tuningInfo!.name}
+                            value={msg.tuningInfo!.value}
+                            timestamp={msg.timestamp}
+                          />
+                        )
                       ))}
                       {isTyping && (
                         <div className="flex justify-start">

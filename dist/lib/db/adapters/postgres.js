@@ -304,5 +304,12 @@ class PostgresAdapter {
                 } })
         };
     }
+    // Add cooldown operations
+    async updateLastOperationTime(userId, operation) {
+        return this.userOperations.updateLastOperationTime(userId, operation);
+    }
+    async getCooldownStatus(userId, operation) {
+        return this.userOperations.getCooldownStatus(userId, operation);
+    }
 }
 exports.PostgresAdapter = PostgresAdapter;

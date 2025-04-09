@@ -7,7 +7,7 @@ export interface DBUser {
   id: string;
   username: string;
   twitter_username?: string;
-  profile_data?: Record<string, any>;
+  profile_data?: Record<string, unknown>;
   profile_picture_url?: string;
   created_at: Date;
   last_scraped?: Date;

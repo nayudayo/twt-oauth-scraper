@@ -209,6 +209,47 @@ class PostgresUserOperations {
             throw error;
         }
     }
+    async updateLastOperationTime(userId, operation) {
+        try {
+            const column = operation === 'scrape' ? 'last_scrape_time' : 'last_analysis_time';
+            await this.monitoredQuery(`UPDATE users SET ${column} = CURRENT_TIMESTAMP WHERE id = $1`, [userId]);
+        }
+        catch (error) {
+            if (this.isPostgresError(error)) {
+                throw errors_1.DatabaseError.fromPgError(error);
+            }
+            throw error;
+        }
+    }
+    async getCooldownStatus(userId, operation) {
+        try {
+            const timeColumn = operation === 'scrape' ? 'last_scrape_time' : 'last_analysis_time';
+            const cooldownColumn = operation === 'scrape' ? 'scrape_cooldown_minutes' : 'analysis_cooldown_minutes';
+            const result = await this.monitoredQuery(`SELECT ${timeColumn}, ${cooldownColumn} FROM users WHERE id = $1`, [userId]);
+            if (!result.rows[0]) {
+                return { canProceed: false };
+            }
+            const lastOperationTime = result.rows[0][timeColumn];
+            const cooldownMinutes = result.rows[0][cooldownColumn];
+            if (!lastOperationTime || !cooldownMinutes) {
+                return { canProceed: true };
+            }
+            const now = new Date();
+            const timeSinceLastOperation = now.getTime() - lastOperationTime.getTime();
+            const cooldownMs = cooldownMinutes * 60 * 1000;
+            if (timeSinceLastOperation < cooldownMs) {
+                const remainingTime = Math.ceil((cooldownMs - timeSinceLastOperation) / 1000);
+                return { canProceed: false, remainingTime };
+            }
+            return { canProceed: true };
+        }
+        catch (error) {
+            if (this.isPostgresError(error)) {
+                throw errors_1.DatabaseError.fromPgError(error);
+            }
+            throw error;
+        }
+    }
     isPostgresError(error) {
         return (typeof error === 'object' &&
             error !== null &&
