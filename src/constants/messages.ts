@@ -83,9 +83,9 @@ Next steps:
 1. First, submit the referral code of who invited you (or type "NO" if none)
 2. Later, you'll generate your own referral code to invite others
 
-Use "submit_referral" command followed by the code or NO.
-Example: submit_referral PUSH-USER-CODE1
-Or: submit_referral NO
+Use "SUBMIT_REFERRAL" command followed by the code or NO.
+Example: SUBMIT_REFERRAL PUSH-USER-CODE1
+Or: SUBMIT_REFERRAL NO
 `
   }
 } 

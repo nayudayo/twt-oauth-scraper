@@ -37,6 +37,7 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
   const [completedCommands, setCompletedCommands] = useState<string[]>([])
   const [commandResponses, setCommandResponses] = useState<{ [key: string]: string }>({})
   const [showShareDialog, setShowShareDialog] = useState(false)
+  const [showDownloadConfirm, setShowDownloadConfirm] = useState(false)
   const [referralCode, setReferralCode] = useState<string | null>(null)
   const [isLoadingReferral, setIsLoadingReferral] = useState(false)
   const [hasShared, setHasShared] = useState(false)
@@ -630,57 +631,51 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
   const handleShareToX = async () => {
     if (!shareModalRef.current) return;
 
+    // Show confirmation dialog first
+    setShowDownloadConfirm(true);
+  };
+
+  const handleConfirmedShare = async (shouldDownload: boolean) => {
+    setShowDownloadConfirm(false);
+    
     try {
-      // Get modal dimensions
-      const modalElement = shareModalRef.current;
-      const { width, height } = modalElement.getBoundingClientRect();
+      if (shouldDownload) {
+        // Get modal dimensions
+        const modalElement = shareModalRef.current;
+        if (!modalElement) return;
 
-      // Generate PNG with better quality
-      const dataUrl = await toPng(modalElement, {
-        quality: 1.0,
-        width: width * 2, // Double the resolution
-        height: height * 2,
-        backgroundColor: 'rgba(0, 0, 0, 0)',
-        style: {
-          transform: 'scale(2)',
-          transformOrigin: 'top left',
-          width: `${width}px`,
-          height: `${height}px`
-        },
-        filter: (node) => {
-          // Filter out the close button from the image
-          return !node.classList?.contains('close-button');
-        }
-      });
+        const { width, height } = modalElement.getBoundingClientRect();
 
-      // Download image
-      const link = document.createElement('a');
-      link.download = 'referral-code.png';
-      link.href = dataUrl;
-      link.click();
+        // Generate PNG with better quality
+        const dataUrl = await toPng(modalElement, {
+          quality: 1.0,
+          width: width * 2,
+          height: height * 2,
+          backgroundColor: 'rgba(0, 0, 0, 0)',
+          style: {
+            transform: 'scale(2)',
+            transformOrigin: 'top left',
+            width: `${width}px`,
+            height: `${height}px`
+          },
+          filter: (node) => {
+            return !node.classList?.contains('close-button');
+          }
+        });
+
+        // Download image
+        const link = document.createElement('a');
+        link.download = 'referral-code.png';
+        link.href = dataUrl;
+        link.click();
+      }
 
       // Tweet text options
       const tweetOptions = [
-        `"We all fake it till we make it, but what if we didn't have to?\n\n
-        
-        ${referralCode || commandResponses['GENERATE_REFERRAL']}
-        
-        \n\n https://pushthebutton.ai @pushthebuttonlol
-        "`,
-        `"Be the love u've never encountered\n\n
-        
-        \n\n${referralCode || commandResponses['GENERATE_REFERRAL']}
-        
-        \n\n https://pushthebutton.ai @pushthebuttonlol
-        "`,
-        `"The best way to level up? Bring your people with you. Let's get it.\n\n${referralCode || commandResponses['GENERATE_REFERRAL']}
-        
-        \n\n https://pushthebutton.ai @pushthebuttonlol
-        "`,
-        `"Good things multiply—wealth, knowledge, and referrals. Get your share.\n\n${referralCode || commandResponses['GENERATE_REFERRAL']}
-        
-        \n\n https://pushthebutton.ai @pushthebuttonlol
-        "`
+        `"We all fake it till we make it, but what if we didn't have to?\n\n${referralCode || commandResponses['GENERATE_REFERRAL']}\n\n https://pushthebutton.ai @pushthebuttonlol"`,
+        `"Be the love u've never encountered\n\n${referralCode || commandResponses['GENERATE_REFERRAL']}\n\n https://pushthebutton.ai @pushthebuttonlol"`,
+        `"The best way to level up? Bring your people with you. Let's get it.\n\n${referralCode || commandResponses['GENERATE_REFERRAL']}\n\n https://pushthebutton.ai @pushthebuttonlol"`,
+        `"Good things multiply—wealth, knowledge, and referrals. Get your share.\n\n${referralCode || commandResponses['GENERATE_REFERRAL']}\n\n https://pushthebutton.ai @pushthebuttonlol"`
       ];
 
       // Randomly select a tweet text
@@ -816,6 +811,32 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
           className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 md:p-6 lg:p-8"
           onClick={() => hasShared && setShowShareDialog(false)}
         >
+          {/* Confirmation Dialog */}
+          {showDownloadConfirm && (
+            <div 
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[70]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-black/95 border border-red-500/20 rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl hover-glow">
+                <h3 className="text-red-500/80 text-lg font-bold mb-4 tracking-wider">Download Image?</h3>
+                <p className="text-red-400/60 text-sm mb-6">Would you like to download the referral code image before sharing to X?</p>
+                <div className="flex gap-4 justify-end">
+                  <button
+                    onClick={() => handleConfirmedShare(false)}
+                    className="px-4 py-2 text-red-500/70 hover:text-red-500/90 transition-colors text-sm"
+                  >
+                    Skip Download
+                  </button>
+                  <button
+                    onClick={() => handleConfirmedShare(true)}
+                    className="px-4 py-2 bg-red-500/10 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/20 transition-all duration-300 text-sm hover-glow"
+                  >
+                    Download & Share
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           <div 
             ref={shareModalRef}
             className="bg-gradient-to-br from-black to-black/95 backdrop-blur-md p-4 md:p-6 lg:p-8 rounded-lg shadow-2xl w-full max-w-[500px] border border-red-500/20 hover-glow float"
@@ -917,13 +938,13 @@ export function TerminalModal({ onComplete }: TerminalModalProps) {
                   <svg className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                   </svg>
-                  Download and Share to X
+                  Download Image and Share to X
                 </button>
               </div>
 
               {!hasShared && (
                 <div className="mt-2 md:mt-4 text-center text-red-500/60 text-[10px] md:text-xs tracking-wider px-2">
-                  Download the Image and Share to X to close this interface
+                  Download the Referral Code Image and Share to X to close this interface
                 </div>
               )}
             </div>
