@@ -9,17 +9,25 @@ async function removeRestrictions() {
       // Start transaction
       await client.query('BEGIN')
       
-      // Delete from scraping_history
-      await client.query('DELETE FROM scraping_history')
-      logger.info('Cleared scraping_history table')
+      // Delete from analysis_queue
+      await client.query('DELETE FROM analysis_queue')
+      logger.info('Cleared analysis_queue table')
       
-      // Delete from analysis_history
-      await client.query('DELETE FROM analysis_history')
-      logger.info('Cleared analysis_history table')
+      // Delete from analysis_chunks
+      await client.query('DELETE FROM analysis_chunks')
+      logger.info('Cleared analysis_chunks table')
       
-      // Delete from rate_limits
-      await client.query('DELETE FROM rate_limits')
-      logger.info('Cleared rate_limits table')
+      // Delete from personality_analysis_queue
+      await client.query('DELETE FROM personality_analysis_queue')
+      logger.info('Cleared personality_analysis_queue table')
+      
+      // Delete from personality_analysis_chunks
+      await client.query('DELETE FROM personality_analysis_chunks')
+      logger.info('Cleared personality_analysis_chunks table')
+      
+      // Delete from analytics_results
+      await client.query('DELETE FROM analytics_results')
+      logger.info('Cleared analytics_results table')
       
       // Commit transaction
       await client.query('COMMIT')

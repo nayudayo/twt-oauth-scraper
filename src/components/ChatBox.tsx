@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Dispatch, SetStateAction, useCallback } from 'react'
+import { useState, useEffect, useRef, Dispatch, SetStateAction, useCallback, memo } from 'react'
 import { Tweet, TwitterProfile, EventData } from '@/types/scraper'
 import { TwitterAPITweet } from '@/lib/twitter/types'
 import { PersonalityAnalysis } from '@/lib/openai'
@@ -19,6 +19,7 @@ import { CommunicationLevel } from '@/lib/openai';
 import React from 'react';
 import { PsychoanalysisModal } from './PsychoanalysisModal';
 import { TuningUpdateMessage } from './TuningUpdateMessage'
+import { Virtuoso } from 'react-virtuoso';
 
 interface ChatBoxProps {
   tweets: Tweet[]
@@ -50,11 +51,16 @@ interface ScanProgress {
   rateLimitReset?: number
 }
 
-// Add cooldown types
+// Update cooldown types
 interface CooldownState {
-  isOnCooldown: boolean;
-  remainingTime?: number;
-  operationType?: 'scrape' | 'analyze' | 'update';
+  scrape: {
+    isOnCooldown: boolean;
+    remainingTime?: number;
+  };
+  analyze: {
+    isOnCooldown: boolean;
+    remainingTime?: number;
+  };
 }
 
 // Add these helper functions near the top of the file, after the imports
@@ -166,6 +172,65 @@ interface ChatBoxMessage {
   };
 }
 
+// Add countdown timer logic
+const useCountdown = (initialTime: number) => {
+  const [timeLeft, setTimeLeft] = useState(initialTime);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (timeLeft > 0) {
+      intervalRef.current = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev > 0) {
+            return prev - 1;
+          }
+          return 0;
+        });
+      }, 1000);
+    } else if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [timeLeft]);
+
+  const resetTimer = (newTime: number) => {
+    setTimeLeft(newTime);
+  };
+
+  return { timeLeft, resetTimer };
+};
+
+// Add the memoized markdown component before the ChatBox component
+const MemoizedMarkdown = memo(({ content }: { content: string }) => (
+  <ReactMarkdown>{content}</ReactMarkdown>
+));
+MemoizedMarkdown.displayName = 'MemoizedMarkdown';
+
+// Add the memoized message component
+const ChatMessage = memo(({ message, isUser }: { message: ChatBoxMessage, isUser: boolean }) => (
+  <div 
+    className={`flex ${isUser ? 'justify-end' : 'justify-start'} p-4`}
+  >
+    <div 
+      className={`max-w-[80%] rounded backdrop-blur-sm border border-red-500/10 shadow-lg hover-glow float
+        ${isUser 
+          ? 'bg-red-500/5 text-red-400/90' 
+          : 'bg-black/40 text-red-300/90'
+        } px-4 py-2 text-sm`}
+    >
+      <div className="prose prose-red prose-invert max-w-none hover-text-glow whitespace-pre-wrap">
+        <MemoizedMarkdown content={message.text} />
+      </div>
+    </div>
+  </div>
+));
+ChatMessage.displayName = 'ChatMessage';
+
 export default function ChatBox({ tweets: initialTweets, profile, onClose, onTweetsUpdate }: ChatBoxProps) {
   const queryClient = useQueryClient();
   const [messages, setMessages] = useState<ChatBoxMessage[]>([])
@@ -207,8 +272,18 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
   const [accumulatedTweets, setAccumulatedTweets] = useState<Tweet[]>([])
   const [showProfile, setShowProfile] = useState(true)
   const [cooldownState, setCooldownState] = useState<CooldownState>({
-    isOnCooldown: false
+    scrape: {
+      isOnCooldown: false
+    },
+    analyze: {
+      isOnCooldown: false
+    }
   });
+  const [messageQueue, setMessageQueue] = useState<ChatBoxMessage[]>([]);
+  const MAX_MESSAGES = 1000; // Maximum number of messages to keep in memory
+
+  const scrapeCountdown = useCountdown(0);
+  const analyzeCountdown = useCountdown(0);
 
   // Add cache hook
   const personalityCache = usePersonalityCache({
@@ -549,35 +624,50 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     }
   };
 
-  // Handle message submission
+  // Add message batching effect
+  useEffect(() => {
+    if (messageQueue.length === 0) return;
+
+    const batchTimeout = setTimeout(() => {
+      setMessages(prev => [...prev, ...messageQueue]);
+      setMessageQueue([]);
+    }, 100); // Batch updates every 100ms
+
+    return () => clearTimeout(batchTimeout);
+  }, [messageQueue]);
+
+  // Modify message adding logic to use queue
+  const addMessage = useCallback((message: ChatBoxMessage) => {
+    setMessageQueue(prev => [...prev, message]);
+  }, []);
+
+  // Update handleSubmit to use the new addMessage function
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!input.trim() || isChatLoading) return
+    e.preventDefault();
+    if (!input.trim() || isChatLoading) return;
 
-    const userMessage = input.trim()
-    setInput('')
+    const userMessage = input.trim();
+    setInput('');
 
-    // Only proceed if we have personality analysis
     if (analysis) {
-      // Add user message to UI immediately with timestamp
-      setMessages(prev => [...prev, {
+      // Add user message to queue
+      addMessage({
         text: userMessage,
         isUser: true,
         timestamp: new Date().toLocaleTimeString(),
         type: 'chat'
-      }])
+      });
       
-      // Generate and add AI response
-      const response = await generatePersonalityResponse(userMessage)
+      const response = await generatePersonalityResponse(userMessage);
       if (response) {
-        setMessages(prev => [...prev, {
+        // Add AI response to queue
+        addMessage({
           text: response,
           isUser: false,
           timestamp: new Date().toLocaleTimeString(),
           type: 'chat'
-        }])
+        });
         
-        // Update conversation metadata with new message count only
         if (activeConversationId) {
           setConversations(prev => prev.map(conv => 
             conv.id === activeConversationId 
@@ -589,34 +679,33 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                   }
                 }
               : conv
-          ))
+          ));
         }
 
-        // Focus the textarea after response is generated
         if (textareaRef.current) {
-          textareaRef.current.focus()
+          textareaRef.current.focus();
         }
       }
 
-      // If we have an active conversation ID and the messages might be out of sync,
-      // fetch the latest messages from the server
+      // Sync with server if needed
       if (activeConversationId) {
         try {
-          const response = await fetch('/api/conversations/' + activeConversationId + '/messages')
+          const response = await fetch('/api/conversations/' + activeConversationId + '/messages');
           if (response.ok) {
-            const data = await response.json()
+            const data = await response.json();
             if (data.success && Array.isArray(data.data)) {
-              setMessages(data.data.map((msg: APIMessage) => ({
+              const newMessages = data.data.map((msg: APIMessage) => ({
                 text: msg.content || '',
                 isUser: msg.role === 'user',
                 timestamp: new Date().toLocaleTimeString(),
                 type: 'chat' as const,
                 ...(msg.tuningInfo && { tuningInfo: msg.tuningInfo })
-              })))
+              }));
+              setMessages(newMessages); // Replace all messages with server state
             }
           }
         } catch (error) {
-          console.error('Error syncing messages:', error)
+          console.error('Error syncing messages:', error);
         }
       }
     }
@@ -624,8 +713,9 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
 
   // Update handleAnalyze to handle both initial analysis and updates
   const handleAnalyze = async () => {
-    const canProceed = await checkCooldown('analyze');
-    if (!canProceed) {
+    // Check cooldown but don't enforce yet
+    const cooldownCheck = await checkCooldown('analyze');
+    if (!cooldownCheck) {
       return;
     }
 
@@ -707,6 +797,17 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
         setIsAnalyzing(false);
         setAnalysisStartTime(null);
         setShowPsychoanalysis(true);
+
+        // Update last analysis time since we used cache
+        try {
+          await fetch('/api/analyze/update-time', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } catch (error) {
+          console.error('Failed to update analysis time:', error);
+        }
+
         return;
       }
 
@@ -799,6 +900,16 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
             expressionStyle: newAnalysis.thoughtProcess.expressionStyle?.replace(/[*-]/g, '').trim()
           }
         });
+
+        // Update last analysis time since analysis was successful
+        try {
+          await fetch('/api/analyze/update-time', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } catch (error) {
+          console.error('Failed to update analysis time:', error);
+        }
 
         // Create a new chat with the updated personality if this was an update
         if (analysis) {
@@ -1020,24 +1131,83 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     }
   };
 
-  // Add cooldown check function
-  const checkCooldown = async (operation: 'scrape' | 'analyze' | 'update') => {
+  // Update checkCooldown function to use countdown
+  const checkCooldown = async (operation: 'scrape' | 'analyze') => {
     try {
       const response = await fetch(`/api/cooldown?operation=${operation}`);
       const data = await response.json();
       
-      setCooldownState({
-        isOnCooldown: !data.canProceed,
-        remainingTime: data.remainingTime,
-        operationType: operation
-      });
+      const countdown = operation === 'scrape' ? scrapeCountdown : analyzeCountdown;
+      
+      setCooldownState(prev => ({
+        ...prev,
+        [operation]: {
+          isOnCooldown: !data.canProceed,
+          remainingTime: data.remainingTime
+        }
+      }));
+
+      if (!data.canProceed && data.remainingTime) {
+        countdown.resetTimer(data.remainingTime);
+      }
 
       return data.canProceed;
     } catch (error) {
       console.error('Error checking cooldown:', error);
-      return true; // Allow operation on error to prevent blocking
+      return true;
     }
   };
+
+  // Add effect to check cooldowns on mount
+  useEffect(() => {
+    const initializeCooldowns = async () => {
+      await checkCooldown('scrape');
+      await checkCooldown('analyze');
+    };
+
+    initializeCooldowns();
+  }, []);
+
+  // Update cooldown states based on countdown timers
+  useEffect(() => {
+    if (scrapeCountdown.timeLeft === 0) {
+      setCooldownState(prev => ({
+        ...prev,
+        scrape: {
+          isOnCooldown: false,
+          remainingTime: undefined
+        }
+      }));
+    } else if (scrapeCountdown.timeLeft) {
+      setCooldownState(prev => ({
+        ...prev,
+        scrape: {
+          isOnCooldown: true,
+          remainingTime: scrapeCountdown.timeLeft
+        }
+      }));
+    }
+  }, [scrapeCountdown.timeLeft]);
+
+  useEffect(() => {
+    if (analyzeCountdown.timeLeft === 0) {
+      setCooldownState(prev => ({
+        ...prev,
+        analyze: {
+          isOnCooldown: false,
+          remainingTime: undefined
+        }
+      }));
+    } else if (analyzeCountdown.timeLeft) {
+      setCooldownState(prev => ({
+        ...prev,
+        analyze: {
+          isOnCooldown: true,
+          remainingTime: analyzeCountdown.timeLeft
+        }
+      }));
+    }
+  }, [analyzeCountdown.timeLeft]);
 
   // Add handlers for terminal session
   const handleScrape = async () => {
@@ -1662,10 +1832,10 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           type: 'chat' as const
         }));
         
-        setMessages(messages);
+        // Only keep the last MAX_MESSAGES
+        setMessages(messages.slice(-MAX_MESSAGES));
         setActiveConversationId(conversation.id);
         
-        // Update conversation metadata with accurate message count only
         setConversations(prev => prev.map(conv => 
           conv.id === conversation.id 
             ? {
@@ -1832,11 +2002,16 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     };
   }, [profile.name, loading]);
 
-  // Add scroll handler to hide profile when scrolled past it
-  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+  // Handler for DOM scroll events (used in non-virtualized areas)
+  const handleDOMScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const scrollTop = e.currentTarget.scrollTop;
-    const threshold = 200; // Adjust this value based on your profile section height
+    const threshold = 200;
     setShowProfile(scrollTop < threshold);
+  }, []);
+
+  // Handler for Virtuoso scroll position changes
+  const handleVirtuosoScroll = useCallback((atBottom: boolean) => {
+    setShowProfile(!atBottom);
   }, []);
 
   // Add handleRenameConversation function
@@ -1889,33 +2064,18 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
 
   // Update button rendering to show cooldown state
   const renderActionButton = (type: 'scrape' | 'analyze') => {
-    const isCoolingDown = cooldownState.isOnCooldown && cooldownState.operationType === type;
+    const countdown = type === 'scrape' ? scrapeCountdown : analyzeCountdown;
+    const isCoolingDown = cooldownState[type].isOnCooldown;
     const buttonText = type === 'scrape' ? 
       (loading ? 'ABORT SEQUENCE' : 'EXECUTE DATA EXTRACTION') : 
       (isAnalyzing ? 'ANALYZING' : (analysis ? 'UPDATE ANALYSIS' : 'START ANALYSIS'));
-
-    if (isCoolingDown && cooldownState.remainingTime) {
-      return (
-        <div className="w-full text-center">
-          <button
-            disabled
-            className="w-full px-3 py-2 font-medium bg-red-500/5 text-red-500/50 border border-red-500/20 rounded cursor-not-allowed uppercase tracking-wider text-xs backdrop-blur-sm"
-          >
-            COOLDOWN: {formatRemainingTime(cooldownState.remainingTime)}
-          </button>
-          <p className="text-xs text-red-500/50 mt-1">
-            {type === 'scrape' ? 'Data extraction' : 'Analysis'} available in {formatRemainingTime(cooldownState.remainingTime)}
-          </p>
-        </div>
-      );
-    }
 
     return (
       <button
         onClick={type === 'scrape' ? 
           (loading ? handleCancelScraping : handleScrape) : 
           (isAnalyzing ? undefined : (analysis ? handleUpdateAnalysis : handleAnalyze))}
-        disabled={type === 'scrape' ? false : (isAnalyzing || !accumulatedTweets.length)}
+        disabled={isCoolingDown || (type === 'analyze' && (isAnalyzing || !accumulatedTweets.length))}
         className={`w-full px-3 py-2 font-medium bg-red-500/5 text-red-500/90 border border-red-500/30 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 ancient-text disabled:opacity-50 disabled:cursor-not-allowed ${!loading && !analysis ? 'pulse-action' : ''}`}
       >
         {(type === 'scrape' && loading) || (type === 'analyze' && isAnalyzing) ? (
@@ -1923,12 +2083,33 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
             <Spinner size="sm" />
             <span>{buttonText}</span>
           </div>
+        ) : isCoolingDown && countdown.timeLeft ? (
+          <span>COOLDOWN: {formatRemainingTime(countdown.timeLeft)}</span>
         ) : (
           buttonText
         )}
       </button>
     );
   };
+
+  // Add cleanup effect
+  useEffect(() => {
+    if (messages.length > MAX_MESSAGES) {
+      const excessMessages = messages.length - MAX_MESSAGES;
+      setMessages(prev => prev.slice(excessMessages));
+      
+      // If we have an active conversation, update the server
+      if (activeConversationId) {
+        fetch(`/api/conversations/${activeConversationId}/cleanup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ keepLast: MAX_MESSAGES })
+        }).catch(error => {
+          console.warn('Failed to cleanup messages on server:', error);
+        });
+      }
+    }
+  }, [messages.length, activeConversationId]);
 
   return (
     <>
@@ -1956,8 +2137,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
 
             {/* Chat Messages Container */}
             <div 
-              className="flex-1 overflow-y-auto custom-scrollbar backdrop-blur-sm bg-black/20 ancient-scroll min-h-0 relative z-30"
-              onScroll={handleScroll}
+              className="flex-1 overflow-hidden backdrop-blur-sm bg-black/20 ancient-scroll min-h-0 relative z-30"
             >
               {!analysis ? (
                 <div className="text-red-500/70 italic text-center glow-text p-4">
@@ -1996,46 +2176,41 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     </div>
                   </div>
 
-                  {/* Messages */}
-                  {messages.map((msg: ChatBoxMessage, i: number) => (
-                    msg.type === 'chat' ? (
-                      <div 
-                        key={`msg-${i}`}
-                        className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <div 
-                          className={`max-w-[80%] rounded backdrop-blur-sm border border-red-500/10 shadow-lg hover-glow float
-                            ${msg.isUser 
-                              ? 'bg-red-500/5 text-red-400/90' 
-                              : 'bg-black/40 text-red-300/90'
-                            } px-4 py-2 text-sm`}
-                        >
-                          <div className="prose prose-red prose-invert max-w-none hover-text-glow whitespace-pre-wrap">
-                            <ReactMarkdown>{msg.text}</ReactMarkdown>
+                  {/* Virtualized Messages */}
+                  <Virtuoso
+                    style={{ height: '100%' }}
+                    data={messages}
+                    itemContent={(index, msg: ChatBoxMessage) => (
+                      msg.type === 'chat' ? (
+                        <ChatMessage message={msg} isUser={msg.isUser} />
+                      ) : (
+                        <TuningUpdateMessage
+                          type={msg.tuningInfo!.tuningType}
+                          name={msg.tuningInfo!.name}
+                          value={msg.tuningInfo!.value}
+                          timestamp={msg.timestamp}
+                        />
+                      )
+                    )}
+                    followOutput="smooth"
+                    alignToBottom
+                    atBottomStateChange={handleVirtuosoScroll}
+                    components={{
+                      Footer: () => (
+                        isTyping ? (
+                          <div className="flex justify-start p-4">
+                            <div className="max-w-[80%] rounded-lg p-3 bg-red-500/5 text-red-500/80">
+                              <div className="flex items-center gap-1">
+                                <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce [animation-delay:-0.3s]" />
+                                <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce [animation-delay:-0.15s]" />
+                                <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce" />
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <TuningUpdateMessage
-                        key={`tuning-${i}`}
-                        type={msg.tuningInfo!.tuningType}
-                        name={msg.tuningInfo!.name}
-                        value={msg.tuningInfo!.value}
-                        timestamp={msg.timestamp}
-                      />
-                    )
-                  ))}
-                  {isTyping && (
-                    <div className="flex justify-start">
-                      <div className="max-w-[80%] rounded-lg p-3 bg-red-500/5 text-red-500/80">
-                        <div className="flex items-center gap-1">
-                          <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce [animation-delay:-0.3s]" />
-                          <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce [animation-delay:-0.15s]" />
-                          <div className="w-2 h-2 rounded-full bg-red-500/50 animate-bounce" />
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                        ) : null
+                      )
+                    }}
+                  />
                   <div ref={messagesEndRef} />
                 </>
               )}
@@ -3278,7 +3453,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
               {/* Chat Messages Container */}
               <div 
                 className="flex-1 overflow-y-auto custom-scrollbar backdrop-blur-sm bg-black/20 ancient-scroll min-h-0 relative z-30"
-                onScroll={handleScroll}
+                onScroll={handleDOMScroll}
               >
                 {!analysis ? (
                   <div className="text-red-500/70 italic text-center glow-text p-4">
@@ -3321,30 +3496,9 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
                     <div className="p-4 space-y-4 relative z-30">
                       {messages.map((msg: ChatBoxMessage, i: number) => (
                         msg.type === 'chat' ? (
-                          <div 
-                            key={`msg-${i}`}
-                            className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}
-                          >
-                            <div 
-                              className={`max-w-[80%] rounded backdrop-blur-sm border border-red-500/10 shadow-lg hover-glow float
-                                ${msg.isUser 
-                                  ? 'bg-red-500/5 text-red-400/90' 
-                                  : 'bg-black/40 text-red-300/90'
-                                } px-4 py-2 text-sm`}
-                            >
-                              <div className="prose prose-red prose-invert max-w-none hover-text-glow whitespace-pre-wrap">
-                                <ReactMarkdown>{msg.text}</ReactMarkdown>
-                              </div>
-                            </div>
-                          </div>
+                          <ChatMessage key={`msg-${i}`} message={msg} isUser={msg.isUser} />
                         ) : (
-                          <TuningUpdateMessage
-                            key={`tuning-${i}`}
-                            type={msg.tuningInfo!.tuningType}
-                            name={msg.tuningInfo!.name}
-                            value={msg.tuningInfo!.value}
-                            timestamp={msg.timestamp}
-                          />
+                          <TuningUpdateMessage key={`tuning-${i}`} type={msg.tuningInfo!.tuningType} name={msg.tuningInfo!.name} value={msg.tuningInfo!.value} timestamp={msg.timestamp} />
                         )
                       ))}
                       {isTyping && (
