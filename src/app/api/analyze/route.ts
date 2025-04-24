@@ -86,7 +86,8 @@ export async function POST(req: Request) {
           profile,
           prompt: prompt || undefined,
           context: context || undefined,
-          currentTuning // Pass through current tuning
+          currentTuning,
+          userId: user.id
         },
         session.username,
         (result) => {

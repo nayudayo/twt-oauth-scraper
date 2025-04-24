@@ -6,4 +6,5 @@ export interface AnalyzeRequest {
   prompt?: string;
   context?: string;
   currentTuning?: PersonalityTuning;
+  userId: string;
 } 

@@ -77,6 +77,7 @@ interface AnalyzeRequest {
   prompt?: string
   context?: string
   currentTuning?: PersonalityTuning
+  userId: string
 }
 
 export class OpenAIQueueManager {
@@ -355,7 +356,8 @@ export class OpenAIQueueManager {
               1, // bestOf
               analyzeData.currentTuning, // Pass the entire PersonalityTuning object
               undefined, // customInstructions
-              controller.signal
+              controller.signal,
+              analyzeData.userId // Pass the userId here
             );
 
             // Validate the result has required fields

@@ -434,7 +434,6 @@ export function parseInterestsChunk(response: string): Partial<PersonalityAnalys
           section.toLowerCase().includes('interests & expertise')) {
         const lines = section.split('\n');
         let currentInterest = '';
-        let currentExpertise = '';
         let currentEvidence = '';
         
         for (const line of lines) {
@@ -453,8 +452,6 @@ export function parseInterestsChunk(response: string): Partial<PersonalityAnalys
               result.interests?.push(currentInterest);
             }
             currentInterest = interestMatch[1].trim();
-          } else if (trimmedLine.toLowerCase().startsWith('expertise level:')) {
-            currentExpertise = trimmedLine.split(':')[1]?.trim() || '';
           } else if (trimmedLine.toLowerCase().startsWith('evidence:')) {
             currentEvidence = trimmedLine.split(':')[1]?.trim() || '';
           } else if (!trimmedLine.match(/^[-•*]/) && currentInterest) {
@@ -489,6 +486,9 @@ export function parseInterestsChunk(response: string): Partial<PersonalityAnalys
 
 // Parse communication chunk
 export function parseCommunicationChunk(response: string): Partial<PersonalityAnalysis> {
+  type MessageStructureType = 'opening' | 'framing' | 'closing';
+  type SubsectionType = 'metrics' | 'patterns' | 'structure' | 'variations' | MessageStructureType;
+  
   const result: Partial<PersonalityAnalysis> = {
     communicationStyle: {
       formality: 'medium',
@@ -522,8 +522,8 @@ export function parseCommunicationChunk(response: string): Partial<PersonalityAn
     if (section.includes('Communication Style Analysis') || section.includes('Communication Style')) {
       const styleLines = section.split('\n').slice(1);
       const descriptionParts = [];
-      let foundMetrics = false;
-      let currentSubsection = '';
+      let currentSubsection: SubsectionType = 'metrics';
+      let currentStructure: MessageStructureType | null = null;
       
       for (const line of styleLines) {
         const trimmedLine = line.trim();
@@ -532,28 +532,47 @@ export function parseCommunicationChunk(response: string): Partial<PersonalityAn
         // Parse core metrics section
         if (trimmedLine.toLowerCase().includes('core metrics')) {
           currentSubsection = 'metrics';
+          currentStructure = null;
           continue;
         }
         // Parse writing patterns section
         else if (trimmedLine.toLowerCase().includes('writing patterns')) {
           currentSubsection = 'patterns';
+          currentStructure = null;
           continue;
         }
         // Parse message structure section
         else if (trimmedLine.toLowerCase().includes('message structure')) {
           currentSubsection = 'structure';
+          currentStructure = null;
           continue;
         }
         // Parse contextual variations section
         else if (trimmedLine.toLowerCase().includes('contextual variations')) {
           currentSubsection = 'variations';
+          currentStructure = null;
+          continue;
+        }
+        // Parse message structure subsections
+        else if (trimmedLine.toLowerCase().includes('opening patterns:')) {
+          currentSubsection = 'structure';
+          currentStructure = 'opening';
+          continue;
+        }
+        else if (trimmedLine.toLowerCase().includes('framing patterns:')) {
+          currentSubsection = 'structure';
+          currentStructure = 'framing';
+          continue;
+        }
+        else if (trimmedLine.toLowerCase().includes('closing patterns:')) {
+          currentSubsection = 'structure';
+          currentStructure = 'closing';
           continue;
         }
 
         // Handle each section's content
         switch (currentSubsection) {
-          case 'metrics':
-            // Parse core metrics with scores and explanations
+          case 'metrics': {
             const metricMatch = trimmedLine.match(/^-\s*([^:]+):\s*(\d+)\s*-\s*(.+)$/);
             if (metricMatch) {
               const [, metric, score, explanation] = metricMatch;
@@ -578,10 +597,9 @@ export function parseCommunicationChunk(response: string): Partial<PersonalityAn
                   descriptionParts.push(`Emoji usage: ${level} - ${explanation}`);
                   break;
               }
-              foundMetrics = true;
             }
             break;
-
+          }
           case 'patterns':
             // Parse writing patterns
             if (trimmedLine.startsWith('-')) {
@@ -608,29 +626,23 @@ export function parseCommunicationChunk(response: string): Partial<PersonalityAn
               }
             }
             break;
-
           case 'structure':
             // Parse message structure patterns
-            if (trimmedLine.toLowerCase().includes('opening patterns:')) {
-              currentSubsection = 'opening';
-            } else if (trimmedLine.toLowerCase().includes('framing patterns:')) {
-              currentSubsection = 'framing';
-            } else if (trimmedLine.toLowerCase().includes('closing patterns:')) {
-              currentSubsection = 'closing';
-            } else if (trimmedLine.startsWith('-')) {
+            if (trimmedLine.startsWith('-') && currentStructure) {
               const pattern = trimmedLine.substring(1).trim();
-              if (currentSubsection === 'opening') {
-                result.communicationStyle!.patterns.messageStructure.opening.push(pattern);
-              }
-              else if (currentSubsection === 'framing') {
-                result.communicationStyle!.patterns.messageStructure.framing.push(pattern);
-              }
-              else if (currentSubsection === 'closing') {
-                result.communicationStyle!.patterns.messageStructure.closing.push(pattern);
+              switch (currentStructure) {
+                case 'opening':
+                  result.communicationStyle!.patterns.messageStructure.opening.push(pattern);
+                  break;
+                case 'framing':
+                  result.communicationStyle!.patterns.messageStructure.framing.push(pattern);
+                  break;
+                case 'closing':
+                  result.communicationStyle!.patterns.messageStructure.closing.push(pattern);
+                  break;
               }
             }
             break;
-
           case 'variations':
             // Parse contextual variations
             if (trimmedLine.startsWith('-')) {
