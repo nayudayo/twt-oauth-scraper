@@ -1,12 +1,19 @@
 import { useState, useCallback } from 'react';
-import type { PersonalityAnalysis } from '@/lib/openai';
+import type { PersonalityAnalysis } from '@/lib/openai/types';
 
 interface UsePersonalityCacheProps {
   username: string;
 }
 
+// Extended interface for cached data that includes tuning parameters
+interface CachedPersonalityData extends PersonalityAnalysis {
+  traitModifiers?: { [key: string]: number };
+  interestWeights?: { [key: string]: number };
+  customInterests?: string[];
+}
+
 interface CacheState {
-  data: PersonalityAnalysis | null;
+  data: CachedPersonalityData | null;
   isLoading: boolean;
   error: string | null;
   isFresh: boolean;
@@ -83,10 +90,10 @@ export function usePersonalityCache({ username }: UsePersonalityCacheProps) {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
     try {
       // Get existing tuning parameters
-      const traitModifiers = state.data?.traitModifiers !== undefined ? state.data.traitModifiers : {};
+      const traitModifiers = state.data?.traitModifiers || {};
       
       // Prepare final data with applied modifiers
-      const finalData: PersonalityAnalysis = {
+      const finalData: CachedPersonalityData = {
         ...analysisData,
         // Apply trait modifiers to trait scores
         traits: analysisData.traits.map(trait => ({
@@ -95,8 +102,8 @@ export function usePersonalityCache({ username }: UsePersonalityCacheProps) {
         })),
         // Preserve tuning parameters
         traitModifiers,
-        interestWeights: state.data?.interestWeights !== undefined ? state.data.interestWeights : {},
-        customInterests: state.data?.customInterests !== undefined ? state.data.customInterests : [],
+        interestWeights: state.data?.interestWeights || {},
+        customInterests: state.data?.customInterests || [],
         communicationStyle: {
           ...analysisData.communicationStyle,
           formality: state.data?.communicationStyle?.formality ?? analysisData.communicationStyle.formality,

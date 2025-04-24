@@ -1,6 +1,6 @@
 import { DatabaseOperations } from './operations';
 import { PoolClient } from 'pg';
-import { CommunicationLevel } from '../../../lib/openai';
+import { CommunicationLevel } from '../../openai/openai';
 
 // User Types
 export interface DBUser {

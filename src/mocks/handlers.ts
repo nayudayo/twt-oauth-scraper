@@ -6,11 +6,6 @@ interface CommandProgressBody {
   completedCommands: string[]
 }
 
-interface FunnelCompletionBody {
-  userId: string
-  completionData: Record<string, string>
-}
-
 export const handlers = [
   // Mock GET /api/command-progress
   http.get('/api/command-progress', ({ request }) => {
@@ -46,37 +41,5 @@ export const handlers = [
     }
 
     return HttpResponse.json({ success: true })
-  }),
-
-  // Mock POST /api/funnel-completion
-  http.post('/api/funnel-completion', async ({ request }) => {
-    const body = await request.json() as FunnelCompletionBody
-    const { userId, completionData } = body
-
-    if (!userId || typeof completionData !== 'object') {
-      return HttpResponse.json(
-        { error: 'Invalid request body' },
-        { status: 400 }
-      )
-    }
-
-    return HttpResponse.json({ success: true })
-  }),
-
-  // Mock GET /api/funnel-completion
-  http.get('/api/funnel-completion', ({ request }) => {
-    const url = new URL(request.url)
-    const userId = url.searchParams.get('userId')
-    
-    if (!userId) {
-      return HttpResponse.json(
-        { error: 'Missing userId parameter' },
-        { status: 400 }
-      )
-    }
-
-    return HttpResponse.json({
-      completion: null
-    })
   })
 ] 

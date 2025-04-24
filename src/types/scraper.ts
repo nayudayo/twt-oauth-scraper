@@ -1,4 +1,4 @@
-import { CommunicationLevel } from '../lib/openai';
+import { CommunicationLevel } from '../lib/openai/openai';
 
 export interface TwitterProfile {
   name: string | null

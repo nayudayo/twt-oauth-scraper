@@ -1,4 +1,4 @@
-import { PersonalityAnalysis } from '@/lib/openai';
+import { PersonalityAnalysis } from '../../../lib/openai/types';
 
 // Define the structure for required inputs
 interface PromptInput {

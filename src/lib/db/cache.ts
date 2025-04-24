@@ -1,7 +1,14 @@
 import { Pool } from 'pg';
 import { DatabaseError } from './adapters/errors';
 import type { PersonalityCache } from '../../types/cache';
-import type { PersonalityAnalysis } from '../../lib/openai';
+import type { PersonalityAnalysis } from '../openai/types';
+
+// Extended interface for cached data that includes tuning parameters
+interface CachedPersonalityData extends PersonalityAnalysis {
+  traitModifiers?: { [key: string]: number };
+  interestWeights?: { [key: string]: number };
+  customInterests?: string[];
+}
 
 export class PersonalityCacheDB {
   constructor(private pool: Pool) {}
@@ -61,14 +68,14 @@ export class PersonalityCacheDB {
 
       // Get existing cache to preserve tuning parameters if they exist
       const existingCache = await this.getPersonalityCache(userId);
-      let finalData: PersonalityAnalysis = { ...analysisData };
+      let finalData: CachedPersonalityData = { ...analysisData };
 
       if (existingCache?.analysisData) {
-        // Cast the existing data to PersonalityAnalysis after validating its shape
-        const existingData = existingCache.analysisData as unknown as PersonalityAnalysis;
+        // Cast the existing data to CachedPersonalityData after validating its shape
+        const existingData = existingCache.analysisData as unknown as CachedPersonalityData;
         
         // Preserve tuning parameters if they exist
-        const traitModifiers = existingData.traitModifiers !== undefined ? existingData.traitModifiers : {};
+        const traitModifiers = existingData.traitModifiers || {};
         
         // Apply trait modifiers to the scores
         finalData = {
@@ -80,8 +87,8 @@ export class PersonalityCacheDB {
           })),
           // Preserve tuning parameters
           traitModifiers,
-          interestWeights: existingData.interestWeights !== undefined ? existingData.interestWeights : {},
-          customInterests: existingData.customInterests !== undefined ? existingData.customInterests : [],
+          interestWeights: existingData.interestWeights || {},
+          customInterests: existingData.customInterests || [],
           communicationStyle: {
             ...analysisData.communicationStyle,
             // Use nullish coalescing to properly preserve existing values

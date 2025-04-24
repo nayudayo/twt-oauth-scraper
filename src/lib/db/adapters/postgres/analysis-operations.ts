@@ -16,6 +16,7 @@ interface AnalysisOperations {
     status: string;
     progress: number;
     error?: string;
+    processed_chunks: number;
   } | null>;
   updateAnalysisStatus(jobId: number, status: string, error?: string): Promise<void>;
   incrementProcessedChunks(jobId: number): Promise<void>;
@@ -133,6 +134,7 @@ export class PostgresAnalysisOperations implements AnalysisOperations {
     status: string;
     progress: number;
     error?: string;
+    processed_chunks: number;
   } | null> {
     const client = await this.pool.connect();
     try {
@@ -147,7 +149,8 @@ export class PostgresAnalysisOperations implements AnalysisOperations {
       return {
         status,
         progress: (processed_chunks / total_chunks) * 100,
-        error
+        error,
+        processed_chunks
       };
     } catch (error) {
       if (this.isPostgresError(error)) {

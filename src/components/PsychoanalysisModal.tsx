@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useRef, useEffect, useState } from 'react'
-import { PersonalityAnalysis } from '@/lib/openai'
+import { PersonalityAnalysis } from '@/lib/openai/types'
 import {
   Chart as ChartJS,
   RadialLinearScale,

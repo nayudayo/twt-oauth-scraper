@@ -40,7 +40,6 @@ async function purgeDatabase() {
       DROP TABLE IF EXISTS referral_usage_log CASCADE;
       DROP TABLE IF EXISTS referral_tracking CASCADE;
       DROP TABLE IF EXISTS referral_codes CASCADE;
-      DROP TABLE IF EXISTS funnel_completion CASCADE;
       DROP TABLE IF EXISTS funnel_progress CASCADE;
       DROP TABLE IF EXISTS analysis_chunks CASCADE;
       DROP TABLE IF EXISTS analysis_queue CASCADE;
@@ -85,7 +84,11 @@ async function purgeDatabase() {
         profile_data JSONB,
         profile_picture_url TEXT,
         last_scraped TIMESTAMP WITH TIME ZONE,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        last_scrape_time TIMESTAMP WITH TIME ZONE,
+        last_analysis_time TIMESTAMP WITH TIME ZONE,
+        scrape_cooldown_minutes INTEGER DEFAULT 60,
+        analysis_cooldown_minutes INTEGER DEFAULT 60
       );
 
       CREATE TABLE access_codes (
@@ -140,12 +143,6 @@ async function purgeDatabase() {
         completed_commands JSONB DEFAULT '[]'::jsonb,
         command_responses JSONB DEFAULT '{}'::jsonb,
         last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE funnel_completion (
-        user_id VARCHAR(255) PRIMARY KEY REFERENCES users(id),
-        completed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        completion_data JSONB DEFAULT '{}'::jsonb
       );
 
       CREATE TABLE referral_codes (
@@ -391,6 +388,8 @@ async function purgeDatabase() {
       CREATE INDEX idx_access_codes_code ON access_codes(code);
       CREATE INDEX idx_access_codes_user_id ON access_codes(user_id);
       CREATE INDEX idx_access_codes_is_active ON access_codes(is_active);
+      CREATE INDEX idx_users_last_scrape_time ON users(last_scrape_time);
+      CREATE INDEX idx_users_last_analysis_time ON users(last_analysis_time);
       
       -- Personality cache indexes
       CREATE INDEX idx_personality_cache_user ON personality_cache(user_id);

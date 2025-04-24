@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
-import { analyzePersonality } from '@/lib/openai'
+import { analyzePersonality } from '@/lib/openai/openai'
+import { retryWithExponentialBackoff } from '@/lib/openai/utils/retry'
 import { Tweet, TwitterProfile, PersonalityTuning } from '@/types/scraper'
 import type { ChatCompletionMessage } from 'openai/resources/chat/completions'
 import { RateLimiter } from './rate-limiter'
@@ -89,12 +90,19 @@ export class OpenAIQueueManager {
   private abortController: AbortController | null = null
   private cleanupHandlers: Set<() => void> = new Set()
   private networkTimeoutMs: number = 30000 // 30 second timeout
-  private maxRetries: number = 3
-  private retryDelayMs: number = 1000 // Base delay of 1 second
 
   private constructor() {
+    console.log('[OpenAI Queue] Initializing OpenAI client with config:', {
+      baseURL: process.env.OPENAI_BASE_URL,
+      maxRetries: 3,
+      timeout: this.networkTimeoutMs
+    });
+
     this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
+      apiKey: process.env.OPENAI_API_KEY,
+      maxRetries: 3,
+      timeout: this.networkTimeoutMs,
+      baseURL: process.env.OPENAI_BASE_URL,
     })
     this.rateLimiter = new RateLimiter({
       windowMs: 60 * 1000,
@@ -121,33 +129,81 @@ export class OpenAIQueueManager {
     }
   }
 
-  private saveQueueState() {
+  private loadQueueState() {
     try {
-      const state = {
-        queue: this.queue,
-        activeRequests: this.activeRequests,
-        timestamp: Date.now()
-      };
-      sessionStorage.setItem('openai_queue_state', JSON.stringify(state));
+      // Check if we're in a browser environment
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        const savedState = sessionStorage.getItem('openai_queue_state');
+        if (savedState) {
+          const state = JSON.parse(savedState);
+          // Only restore if state is less than 5 minutes old
+          const stateAge = Date.now() - state.timestamp;
+          if (stateAge < 5 * 60 * 1000) {
+            this.queue = state.queue;
+            this.activeRequests = state.activeRequests;
+            return;
+          }
+        }
+      }
+      // If no valid state or not in browser, initialize fresh
+      this.queue = [];
+      this.activeRequests = 0;
     } catch (error) {
-      console.error('Failed to save queue state:', error);
+      console.warn('Failed to load queue state:', error);
+      // Initialize fresh state on error
+      this.queue = [];
+      this.activeRequests = 0;
     }
   }
 
-  private loadQueueState() {
+  private saveQueueState() {
     try {
-      const savedState = sessionStorage.getItem('openai_queue_state');
-      if (savedState) {
-        const state = JSON.parse(savedState);
-        // Only restore if state is less than 5 minutes old
-        if (Date.now() - state.timestamp < 5 * 60 * 1000) {
-          this.queue = state.queue;
-          console.log('Restored queue state with', this.queue.length, 'items');
-        }
-        sessionStorage.removeItem('openai_queue_state');
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        const state = {
+          queue: this.queue,
+          activeRequests: this.activeRequests,
+          timestamp: Date.now()
+        };
+        sessionStorage.setItem('openai_queue_state', JSON.stringify(state));
       }
     } catch (error) {
-      console.error('Failed to load queue state:', error);
+      console.warn('Failed to save queue state:', error);
+    }
+  }
+
+  private async checkSessionValidity() {
+    try {
+      const response = await fetch('/api/auth/session');
+      if (!response.ok) {
+        throw new Error('Failed to validate session');
+      }
+      const session = await response.json();
+      
+      // Check if session exists and is not expired
+      if (!session || !session.user || !session.expires) {
+        throw new Error('Invalid session');
+      }
+
+      // Check if session is expired or about to expire (within 5 minutes)
+      const expiresAt = new Date(session.expires).getTime();
+      const now = Date.now();
+      if (expiresAt - now < 5 * 60 * 1000) {
+        throw new Error('Session expired or about to expire');
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Session validation failed:', error);
+      // Notify the user about session expiry
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('session-expired', {
+          detail: {
+            message: 'Your session has expired. Please reconnect your Twitter account.',
+            error: error instanceof Error ? error.message : 'Session validation failed'
+          }
+        }));
+      }
+      return false;
     }
   }
 
@@ -181,66 +237,6 @@ export class OpenAIQueueManager {
 
   public removeCleanupHandler(handler: () => void): void {
     this.cleanupHandlers.delete(handler);
-  }
-
-  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number = this.networkTimeoutMs): Promise<T> {
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new NetworkError('Request timed out')), timeoutMs);
-    });
-
-    return Promise.race([promise, timeoutPromise]);
-  }
-
-  private async withRetry<T>(operation: () => Promise<T>, retryCount: number = 0): Promise<T> {
-    try {
-      return await this.withTimeout(operation());
-    } catch (error) {
-      const isRetryable = this.isRetryableError(error);
-      
-      if (isRetryable && retryCount < this.maxRetries) {
-        const delay = this.calculateRetryDelay(retryCount);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return this.withRetry(operation, retryCount + 1);
-      }
-      
-      throw this.normalizeError(error);
-    }
-  }
-
-  private isRetryableError(error: unknown): boolean {
-    if (error instanceof NetworkError) return true;
-    if (error instanceof Error) {
-      // Check for common network error patterns
-      const errorMessage = error.message.toLowerCase();
-      return (
-        errorMessage.includes('network') ||
-        errorMessage.includes('timeout') ||
-        errorMessage.includes('econnrefused') ||
-        errorMessage.includes('econnreset') ||
-        errorMessage.includes('socket hang up') ||
-        errorMessage.includes('429') // Rate limit
-      );
-    }
-    return false;
-  }
-
-  private calculateRetryDelay(retryCount: number): number {
-    // Exponential backoff with jitter
-    const baseDelay = this.retryDelayMs;
-    const maxDelay = 30000; // 30 seconds
-    const exponentialDelay = Math.min(baseDelay * Math.pow(2, retryCount), maxDelay);
-    const jitter = Math.random() * 1000; // Add up to 1 second of random jitter
-    return exponentialDelay + jitter;
-  }
-
-  private normalizeError(error: unknown): Error {
-    if (error instanceof Error) {
-      if (this.isRetryableError(error)) {
-        return new RetryableError(error.message, error);
-      }
-      return error;
-    }
-    return new Error(String(error));
   }
 
   public static getInstance(): OpenAIQueueManager {
@@ -284,7 +280,7 @@ export class OpenAIQueueManager {
         this.processQueue();
       }
     } catch (error) {
-      onError(this.normalizeError(error));
+      onError(error instanceof Error ? error : new Error(String(error)));
     }
   }
 
@@ -335,19 +331,65 @@ export class OpenAIQueueManager {
       this.addCleanupHandler(() => controller.abort('Operation cancelled'));
 
       try {
-        switch (item.type) {
-          case 'chat':
-            result = await this.withRetry(() => 
-              this.processChatRequest(item.data as ChatRequest, controller.signal)
+        if (item.type === 'chat') {
+          result = await retryWithExponentialBackoff(() => 
+            this.processChatRequest(item.data as ChatRequest, controller.signal)
+          );
+        } else if (item.type === 'analyze') {
+          const analyzeData = item.data as AnalyzeRequest;
+          
+          // Use retryWithExponentialBackoff for analyze requests too
+          result = await retryWithExponentialBackoff(async () => {
+            const analysisResult = await analyzePersonality(
+              analyzeData.tweets,
+              convertProfile(analyzeData.profile),
+              analyzeData.prompt,
+              analyzeData.context,
+              undefined, // systemPrompt
+              item.attempts,
+              0.7, // temperature
+              0.6, // presencePenalty
+              0.5, // frequencyPenalty
+              1000, // maxTokens
+              0.9, // topP
+              1, // bestOf
+              analyzeData.currentTuning, // Pass the entire PersonalityTuning object
+              undefined, // customInstructions
+              controller.signal
             );
-            break;
-          case 'analyze':
-            result = await this.withRetry(() => 
-              this.processAnalyzeRequest(item.data as AnalyzeRequest, controller.signal)
+
+            // Validate the result has required fields
+            if (!analysisResult || typeof analysisResult !== 'object') {
+              throw new Error('Invalid analysis result format');
+            }
+
+            const requiredFields = [
+              'traits',
+              'interests',
+              'communicationStyle',
+              'vocabulary',
+              'vocabularyMetrics',
+              'messageArchitecture',
+              'emotionalTone',
+              'topicsAndThemes',
+              'thoughtProcess',
+              'socialBehaviorMetrics'
+            ];
+
+            const missingFields = requiredFields.filter(field => 
+              !analysisResult[field as keyof typeof analysisResult]
             );
-            break;
-          default:
-            throw new Error(`Unknown request type: ${item.type}`);
+
+            if (missingFields.length > 0) {
+              console.error('Missing fields in analysis result:', missingFields);
+              console.error('Analysis result:', analysisResult);
+              throw new Error(`Missing required fields in analysis result: ${missingFields.join(', ')}`);
+            }
+
+            return analysisResult;
+          });
+        } else {
+          throw new Error(`Unknown request type: ${item.type}`);
         }
 
         item.onComplete(result);
@@ -356,43 +398,48 @@ export class OpenAIQueueManager {
       }
     } catch (error) {
       console.error(`Error processing ${item.type} request:`, error);
-      const normalizedError = this.normalizeError(error);
       
-      // Check if we should retry
-      if (this.isRetryableError(normalizedError) && item.attempts < this.maxRetries) {
-        item.attempts++;
-        item.lastAttempt = new Date();
-        const delay = this.calculateRetryDelay(item.attempts - 1);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        this.queue.push(item);
-        console.log(`Requeued ${item.type} request. Attempt ${item.attempts}/${this.maxRetries}`);
-      } else {
-        item.onError(normalizedError);
+      // Enhanced error logging
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+          cause: error.cause
+        });
       }
+      
+      item.onError(error instanceof Error ? error : new Error(String(error)));
     }
   }
 
   private async processChatRequest(data: ChatRequest, signal?: AbortSignal): Promise<ChatCompletionMessage> {
     const { messages, tuning } = data;
     
+    console.log('[OpenAI Queue] Making chat request with config:', {
+      model: "gpt-4o-mini",
+      temperature: tuning?.temperature ?? 0.7,
+      max_tokens: tuning?.maxTokens ?? 500,
+      messageCount: messages.length
+    });
+
     const response = await this.openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages,
       temperature: tuning?.temperature ?? 0.7,
-      max_completion_tokens: tuning?.maxTokens ?? 500,
+      max_tokens: tuning?.maxTokens ?? 500,
       presence_penalty: tuning?.presencePenalty ?? 0.6,
       frequency_penalty: tuning?.frequencyPenalty ?? 0.5,
       top_p: 0.9
     }, { signal });
 
-    return response.choices[0].message;
-  }
+    console.log('[OpenAI Queue] Received chat response:', {
+      status: 'success',
+      responseLength: response.choices[0].message.content?.length || 0,
+      finishReason: response.choices[0].finish_reason
+    });
 
-  private async processAnalyzeRequest(data: AnalyzeRequest, signal?: AbortSignal): Promise<unknown> {
-    const { tweets, profile, prompt, context, currentTuning } = data;
-    // Convert profile to expected format
-    const convertedProfile = convertProfile(profile);
-    return await analyzePersonality(tweets, convertedProfile, prompt, context, undefined, 0, 0, 0, 0, 0, 0, 0, currentTuning, undefined, signal);
+    return response.choices[0].message;
   }
 
   // Utility methods

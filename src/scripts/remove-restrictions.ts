@@ -28,6 +28,10 @@ async function removeRestrictions() {
       // Delete from analytics_results
       await client.query('DELETE FROM analytics_results')
       logger.info('Cleared analytics_results table')
+
+      // Reset cooldown timestamps in users table
+      await client.query('UPDATE users SET last_scrape_time = NULL, last_analysis_time = NULL')
+      logger.info('Reset cooldown timestamps in users table')
       
       // Commit transaction
       await client.query('COMMIT')

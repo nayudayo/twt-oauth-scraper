@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { TwitterProfile } from '../../../types/scraper'
-import { PersonalityAnalysis } from '../../../lib/openai'
+import { PersonalityAnalysis } from '../../../lib/openai/types'
 import { ConsciousnessConfig, DEFAULT_CONSCIOUSNESS, generateConsciousnessInstructions, applyConsciousnessEffects } from '../../../lib/consciousness'
 import { OpenAIQueueManager } from '../../../lib/queue/openai-queue'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '../../../lib/auth/config'
 import { ChatCompletionMessage } from 'openai/resources/chat/completions'
 import { initDB } from '@/lib/db'
-import { CommunicationLevel } from '@/lib/openai'
+import { CommunicationLevel } from '@/lib/openai/openai'
 import { detectSpecialPrompt, formatSpecialPrompt } from './special-prompting'
 
 interface RequestBody {

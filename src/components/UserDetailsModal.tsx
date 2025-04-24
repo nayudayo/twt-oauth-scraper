@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react';
-import type { PersonalityAnalysis } from '@/lib/openai';
+import type { PersonalityAnalysis } from '@/lib/openai/types';
 import Image from 'next/image';
 
 interface UserDetailsModalProps {

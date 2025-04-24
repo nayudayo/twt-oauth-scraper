@@ -1,5 +1,5 @@
 import React from 'react';
-import { CommunicationLevel } from '@/lib/openai';
+import { CommunicationLevel } from '@/lib/openai/openai';
 
 interface CycleButtonProps {
   value: CommunicationLevel;

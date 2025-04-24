@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTweets } from '@/hooks/useTweets';
-import { Spinner } from './ui/spinner';
-import '../styles/glow.css';
+import { Spinner } from '../ui/spinner';
+import '../../styles/glow.css';
 import { Tweet } from '@/types/scraper';
 
 interface TweetListProps {
@@ -112,20 +112,39 @@ export function TweetList({
               </span>
             </div>
             {scrapingProgress && (
-              <div className="flex flex-col gap-1 text-xs">
+              <div className="flex flex-col gap-2 text-xs">
+                {/* Overall Progress */}
                 <div className="flex items-center justify-between">
                   <span>Total Collected: {displayedCount}</span>
                   {scrapingProgress.total && (
                     <span>Target: {scrapingProgress.total}</span>
                   )}
                 </div>
+                
+                {/* Batch Progress */}
                 {scrapingProgress.currentBatch && scrapingProgress.totalBatches && (
-                  <div className="flex items-center justify-between">
-                    <span>Batch Progress: {scrapingProgress.currentBatch}/{scrapingProgress.totalBatches}</span>
-                  </div>
+                  <>
+                    <div className="flex items-center justify-between text-red-400/80">
+                      <span>Current Batch: {scrapingProgress.currentBatch}/{scrapingProgress.totalBatches}</span>
+                      <span>
+                        {Math.round((scrapingProgress.currentBatch / scrapingProgress.totalBatches) * 100)}% Complete
+                      </span>
+                    </div>
+                    {/* Progress Bar */}
+                    <div className="w-full h-1 bg-red-500/10 rounded overflow-hidden">
+                      <div 
+                        className="h-full bg-red-500/30 transition-all duration-300"
+                        style={{ 
+                          width: `${(scrapingProgress.currentBatch / scrapingProgress.totalBatches) * 100}%` 
+                        }}
+                      />
+                    </div>
+                  </>
                 )}
+                
+                {/* Rate Limit Warning */}
                 {scrapingProgress.isRateLimited && (
-                  <div className="text-yellow-500/80">
+                  <div className="text-yellow-500/80 mt-1">
                     Rate limit reached. Resuming in {Math.ceil((scrapingProgress.rateLimitReset || 0) / 1000)}s...
                   </div>
                 )}

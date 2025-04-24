@@ -2,8 +2,7 @@
 
 import { useState, useEffect, Dispatch, SetStateAction } from 'react'
 import { signIn, signOut, useSession } from 'next-auth/react'
-import ChatBox from '@/components/ChatBox'
-import { TerminalModal } from '@/components/TerminalModal'
+import ChatBox from '@/components/main-page/ChatBox'
 import { AccessCodeModal } from '@/components/AccessCodeModal'
 import FlowField from '@/components/FlowField'
 import { Tweet } from '@/types/scraper'
@@ -11,8 +10,6 @@ import { Tweet } from '@/types/scraper'
 export default function Home() {
   const { data: session, status } = useSession()
   const [tweets, setTweets] = useState<Tweet[]>([])
-  const [terminalComplete, setTerminalComplete] = useState(false)
-  const [showContent, setShowContent] = useState(false)
   const [accessVerified, setAccessVerified] = useState(false)
   const [isCheckingAccess, setIsCheckingAccess] = useState(true)
   const [showHeroContent, setShowHeroContent] = useState(false)
@@ -80,8 +77,6 @@ export default function Home() {
   // Reset states when session changes
   useEffect(() => {
     if (!session) {
-      setTerminalComplete(false)
-      setShowContent(false)
       setAccessVerified(false)
       setTweets([])
       // Clear any cached data
@@ -89,13 +84,6 @@ export default function Home() {
       sessionStorage.clear()
     }
   }, [session])
-
-  // Handle terminal completion
-  const handleTerminalComplete = () => {
-    setTerminalComplete(true)
-    // Small delay to ensure terminal fade out starts first
-    setTimeout(() => setShowContent(true), 100)
-  }
 
   // Handle access code verification
   const handleAccessVerified = () => {
@@ -145,8 +133,6 @@ export default function Home() {
     await signOut({ redirect: false })
     
     // Clear local state
-    setTerminalComplete(false)
-    setShowContent(false)
     setAccessVerified(false)
     setTweets([])
 
@@ -206,18 +192,12 @@ export default function Home() {
     return <AccessCodeModal onValidated={handleAccessVerified} />
   }
 
-  // Show terminal if verified but not completed
-  if (!terminalComplete) {
-    return <TerminalModal onComplete={handleTerminalComplete} />
-  }
-
   // Show main content
   return (
     <main className="min-h-screen bg-gradient-to-br from-black via-red-950/20 to-black text-red-500 font-mono">
-      {showContent && (
-        <ChatBox
-          tweets={tweets}
-          profile={{
+      <ChatBox
+        tweets={tweets}
+        profile={{
             name: session?.username || null,
             imageUrl: session?.user?.image || null,
             bio: null,
@@ -227,7 +207,7 @@ export default function Home() {
           onClose={handleTerminateSession}
           onTweetsUpdate={handleTweetsUpdate}
         />
-      )}
+
     </main>
   )
 }

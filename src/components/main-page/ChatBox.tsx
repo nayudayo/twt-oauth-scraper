@@ -1,26 +1,28 @@
-import { useState, useEffect, useRef, Dispatch, SetStateAction, useCallback, memo } from 'react'
-import { Tweet, TwitterProfile, EventData } from '@/types/scraper'
-import { TwitterAPITweet } from '@/lib/twitter/types'
-import { PersonalityAnalysis } from '@/lib/openai'
-import type { Conversation } from '@/types/conversation'
-import type { Message as BaseAPIMessage } from '@/types/conversation'
-import ReactMarkdown from 'react-markdown'
-import { Spinner } from '../components/ui/spinner'
-import '../styles/glow.css'
-import Image from 'next/image'
-import { ConversationList } from './ConversationList'
+import React, { useState, useEffect, useRef, Dispatch, SetStateAction, useCallback, memo } from 'react';
+import { Tweet, TwitterProfile, EventData } from '@/types/scraper';
+import { TwitterAPITweet } from '@/lib/twitter/types';
+import { PersonalityAnalysis, CommunicationLevel, MissingInterestsError, MissingPsychoanalysisError, MissingSocialMetricsError, MissingEmotionalToneError, MissingVocabularyPatternsError, MissingCommunicationPatternsError } from '@/lib/openai/types';
+import type { Conversation } from '@/types/conversation';
+import type { Message as BaseAPIMessage } from '@/types/conversation';
+import ReactMarkdown from 'react-markdown';
+import { Spinner } from '../ui/spinner';
+import '../../styles/glow.css';
+import Image from 'next/image';
+import { ConversationList } from '../ConversationList';
 import { usePersonalityCache } from '@/hooks/usePersonalityCache';
-import { CacheStatusIndicator } from './CacheStatusIndicator';
+import { CacheStatusIndicator } from '../CacheStatusIndicator';
 import { TweetList } from './TweetList';
 import { useQueryClient } from '@tanstack/react-query';
-import { ToggleButton } from './ToggleButton';
-import { CycleButton } from './CycleButton';
-import { CommunicationLevel } from '@/lib/openai';
-import React from 'react';
-import { PsychoanalysisModal } from './PsychoanalysisModal';
-import { TuningUpdateMessage } from './TuningUpdateMessage'
+import { PsychoanalysisModal } from '../PsychoanalysisModal';
+import { TuningUpdateMessage } from '../TuningUpdateMessage';
 import { Virtuoso } from 'react-virtuoso';
+import { ConsentModal, CompletionModal } from '../modals';
+import { AnalysisSummary } from './AnalysisSummary';
+import { FineTuningPanel } from './FineTuningPanel';
 
+// ============================================================================
+// TYPES & INTERFACES
+// ============================================================================
 interface ChatBoxProps {
   tweets: Tweet[]
   profile: TwitterProfile
@@ -51,7 +53,6 @@ interface ScanProgress {
   rateLimitReset?: number
 }
 
-// Update cooldown types
 interface CooldownState {
   scrape: {
     isOnCooldown: boolean;
@@ -63,7 +64,57 @@ interface CooldownState {
   };
 }
 
-// Add these helper functions near the top of the file, after the imports
+interface APIMessage extends BaseAPIMessage {
+  timestamp?: string;
+  tuningInfo?: {
+    tuningType: 'trait' | 'interest' | 'communication';
+    name: string;
+    value: string | boolean;
+  };
+}
+
+interface ChatBoxMessage {
+  text: string;
+  isUser: boolean;
+  timestamp: string;
+  type: 'chat' | 'tuning';
+  tuningInfo?: {
+    tuningType: 'trait' | 'interest' | 'communication';
+    name: string;
+    value: string | boolean;
+  };
+}
+
+// ============================================================================
+// PERSONALITY FINE TUNING TYPES
+// ============================================================================
+interface PersonalityTuning {
+  traitModifiers: { [key: string]: number }  // trait name -> adjustment (-2 to +2)
+  interestWeights: { [key: string]: number } // interest -> weight (0 to 100)
+  communicationStyle: {
+    formality: CommunicationLevel
+    enthusiasm: CommunicationLevel
+    technicalLevel: CommunicationLevel
+    emojiUsage: CommunicationLevel
+    verbosity: CommunicationLevel
+  }
+}
+
+// ============================================================================
+// PERSONALITY ANALYSIS TYPES
+// ============================================================================
+interface APIMessage extends BaseAPIMessage {
+  timestamp?: string;
+  tuningInfo?: {
+    tuningType: 'trait' | 'interest' | 'communication';
+    name: string;
+    value: string | boolean;
+  };
+}
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
 const formatTraitName = (name: string) => {
   if (!name) return '';
   
@@ -149,30 +200,9 @@ const formatInterestName = (interest: string) => {
     .join(' ');
 };
 
-// Extend the base API message type to include our tuning info
-interface APIMessage extends BaseAPIMessage {
-  timestamp?: string;
-  tuningInfo?: {
-    tuningType: 'trait' | 'interest' | 'communication';
-    name: string;
-    value: string | boolean;
-  };
-}
-
-// Define our internal message type
-interface ChatBoxMessage {
-  text: string;
-  isUser: boolean;
-  timestamp: string;
-  type: 'chat' | 'tuning';
-  tuningInfo?: {
-    tuningType: 'trait' | 'interest' | 'communication';
-    name: string;
-    value: string | boolean;
-  };
-}
-
-// Add countdown timer logic
+// ============================================================================
+// HOOKS
+// ============================================================================
 const useCountdown = (initialTime: number) => {
   const [timeLeft, setTimeLeft] = useState(initialTime);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -205,13 +235,14 @@ const useCountdown = (initialTime: number) => {
   return { timeLeft, resetTimer };
 };
 
-// Add the memoized markdown component before the ChatBox component
+// ============================================================================
+// MEMOIZED COMPONENTS
+// ============================================================================
 const MemoizedMarkdown = memo(({ content }: { content: string }) => (
   <ReactMarkdown>{content}</ReactMarkdown>
 ));
 MemoizedMarkdown.displayName = 'MemoizedMarkdown';
 
-// Add the memoized message component
 const ChatMessage = memo(({ message, isUser }: { message: ChatBoxMessage, isUser: boolean }) => (
   <div 
     className={`flex ${isUser ? 'justify-end' : 'justify-start'} p-4`}
@@ -231,6 +262,9 @@ const ChatMessage = memo(({ message, isUser }: { message: ChatBoxMessage, isUser
 ));
 ChatMessage.displayName = 'ChatMessage';
 
+// ============================================================================
+// MAIN CHATBOX COMPONENT
+// ============================================================================
 export default function ChatBox({ tweets: initialTweets, profile, onClose, onTweetsUpdate }: ChatBoxProps) {
   const queryClient = useQueryClient();
   const [messages, setMessages] = useState<ChatBoxMessage[]>([])
@@ -281,22 +315,127 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
   });
   const [messageQueue, setMessageQueue] = useState<ChatBoxMessage[]>([]);
   const MAX_MESSAGES = 1000; // Maximum number of messages to keep in memory
+  const [retryState, setRetryState] = useState<{
+    attempt: number;
+    maxAttempts: number;
+    missingFields: string[];
+  } | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   const scrapeCountdown = useCountdown(0);
   const analyzeCountdown = useCountdown(0);
 
-  // Add cache hook
+  // ============================================================================
+  // PERSONALITY ANALYSIS & TUNING REFS
+  // ============================================================================
+  const latestTuning = useRef<PersonalityTuning>(tuning)
+
+  // ============================================================================
+  // PERSONALITY ANALYSIS & TUNING EFFECTS
+  // ============================================================================
+  // Update tuning ref
+  useEffect(() => {
+    latestTuning.current = tuning
+  }, [tuning])
+
+  // ============================================================================
+  // PERSONALITY ANALYSIS & TUNING CACHE HOOKS
+  // ============================================================================
   const personalityCache = usePersonalityCache({
     username: profile.name || ''
   })
 
-  // Add ref to track latest tuning state
-  const latestTuning = useRef<PersonalityTuning>(tuning)
-
-  // Update ref whenever tuning changes
+  // ============================================================================
+  // PERSONALITY ANALYSIS & TUNING INITIALIZATION
+  // ============================================================================
   useEffect(() => {
-    latestTuning.current = tuning
-  }, [tuning])
+    const loadInitialData = async () => {
+      if (!profile.name || isLoadingInitialData) return;
+      
+      setIsLoadingInitialData(true);
+      try {
+        setLoading(true);
+        
+        // Load personality cache first
+        const cachedAnalysis = await personalityCache.fetchCache();
+        if (cachedAnalysis) {
+          setAnalysis(cachedAnalysis);
+          
+          // Initialize tuning from cache
+          setTuning(prev => ({
+            ...prev,
+            // Set all cached traits to ON by default
+            traitModifiers: cachedAnalysis.traits.reduce((acc: Record<string, number>, trait: { name: string }) => ({
+              ...acc,
+              [trait.name]: 100 // Set to 100 (ON) for all traits
+            }), {}),
+            communicationStyle: {
+              formality: cachedAnalysis.communicationStyle.formality,
+              enthusiasm: cachedAnalysis.communicationStyle.enthusiasm,
+              technicalLevel: cachedAnalysis.communicationStyle.technicalLevel,
+              emojiUsage: cachedAnalysis.communicationStyle.emojiUsage,
+              verbosity: cachedAnalysis.communicationStyle.verbosity ?? 'medium'
+            },
+            interestWeights: cachedAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => {
+              const [interestName, expertiseLevel] = interest.split(':').map(s => s.trim());
+              let weight = 50; // Default to medium
+              
+              if (expertiseLevel) {
+                const level = expertiseLevel.toLowerCase();
+                if (level.includes('advanced') || level.includes('high') || level.includes('strong')) {
+                  weight = 75;
+                } else if (level.includes('intermediate') || level.includes('moderate')) {
+                  weight = 50;
+                } else if (level.includes('basic') || level.includes('low')) {
+                  weight = 25;
+                }
+              }
+              
+              return { ...acc, [interestName]: weight };
+            }, {})
+          }));
+        }
+
+        // Load conversations
+        const response = await fetch('/api/conversations');
+        if (!response.ok) {
+          throw new Error('Failed to fetch conversations');
+        }
+        
+        const data = await response.json();
+        if (data.success && Array.isArray(data.data)) {
+          setConversations(data.data);
+          // Set active conversation if exists
+          const activeConv = data.data.find((c: Conversation) => c.metadata.isActive);
+          if (activeConv) {
+            setActiveConversationId(activeConv.id);
+            // Load messages for active conversation
+            const messagesResponse = await fetch('/api/conversations/' + activeConv.id + '/messages');
+            if (messagesResponse.ok) {
+              const messagesData = await messagesResponse.json();
+              if (messagesData.success && Array.isArray(messagesData.data)) {
+                setMessages(messagesData.data.map((msg: APIMessage) => ({
+                  text: msg.content || '',
+                  isUser: msg.role === 'user',
+                  timestamp: msg.timestamp || new Date().toLocaleTimeString(),
+                  type: 'chat' as const
+                })));
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading initial data:', error);
+        setError(error instanceof Error ? error.message : 'Failed to load initial data');
+      } finally {
+        setLoading(false);
+        setIsLoadingConversations(false);
+        setIsLoadingInitialData(false);
+      }
+    };
+
+    loadInitialData();
+  }, [profile.name]);
 
   // Add escape key handler for modals
   useEffect(() => {
@@ -727,6 +866,7 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     setIsAnalyzing(true);
     setError(null);
     setAnalysisStartTime(Date.now());
+    setRetryState(null); // Reset retry state at start
 
     try {
       // Check cache first
@@ -833,17 +973,27 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           throw new Error('Failed to analyze personality');
         }
 
-        const newAnalysis = await response.json();
+        const data = await response.json();
         
+        // Handle retry states from error responses
+        if (data.error && data.retryState) {
+          setRetryState({
+            attempt: data.retryState.attempt,
+            maxAttempts: data.retryState.maxAttempts,
+            missingFields: data.retryState.missingFields
+          });
+          return;
+        }
+
         // Update tuning with new analysis values
-        const newTraitModifiers = newAnalysis.traits.reduce((acc: Record<string, number>, trait: { name: string; score: number }) => ({
+        const newTraitModifiers = data.traits.reduce((acc: Record<string, number>, trait: { name: string; score: number }) => ({
           ...acc,
           // Convert analysis score (0-10) to UI score (0-100)
           [trait.name]: Math.round(trait.score * 10)
         }), {});
 
         // Initialize weights based on expertise levels in the interest strings
-        const newInterestWeights = newAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => {
+        const newInterestWeights = data.interests.reduce((acc: Record<string, number>, interest: string) => {
           const [interestName, expertiseLevel] = interest.split(':').map(s => s.trim());
           let weight = 50; // Default to medium
           
@@ -869,35 +1019,35 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
             ...newInterestWeights
           },
           communicationStyle: {
-            formality: newAnalysis.communicationStyle.formality ?? 'medium',
-            enthusiasm: newAnalysis.communicationStyle.enthusiasm ?? 'medium',
-            technicalLevel: newAnalysis.communicationStyle.technicalLevel ?? 'medium',
-            emojiUsage: newAnalysis.communicationStyle.emojiUsage ?? 'medium',
-            verbosity: newAnalysis.communicationStyle.verbosity ?? 'medium'
+            formality: data.communicationStyle.formality ?? 'medium',
+            enthusiasm: data.communicationStyle.enthusiasm ?? 'medium',
+            technicalLevel: data.communicationStyle.technicalLevel ?? 'medium',
+            emojiUsage: data.communicationStyle.emojiUsage ?? 'medium',
+            verbosity: data.communicationStyle.verbosity ?? 'medium'
           }
         }));
 
-        setAnalysis(newAnalysis);
+        setAnalysis(data);
         setShowPsychoanalysis(true);
 
         // Save new analysis and tuning to cache
         await personalityCache.saveToCache({
-          ...newAnalysis,
+          ...data,
           traits: (Object.entries(newTraitModifiers) as [string, number][]).map(([name, score]) => ({
             name: name.replace(/[*-]/g, '').trim(),
             score: Math.round(score / 10),
-            explanation: newAnalysis.traits.find((t: { name: string }) => t.name === name)?.explanation?.replace(/[*-]/g, '').trim()
+            explanation: data.traits.find((t: { name: string }) => t.name === name)?.explanation?.replace(/[*-]/g, '').trim()
           })),
           interests: Object.keys(newInterestWeights).map(interest => interest.replace(/[*-]/g, '').trim()),
           communicationStyle: {
-            ...newAnalysis.communicationStyle,
-            description: newAnalysis.communicationStyle.description?.replace(/[*-]/g, '').trim()
+            ...data.communicationStyle,
+            description: data.communicationStyle.description?.replace(/[*-]/g, '').trim()
           },
           thoughtProcess: {
-            ...newAnalysis.thoughtProcess,
-            initialApproach: newAnalysis.thoughtProcess.initialApproach?.replace(/[*-]/g, '').trim(),
-            processingStyle: newAnalysis.thoughtProcess.processingStyle?.replace(/[*-]/g, '').trim(),
-            expressionStyle: newAnalysis.thoughtProcess.expressionStyle?.replace(/[*-]/g, '').trim()
+            ...data.thoughtProcess,
+            initialApproach: data.thoughtProcess.initialApproach?.replace(/[*-]/g, '').trim(),
+            processingStyle: data.thoughtProcess.processingStyle?.replace(/[*-]/g, '').trim(),
+            expressionStyle: data.thoughtProcess.expressionStyle?.replace(/[*-]/g, '').trim()
           }
         });
 
@@ -918,16 +1068,16 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                analysis: newAnalysis,
+                analysis: data,
                 tuning: {
                   traitModifiers: newTraitModifiers,
                   interestWeights: newInterestWeights,
                   communicationStyle: {
-                    formality: newAnalysis.communicationStyle.formality ?? 'medium',
-                    enthusiasm: newAnalysis.communicationStyle.enthusiasm ?? 'medium',
-                    technicalLevel: newAnalysis.communicationStyle.technicalLevel ?? 'medium',
-                    emojiUsage: newAnalysis.communicationStyle.emojiUsage ?? 'medium',
-                    verbosity: newAnalysis.communicationStyle.verbosity ?? 'medium'
+                    formality: data.communicationStyle.formality ?? 'medium',
+                    enthusiasm: data.communicationStyle.enthusiasm ?? 'medium',
+                    technicalLevel: data.communicationStyle.technicalLevel ?? 'medium',
+                    emojiUsage: data.communicationStyle.emojiUsage ?? 'medium',
+                    verbosity: data.communicationStyle.verbosity ?? 'medium'
                   }
                 }
               })
@@ -962,14 +1112,71 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
 
     } catch (error: unknown) {
       console.error('Analysis error:', error);
-      setError(error instanceof Error ? error.message : 'Failed to analyze personality');
+      
+      // Handle specific error types with unified retry state
+      if (error instanceof MissingInterestsError) {
+        setRetryState({
+          attempt: 1,
+          maxAttempts: 3,
+          missingFields: ['interests']
+        });
+      } else if (error instanceof MissingPsychoanalysisError) {
+        setRetryState({
+          attempt: 1,
+          maxAttempts: 3,
+          missingFields: ['psychoanalysis']
+        });
+      } else if (error instanceof MissingSocialMetricsError) {
+        setRetryState({
+          attempt: 1,
+          maxAttempts: 3,
+          missingFields: ['social metrics']
+        });
+      } else if (error instanceof MissingEmotionalToneError) {
+        setRetryState({
+          attempt: 1,
+          maxAttempts: 3,
+          missingFields: ['emotional tone']
+        });
+      } else if (error instanceof MissingVocabularyPatternsError) {
+        setRetryState({
+          attempt: 1,
+          maxAttempts: 3,
+          missingFields: ['vocabulary patterns']
+        });
+      } else if (error instanceof MissingCommunicationPatternsError) {
+        setRetryState({
+          attempt: 1,
+          maxAttempts: 3,
+          missingFields: ['communication patterns']
+        });
+      } else {
+        setError(error instanceof Error ? error.message : 'Failed to analyze personality');
+      }
     } finally {
       setIsAnalyzing(false);
       setAnalysisStartTime(null);
     }
   };
 
-    // Update handleUpdateAnalysis to handle cooldowns
+  // Update the retry state effect
+  useEffect(() => {
+    if (retryState) {
+      const timeoutId = setTimeout(() => {
+        setRetryState(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            attempt: prev.attempt + 1
+          };
+        });
+      }, 2000); // Match the retry delay in openai.ts
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [retryState]);
+
+  // Update handleUpdateAnalysis to handle cooldowns
   const handleUpdateAnalysis = async () => {
     const canProceed = await checkCooldown('analyze');
     if (!canProceed) {
@@ -1734,83 +1941,6 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     adjustTextareaHeight()
   }, [input])
 
-  // Load conversations and personality cache on mount
-  useEffect(() => {
-    const loadInitialData = async () => {
-      if (!profile.name || isLoadingInitialData) return;
-      
-      setIsLoadingInitialData(true);
-      try {
-        setLoading(true);
-        
-        // Load personality cache first
-        const cachedAnalysis = await personalityCache.fetchCache();
-        if (cachedAnalysis) {
-          setAnalysis(cachedAnalysis);
-          
-          // Initialize tuning from cache
-          setTuning(prev => ({
-            ...prev,
-            // Set all cached traits to ON by default
-            traitModifiers: cachedAnalysis.traits.reduce((acc: Record<string, number>, trait: { name: string }) => ({
-              ...acc,
-              [trait.name]: 100 // Set to 100 (ON) for all traits
-            }), {}),
-            communicationStyle: {
-              formality: cachedAnalysis.communicationStyle.formality,
-              enthusiasm: cachedAnalysis.communicationStyle.enthusiasm,
-              technicalLevel: cachedAnalysis.communicationStyle.technicalLevel,
-              emojiUsage: cachedAnalysis.communicationStyle.emojiUsage,
-              verbosity: cachedAnalysis.communicationStyle.verbosity ?? 'medium'
-            },
-            interestWeights: cachedAnalysis.interests.reduce((acc: Record<string, number>, interest: string) => {
-              const [interestName] = interest.split(':').map(s => s.trim());
-              return { ...acc, [interestName]: 100 }; // Set all interests to ON by default
-            }, {})
-          }));
-        }
-
-        // Load conversations
-        const response = await fetch('/api/conversations');
-        if (!response.ok) {
-          throw new Error('Failed to fetch conversations');
-        }
-        
-        const data = await response.json();
-        if (data.success && Array.isArray(data.data)) {
-          setConversations(data.data);
-          // Set active conversation if exists
-          const activeConv = data.data.find((c: Conversation) => c.metadata.isActive);
-          if (activeConv) {
-            setActiveConversationId(activeConv.id);
-            // Load messages for active conversation
-            const messagesResponse = await fetch('/api/conversations/' + activeConv.id + '/messages');
-            if (messagesResponse.ok) {
-              const messagesData = await messagesResponse.json();
-              if (messagesData.success && Array.isArray(messagesData.data)) {
-                setMessages(messagesData.data.map((msg: APIMessage) => ({
-                  text: msg.content || '',
-                  isUser: msg.role === 'user',
-                  timestamp: msg.timestamp || new Date().toLocaleTimeString(),
-                  type: 'chat' as const
-                })));
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error loading initial data:', error);
-        setError(error instanceof Error ? error.message : 'Failed to load initial data');
-      } finally {
-        setLoading(false);
-        setIsLoadingConversations(false);
-        setIsLoadingInitialData(false);
-      }
-    };
-
-    loadInitialData();
-  }, [profile.name]);
-
   // Remove the old separate loading effects
   // ... existing code ...
 
@@ -2111,11 +2241,50 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
     }
   }, [messages.length, activeConversationId]);
 
+  // Add session expiry handler
+  useEffect(() => {
+    const handleSessionExpiry = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      setSessionExpired(true);
+      setError(customEvent.detail?.message || 'Session expired - please reconnect your Twitter account');
+      // Clear sensitive data
+      setMessages([]);
+      setAnalysis(null);
+      // Force cache invalidation
+      queryClient.invalidateQueries();
+    };
+
+    window.addEventListener('session-expired', handleSessionExpiry);
+    return () => window.removeEventListener('session-expired', handleSessionExpiry);
+  }, [queryClient]);
+
+  // Add reconnect handler
+  const handleReconnect = useCallback(() => {
+    window.location.href = '/api/auth/signin';
+  }, []);
+
   return (
-    <>
-      {/* Main Container - Mobile First Layout */}
-      <div className="flex flex-col w-full min-h-screen pt-5 sm:pt-9 md:pt-9 lg:pt-16 px-2 sm:px-5 pb-6 gap-4 sm:gap-6 md:gap-8 mobile-layout relative z-0 overflow-x-hidden">
-        {/* Chat Interface */}
+    <> {/* Mobile layout */}
+      <div className={`flex flex-col w-full min-h-screen pt-5 sm:pt-9 md:pt-9 lg:pt-16 px-2 sm:px-5 pb-6 gap-4 sm:gap-6 md:gap-8 mobile-layout relative z-0 overflow-x-hidden ${sessionExpired ? 'pointer-events-none opacity-50' : ''}`}>
+        {/* Session Expired Alert */}
+        {sessionExpired && (
+          <div className="fixed top-0 left-0 right-0 z-50 bg-red-500/10 border-b border-red-500/20 p-4 backdrop-blur-sm">
+            <div className="max-w-4xl mx-auto flex items-center justify-between">
+              <div className="flex items-center gap-2 text-red-400/90">
+                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span>Session expired - please reconnect your Twitter account</span>
+              </div>
+              <button
+                onClick={handleReconnect}
+                className="px-4 py-2 bg-red-500/10 border border-red-500/20 rounded hover:bg-red-500/20 text-red-400/90 text-sm"
+              >
+                Reconnect
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Chat Interface Panel */}
         <div className="w-full backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow ancient-border rune-pattern overflow-hidden relative z-10 mb-4 sm:mb-6 md:mb-8">
           <div className="flex flex-col h-[85vh] sm:h-[80vh] md:h-[75vh]">
             {/* Chat Header */}
@@ -2253,20 +2422,9 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
         {/* System Controls Panel */}
         <div className="w-full bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern mb-4 sm:mb-6 md:mb-8">
           <div className="flex-none border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
-                <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">SYSTEM CONTROLS</h3>
-              </div>
-              {/* Add loading indicator */}
-              {loading && (
-                <div className="flex items-center gap-2 text-red-500/90">
-                  <Spinner size="sm" />
-                  <span className="text-xs tracking-wider">
-                    {scrapingElapsedTime ? `ELAPSED: ${scrapingElapsedTime}` : 'INITIALIZING...'}
-                  </span>
-                </div>
-              )}
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
+              <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">SYSTEM CONTROLS</h3>
             </div>
             <div className="flex flex-col gap-2">
               {renderActionButton('scrape')}
@@ -2289,158 +2447,21 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           </div>
         </div>
 
-        {/* Personality Fine-Tuning Panel */}
+        {/* Personality Fine-Tuning Panel - Mobile */}
         <div className="w-full bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern mb-4 sm:mb-6 md:mb-8">
-          <div className="flex-none border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
-                <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">PERSONALITY FINE-TUNING</h3>
-              </div>
-              {analysis && (
-                <CacheStatusIndicator
-                  isFresh={personalityCache.isFresh}
-                  lastUpdated={personalityCache.lastUpdated}
-                  isLoading={personalityCache.isLoading}
-                  onRefresh={handleAnalyze}
-                  className="ml-4"
-                />
-              )}
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[60vh] sm:max-h-[50vh] md:max-h-[40vh] relative">
-            {analysis ? (
-              <div className="space-y-6">
-                {/* Personality Traits */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box" />
-                    <span className="glow-text">Key Traits</span>
-                  </h4>
-                  <div className="space-y-4">
-                    {analysis.traits.map((trait: { name: string; score: number; explanation: string }, index: number) => {
-                      return (
-                        <div key={`trait-${index}-${trait.name}`} className="space-y-2 hover-glow">
-                          <ToggleButton
-                            value={Boolean(tuning.traitModifiers[trait.name] ?? Math.round(trait.score * 10))}
-                            onChange={(enabled) => handleTraitAdjustment(trait.name, enabled)}
-                            label={trait.name}
-                            className="w-full"
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Interests Section */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                    <span className="glow-text">Interests</span>
-                  </h4>
-                  <div className="space-y-3">
-                    {analysis?.interests
-                      .filter(interest => {
-                        // Filter out social behavior metrics and other non-interest items
-                        const nonInterests = [
-                          'Content Sharing Patterns',
-                          'Score',
-                          'Interaction Style',
-                          'Platform Behavior',
-                          'Oversharer',
-                          'Reply Guy',
-                          'Viral Chaser',
-                          'Thread Maker',
-                          'Retweeter',
-                          'Hot Takes',
-                          'Joker',
-                          'Debater',
-                          'Doom Poster',
-                          'Early Adopter',
-                          'Knowledge Dropper',
-                          'Hype Beast'
-                        ];
-                        const [interestName] = interest.split(':').map(s => s.trim());
-                        return !nonInterests.includes(interestName);
-                      })
-                      .map((interest: string, index: number) => {
-                        const [interestName] = interest.split(':').map(s => s.trim());
-                        return (
-                          <div key={`interest-${index}-${interestName}`} className="space-y-1">
-                            <ToggleButton
-                              value={Boolean(tuning.interestWeights[interestName] || 0)}
-                              onChange={(enabled) => handleInterestWeight(interestName, enabled)}
-                              label={interestName}
-                              className={`w-full ${tuning.interestWeights[interestName] === 0 ? 'opacity-50' : ''}`}
-                            />
-                          </div>
-                        );
-                      })}
-                  </div>
-                </div>
-
-                {/* Communication Style */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                    <span className="glow-text">Communication Style</span>
-                  </h4>
-                  <div className="space-y-3">
-                    <div className="space-y-1 hover-glow">
-                      <CycleButton
-                        value={tuning.communicationStyle.formality}
-                        onChange={(value) => handleStyleAdjustment('formality', value)}
-                        label="Formality"
-                        className="w-full"
-                      />
-                    </div>
-
-                    <div className="space-y-1 hover-glow">
-                      <CycleButton
-                        value={tuning.communicationStyle.technicalLevel}
-                        onChange={(value) => handleStyleAdjustment('technicalLevel', value)}
-                        label="Technical Level"
-                        className="w-full"
-                      />
-                    </div>
-
-                    <div className="space-y-1 hover-glow">
-                      <CycleButton
-                        value={tuning.communicationStyle.enthusiasm}
-                        onChange={(value) => handleStyleAdjustment('enthusiasm', value)}
-                        label="Enthusiasm"
-                        className="w-full"
-                      />
-                    </div>
-
-                    <div className="space-y-1 hover-glow">
-                      <CycleButton
-                        value={tuning.communicationStyle.emojiUsage}
-                        onChange={(value) => handleStyleAdjustment('emojiUsage', value)}
-                        label="Emoji Usage"
-                        className="w-full"
-                      />
-                    </div>
-
-                    <div className="space-y-1 hover-glow">
-                      <CycleButton
-                        value={tuning.communicationStyle.verbosity}
-                        onChange={(value) => handleStyleAdjustment('verbosity', value)}
-                        label="Verbosity"
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-red-500/70 italic text-center glow-text">
-                Run personality analysis to enable fine-tuning
-              </div>
-            )}
-          </div>
+          <FineTuningPanel
+            analysis={analysis}
+            tuning={tuning}
+            onTraitAdjustment={handleTraitAdjustment}
+            onInterestWeight={handleInterestWeight}
+            onStyleAdjustment={handleStyleAdjustment}
+            isCacheFresh={personalityCache.isFresh}
+            lastCacheUpdate={personalityCache.lastUpdated}
+            isCacheLoading={personalityCache.isLoading}
+            onRefreshCache={handleAnalyze}
+            containerClassName="max-h-[60vh] sm:max-h-[50vh] md:max-h-[40vh]"
+            variant="mobile"
+          />
         </div>
 
         {/* Personality Analysis Panel */}
@@ -2793,276 +2814,71 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
         </div>
 
         {/* Mobile Consent Modal */}
-        {showConsent && (
-          <div 
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 lg:hidden"
-            onClick={() => {
-              setShowConsent(false)
-              if (loading) handleCancelScraping()
-            }}
-          >
-            <div 
-              className="bg-black/40 backdrop-blur-md px-6 py-4 rounded-lg shadow-2xl w-full max-w-md border border-red-500/20 hover-glow float max-h-[90vh] overflow-y-auto"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-2 mb-4 border-b border-red-500/20 pb-4 glow-border">
-                <div className="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                <h3 className="text-lg font-bold text-red-500/90 tracking-wider glow-text">
-                  SYSTEM AUTHORIZATION REQUIRED
-                </h3>
-              </div>
-              <div className="space-y-4 text-red-400/90">
-                <p className="uppercase tracking-wider glow-text">
-                  This operation will collect the following data:
-                </p>
-                <ul className="list-disc pl-5 space-y-2 text-red-300/80">
-                  <li className="hover-text-glow">Profile metrics and identifiers</li>
-                  <li className="hover-text-glow">Recent transmission logs</li>
-                  <li className="hover-text-glow">Associated media content</li>
-                </ul>
-                <p className="text-red-300/80 hover-text-glow">
-                  Estimated operation time: 1-2 minutes. Maintain connection stability during the process.
-                </p>
-              </div>
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  onClick={() => setShowConsent(false)}
-                  className="px-4 py-2 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs hover-glow"
-                >
-                  Abort
-                </button>
-                <button
-                  onClick={startScraping}
-                  className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow"
-                >
-                  Authorize
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <ConsentModal 
+          isOpen={showConsent}
+          onClose={() => setShowConsent(false)}
+          onAuthorize={startScraping}
+          loading={loading}
+          onCancelScraping={handleCancelScraping}
+        />
 
         {/* Mobile Completion Modal */}
-        {showComplete && (
-          <div 
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 lg:hidden"
-            onClick={handleCloseModal}
-          >
-            <div 
-              className="bg-black/40 backdrop-blur-md px-6 py-4 rounded-lg shadow-2xl w-full max-w-md border border-red-500/20 hover-glow float max-h-[90vh] overflow-y-auto"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between mb-4 border-b border-red-500/20 pb-4 glow-border">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                  <h3 className="text-lg font-bold tracking-wider text-red-500/90 glow-text">OPERATION COMPLETE</h3>
-                </div>
-                <button
-                  onClick={handleCloseModal}
-                  className="text-red-500/70 hover:text-red-500/90 transition-colors hover-text-glow"
-                >
-                  <span className="sr-only">Close</span>
-                  ×
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="text-red-400/90">
-                  <p className="uppercase tracking-wider mb-2 glow-text">Data Collection Summary:</p>
-                  <ul className="list-disc pl-5 space-y-1 text-red-300/80">
-                    <li className="hover-text-glow">{accumulatedTweets.length} posts collected</li>
-                  </ul>
-                </div>
-              
-                <div className="flex justify-end">
-                  <button
-                    onClick={handleCloseModal}
-                    className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow"
-                  >
-                    Close Terminal
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        <CompletionModal 
+          isOpen={showComplete}
+          onClose={handleCloseModal}
+          tweetCount={accumulatedTweets.length}
+        />
       </div>
 
-      {/* Desktop Layout - Preserve Existing */}
+      {/* ============================================================================
+          DESKTOP LAYOUT
+          ============================================================================ */}
       <div className="hidden lg:block desktop-layout">
         {/* Left Side Panels Container */}
         <div className="fixed top-20 left-0 md:left-6 lg:left-8 flex flex-col gap-6 h-[calc(100vh-104px)] w-[26vw] lg:w-[22vw] xl:w-[20vw] min-w-[280px] max-w-[400px] px-4 md:px-0 overflow-y-auto md:overflow-visible transition-all duration-300">
           {/* System Controls Panel */}
           <div className="w-full bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern">
             <div className="flex-none border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
-              <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">SYSTEM CONTROLS</h3>
-            </div>
-            <div className="flex flex-col gap-2">
-              {renderActionButton('scrape')}
-              {(!analysis || isAnalyzing) ? null : renderActionButton('analyze')}
-              {accumulatedTweets.length > 0 && (
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
+                <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">SYSTEM CONTROLS</h3>
+              </div>
+              <div className="flex flex-col gap-2">
+                {renderActionButton('scrape')}
+                {(!analysis || isAnalyzing) ? null : renderActionButton('analyze')}
+                {accumulatedTweets.length > 0 && (
+                  <button
+                    onClick={handleClearData}
+                    className="w-full font-medium px-3 py-2 border border-red-500/30 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs ancient-text"
+                  >
+                    CLEAR DATA
+                  </button>
+                )}
                 <button
-                  onClick={handleClearData}
+                  onClick={onClose}
                   className="w-full font-medium px-3 py-2 border border-red-500/30 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs ancient-text"
                 >
-                  CLEAR DATA
+                  TERMINATE SESSION
                 </button>
-              )}
-              <button
-                onClick={onClose}
-                className="w-full font-medium px-3 py-2 border border-red-500/30 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs ancient-text"
-              >
-                TERMINATE SESSION
-              </button>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Personality Fine-Tuning Panel */}
+          {/* Personality Fine-Tuning Panel */}
           <div className="w-full flex-1 bg-black/40 backdrop-blur-md border border-red-500/10 rounded-lg shadow-2xl flex flex-col hover-glow ancient-border rune-pattern overflow-hidden min-h-0">
-            <div className="flex-none border-b border-red-500/10 p-4 bg-black/40 backdrop-blur-sm cryptic-shadow">
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20" />
-              <h3 className="text-sm font-bold text-red-500/90 tracking-wider ancient-text">PERSONALITY FINE-TUNING</h3>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6 backdrop-blur-sm bg-black/20 dynamic-bg">
-            {analysis ? (
-              <div className="space-y-6">
-                {/* Personality Traits */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box" />
-                    <span className="glow-text">Key Traits</span>
-                  </h4>
-                  <div className="space-y-4">
-                    {analysis.traits.map((trait: { name: string; score: number; explanation: string }, index: number) => {
-                      return (
-                        <div key={`trait-${index}-${trait.name}`} className="space-y-2 hover-glow">
-                          <ToggleButton
-                            value={Boolean(tuning.traitModifiers[trait.name] ?? Math.round(trait.score * 10))}
-                            onChange={(enabled) => handleTraitAdjustment(trait.name, enabled)}
-                            label={trait.name}
-                            className="w-full"
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Interests Section */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                    <span className="glow-text">Interests</span>
-                  </h4>
-                  <div className="space-y-3">
-                    {analysis?.interests
-                      .filter(interest => {
-                        // Filter out social behavior metrics and other non-interest items
-                        const nonInterests = [
-                          'Content Sharing Patterns',
-                          'Score',
-                          'Interaction Style',
-                          'Platform Behavior',
-                          'Oversharer',
-                          'Reply Guy',
-                          'Viral Chaser',
-                          'Thread Maker',
-                          'Retweeter',
-                          'Hot Takes',
-                          'Joker',
-                          'Debater',
-                          'Doom Poster',
-                          'Early Adopter',
-                          'Knowledge Dropper',
-                          'Hype Beast'
-                        ];
-                        const [interestName] = interest.split(':').map(s => s.trim());
-                        return !nonInterests.includes(interestName);
-                      })
-                      .map((interest: string, index: number) => {
-                        const [interestName] = interest.split(':').map(s => s.trim());
-                        return (
-                          <div key={`interest-${index}-${interestName}`} className="space-y-1">
-                            <ToggleButton
-                              value={Boolean(tuning.interestWeights[interestName] || 0)}
-                              onChange={(enabled) => handleInterestWeight(interestName, enabled)}
-                              label={interestName}
-                              className={`w-full ${tuning.interestWeights[interestName] === 0 ? 'opacity-50' : ''}`}
-                            />
-                          </div>
-                        );
-                      })}
-                  </div>
-                </div>
-
-                {/* Communication Style */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                    <span className="glow-text">Communication Style</span>
-                  </h4>
-                  <div className="space-y-3">
-                    <div className="space-y-1 hover-glow">
-                      <CycleButton
-                        value={tuning.communicationStyle.formality}
-                        onChange={(value) => handleStyleAdjustment('formality', value)}
-                        label="Formality"
-                        className="w-full"
-                      />
-                    </div>
-
-                    <div className="space-y-1 hover-glow">
-                      <CycleButton
-                        value={tuning.communicationStyle.technicalLevel}
-                        onChange={(value) => handleStyleAdjustment('technicalLevel', value)}
-                        label="Technical Level"
-                        className="w-full"
-                      />
-                    </div>
-
-                    <div className="space-y-1 hover-glow">
-                      <CycleButton
-                        value={tuning.communicationStyle.enthusiasm}
-                        onChange={(value) => handleStyleAdjustment('enthusiasm', value)}
-                        label="Enthusiasm"
-                        className="w-full"
-                      />
-                    </div>
-
-                    <div className="space-y-1 hover-glow">
-                      <CycleButton
-                        value={tuning.communicationStyle.emojiUsage}
-                        onChange={(value) => handleStyleAdjustment('emojiUsage', value)}
-                        label="Emoji Usage"
-                        className="w-full"
-                      />
-                    </div>
-
-                    <div className="space-y-1 hover-glow">
-                      <CycleButton
-                        value={tuning.communicationStyle.verbosity}
-                        onChange={(value) => handleStyleAdjustment('verbosity', value)}
-                        label="Verbosity"
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-red-500/70 italic text-center glow-text">
-                Run personality analysis to enable fine-tuning
-              </div>
-            )}
+            <FineTuningPanel
+              analysis={analysis}
+              tuning={tuning}
+              onTraitAdjustment={handleTraitAdjustment}
+              onInterestWeight={handleInterestWeight}
+              onStyleAdjustment={handleStyleAdjustment}
+              isCacheFresh={personalityCache.isFresh}
+              lastCacheUpdate={personalityCache.lastUpdated}
+              isCacheLoading={personalityCache.isLoading}
+              onRefreshCache={handleAnalyze}
+            />
           </div>
         </div>
-      </div>
 
         {/* Right Side Panels Container */}
         <div className="fixed top-20 right-0 md:right-6 lg:right-8 h-[calc(100vh-104px)] w-[26vw] lg:w-[22vw] xl:w-[20vw] min-w-[280px] max-w-[400px] flex flex-col gap-6 px-4 md:px-0 overflow-y-auto md:overflow-hidden transition-all duration-300">
@@ -3137,299 +2953,21 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-6 backdrop-blur-sm bg-black/20 dynamic-bg max-h-[50vh] sm:max-h-[45vh] md:max-h-[40vh] relative touch-action-pan-y">
-              {!analysis ? (
-                <div className="text-center">
-                  {isAnalyzing && (
-                    <div className="mb-4 text-red-500/90 tracking-wider uppercase glow-text flex items-center justify-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-lg shadow-red-500/20" />
-                      <span>ANALYZING PERSONALITY</span>
-                      {analysisElapsedTime && (
-                        <span className="text-red-500/70">[{analysisElapsedTime}]</span>
-                      )}
-                    </div>
-                  )}
-                  <p className="text-red-500/70 mb-4 glow-text">
-                    Ready to analyze {accumulatedTweets.length} tweets for personality insights
-                  </p>
-                  <button
-                    onClick={handleAnalyze}
-                    disabled={isAnalyzing}
-                    className={`px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed hover-glow ${showAnalysisPrompt && !isAnalyzing ? 'pulse-action' : ''}`}
-                  >
-                    {isAnalyzing ? (
-                      <div className="flex items-center gap-2">
-                        <Spinner size="sm" />
-                        <span>ANALYZING</span>
-                      </div>
-                    ) : (
-                      'START ANALYSIS'
-                    )}
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* Summary Section */}
-                  <div className="bg-black/20 text-left rounded-lg p-4 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-3">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                      <span className="ancient-text">Summary</span>
-                    </h4>
-                    <div className="prose prose-red prose-invert max-w-none hover-text-glow">
-                      <ReactMarkdown>{analysis.summary}</ReactMarkdown>
-                    </div>
-                  </div>
-
-                  {/* Key Traits Section */}
-                  <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                      <span className="ancient-text text-base">Active Traits</span>
-                    </h4>
-                    <div className="space-y-6">
-                      {analysis.traits
-                        .filter(trait => tuning.traitModifiers[trait.name] > 0) // Only show enabled traits
-                        .map((trait: { name: string; score: number; explanation: string }, index: number) => (
-                          <div key={`trait-${index}-${trait.name}`} className="hover-glow">
-                            <div className="flex justify-between mb-2 items-center">
-                              <span className="text-red-400/90 tracking-wide text-[15px] capitalize font-bold">
-                                {formatTraitName(trait.name)}
-                              </span>
-                            </div>
-                            <div className="text-[14px] leading-relaxed text-red-300/80 prose prose-red prose-invert max-w-none hover-text-glow pl-2 border-l border-red-500/10">
-                              <ReactMarkdown>{formatTraitExplanation(trait.explanation)}</ReactMarkdown>
-                            </div>
-                          </div>
-                        ))}
-                      {analysis.traits.filter(trait => tuning.traitModifiers[trait.name] > 0).length === 0 && (
-                        <div className="text-red-400/60 text-sm italic text-center">
-                          No active traits selected
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Interests Section */}
-                  <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                      <span className="ancient-text text-base">Active Interests</span>
-                    </h4>
-                    <div className="flex flex-wrap gap-2.5 font-bold">
-                      {analysis.interests
-                        .filter(interest => {
-                          // Filter out social behavior metrics and other non-interest items
-                          const nonInterests = [
-                            'Content Sharing Patterns',
-                            'Score',
-                            'Interaction Style',
-                            'Platform Behavior',
-                            'Oversharer',
-                            'Reply Guy',
-                            'Viral Chaser',
-                            'Thread Maker',
-                            'Retweeter',
-                            'Hot Takes',
-                            'Joker',
-                            'Debater',
-                            'Doom Poster',
-                            'Early Adopter',
-                            'Knowledge Dropper',
-                            'Hype Beast'
-                          ];
-                          const [interestName] = interest.split(':').map(s => s.trim());
-                          return !nonInterests.includes(interestName) && tuning.interestWeights[interestName] > 0;
-                        })
-                        .map((interest: string) => {
-                          const [interestName] = interest.split(':').map(s => s.trim());
-                          return (
-                            <button 
-                              key={interestName}
-                              className="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-md text-red-300/90 text-[14px] tracking-wide hover:bg-red-500/10 hover:border-red-500/30 transition-colors duration-200 hover-glow"
-                            >
-                              {formatInterestName(interestName)}
-                            </button>
-                          );
-                        })}
-                      {analysis.interests
-                        .filter(interest => {
-                          const [interestName] = interest.split(':').map(s => s.trim());
-                          return tuning.interestWeights[interestName] > 0;
-                        }).length === 0 && (
-                        <div className="text-red-400/60 text-sm italic text-center w-full">
-                          No active interests selected
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Communication Style Section */}
-                  <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                      <span className="ancient-text text-base">Communication Style</span>
-                    </h4>
-                    <div className="prose prose-red prose-invert max-w-none hover-text-glow prose-p:text-red-300/90 prose-p:leading-relaxed prose-p:text-[15px] mb-6">
-                      <ReactMarkdown>{analysis.communicationStyle.description}</ReactMarkdown>
-                    </div>
-                    <div className="space-y-4 bg-black/20 rounded-lg p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
-                        <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
-                          Formality: {analysis.communicationStyle.formality === 'high' ? 'Very formal and professional' : 
-                                     analysis.communicationStyle.formality === 'medium' ? 'Balanced formality' : 
-                                     'Casual and relaxed'}
-                        </span>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
-                        <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
-                          Enthusiasm: {analysis.communicationStyle.enthusiasm === 'high' ? 'Very enthusiastic and energetic' :
-                                      analysis.communicationStyle.enthusiasm === 'medium' ? 'Balanced enthusiasm' :
-                                      'Reserved and measured'}
-                        </span>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
-                        <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
-                          Technical Level: {analysis.communicationStyle.technicalLevel === 'high' ? 'Advanced technical language' :
-                                          analysis.communicationStyle.technicalLevel === 'medium' ? 'Mix of technical and simple terms' :
-                                          'Simple, everyday language'}
-                        </span>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
-                        <span className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow">
-                          Emoji Usage: {analysis.communicationStyle.emojiUsage === 'high' ? 'Frequent emojis (3+)' :
-                                       analysis.communicationStyle.emojiUsage === 'medium' ? 'Occasional emojis (1-2)' :
-                                       'No emojis'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Topics & Themes Section */}
-                  <div className="bg-black/20 rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                      <span className="ancient-text text-base">Topics & Themes</span>
-                    </h4>
-                    <ul className="list-none space-y-3 bg-black/20 rounded-lg p-4">
-                      {analysis.topicsAndThemes
-                        .filter(topic => {
-                          // Filter out social behavior metrics and other non-interest items
-                          const nonInterests = [
-                            'Content Sharing Patterns',
-                            'Score',
-                            'Interaction Style',
-                            'Platform Behavior',
-                            'Oversharer',
-                            'Reply Guy',
-                            'Viral Chaser',
-                            'Thread Maker',
-                            'Retweeter',
-                            'Hot Takes',
-                            'Joker',
-                            'Debater',
-                            'Doom Poster',
-                            'Early Adopter',
-                            'Knowledge Dropper',
-                            'Hype Beast'
-                          ];
-                          return !nonInterests.some(metric => topic.includes(metric));
-                        })
-                        .map((topic: string, i: number) => (
-                          <li key={i} className="flex items-center gap-3 text-red-300/90 hover-text-glow group">
-                            <div className="w-1.5 h-1.5 rounded-full bg-red-500/30 group-hover:bg-red-500/50 transition-colors duration-200"></div>
-                            <span className="text-[14px] leading-relaxed tracking-wide font-bold">
-                              {topic ? topic.replace(/[*-]/g, '') : topic}
-                            </span>
-                          </li>
-                        ))}
-                    </ul>
-                  </div>
-
-                  {/* Emotional Tone Section */}
-                  <div className="bg-black/20 text-left rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                      <span className="ancient-text text-base">Emotional Tone</span>
-                    </h4>
-                    <div className="space-y-4 bg-black/20 rounded-lg p-4">
-                      {analysis.emotionalTone.split(' - ').map((section, index) => {
-                        const [title, content] = section.split(' involves ').length > 1 
-                          ? section.split(' involves ')
-                          : section.split(' shows ').length > 1
-                          ? section.split(' shows ')
-                          : section.split(' is ');
-                        
-                        return (
-                          <div key={`tone-${index}`} className="flex items-start gap-3">
-                            <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
-                            <div className="flex-1">
-                              <span className="text-red-400/90 font-medium">{title}</span>
-                              <p className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow mt-1">
-                                {content}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Thought Process Section */}
-                  <div className="bg-black/20 text-left rounded-lg p-6 backdrop-blur-sm border border-red-500/10 hover-glow ancient-border">
-                    <h4 className="text-sm font-bold text-red-500/90 tracking-wider uppercase flex items-center gap-2 mb-4">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg shadow-red-500/20"></div>
-                      <span className="ancient-text text-base">Response Patterns</span>
-                    </h4>
-                    <div className="space-y-6">
-                      {/* Core Response Patterns */}
-                      <div className="space-y-3 bg-black/20 rounded-lg p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
-                          <div className="flex-1">
-                            <span className="text-red-400/90 font-medium">Initial Approach</span>
-                            <p className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow mt-1">
-                              {analysis.thoughtProcess?.initialApproach || 'Balances quick insights with careful consideration'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-3">
-                          <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
-                          <div className="flex-1">
-                            <span className="text-red-400/90 font-medium">Processing Style</span>
-                            <p className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow mt-1">
-                              {analysis.thoughtProcess?.processingStyle || 'Combines analytical thinking with practical insights'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-3">
-                          <div className="w-1.5 h-1.5 rounded-full bg-red-500/20 glow-box mt-1.5"></div>
-                          <div className="flex-1">
-                            <span className="text-red-400/90 font-medium">Expression Style</span>
-                            <p className="text-red-300/90 text-[14px] leading-relaxed hover-text-glow mt-1">
-                              {analysis.thoughtProcess?.expressionStyle || 'Adapts communication style to context while maintaining authenticity'}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {error && (
-                <div className="mt-4 p-4 bg-red-500/5 border border-red-500/20 rounded backdrop-blur-sm text-red-400/90">
-                  {error}
-                </div>
-              )}
-            </div>
+            <AnalysisSummary 
+              analysis={analysis}
+              tuning={tuning}
+              isAnalyzing={isAnalyzing}
+              analysisElapsedTime={analysisElapsedTime}
+              showAnalysisPrompt={showAnalysisPrompt}
+              accumulatedTweetsCount={accumulatedTweets.length}
+              onAnalyze={handleAnalyze}
+              containerClassName="max-h-[50vh] sm:max-h-[45vh] md:max-h-[40vh]"
+              retryState={retryState}
+            />
           </div>
         </div>
 
-        {/* Main Center Chat Interface Container - Desktop Only */}
+        {/* Main Center Chat Interface Container */}
         <div className="hidden lg:fixed lg:inset-0 lg:flex lg:items-center lg:justify-center lg:pointer-events-none lg:pt-20 lg:pb-6">
           <div className="w-[40vw] lg:w-[48vw] xl:w-[54vw] min-w-[380px] max-w-[1200px] h-[calc(100vh-104px)] mx-auto backdrop-blur-md bg-black/40 border border-red-500/10 rounded-lg shadow-2xl hover-glow pointer-events-auto z-1 ancient-border rune-pattern overflow-hidden transition-all duration-300 md:mx-6 lg:mx-8">
             <div className="flex flex-col h-full min-h-0">
@@ -3553,108 +3091,13 @@ export default function ChatBox({ tweets: initialTweets, profile, onClose, onTwe
           </div>
         </div>
 
-        {/* Consent Modal */}
-        {showConsent && (
-          <div 
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-            onClick={() => {
-              setShowConsent(false)
-              if (loading) handleCancelScraping()
-            }}
-          >
-            <div 
-              className="bg-black/40 backdrop-blur-md px-6 py-4 rounded-lg shadow-2xl w-full max-w-md border border-red-500/20 hover-glow float max-h-[90vh] overflow-y-auto"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-2 mb-4 border-b border-red-500/20 pb-4 glow-border">
-                <div className="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                <h3 className="text-lg font-bold text-red-500/90 tracking-wider glow-text">
-                  SYSTEM AUTHORIZATION REQUIRED
-                </h3>
-              </div>
-              <div className="space-y-4 text-red-400/90">
-                <p className="uppercase tracking-wider glow-text">
-                  This operation will collect the following data:
-                </p>
-                <ul className="list-disc pl-5 space-y-2 text-red-300/80">
-                  <li className="hover-text-glow">Profile metrics and identifiers</li>
-                  <li className="hover-text-glow">Recent transmission logs</li>
-                  <li className="hover-text-glow">Associated media content</li>
-                </ul>
-                <p className="text-red-300/80 hover-text-glow">
-                  Estimated operation time: 1-2 minutes. Maintain connection stability during the process.
-                </p>
-              </div>
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  onClick={() => setShowConsent(false)}
-                  className="px-4 py-2 border border-red-500/20 text-red-500/60 rounded hover:bg-red-500/5 hover:text-red-500/80 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs hover-glow"
-                >
-                  Abort
-                </button>
-                <button
-                  onClick={startScraping}
-                  className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow"
-                >
-                  Authorize
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Completion Modal */}
-        {showComplete && (
-          <div 
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
-            onClick={handleCloseModal}
-          >
-            <div 
-              className="bg-black/40 backdrop-blur-md p-8 rounded-lg shadow-2xl w-[500px] border border-red-500/20 hover-glow float"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between mb-4 border-b border-red-500/20 pb-4 glow-border">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-red-500 shadow-lg shadow-red-500/20 glow-box"></div>
-                  <h3 className="text-lg font-bold tracking-wider text-red-500/90 glow-text">OPERATION COMPLETE</h3>
-                </div>
-                <button
-                  onClick={handleCloseModal}
-                  className="text-red-500/70 hover:text-red-500/90 transition-colors hover-text-glow"
-                >
-                  <span className="sr-only">Close</span>
-                  ×
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="text-red-400/90">
-                  <p className="uppercase tracking-wider mb-2 glow-text">Data Collection Summary:</p>
-                  <ul className="list-disc pl-5 space-y-1 text-red-300/80">
-                    <li className="hover-text-glow">{accumulatedTweets.length} posts collected</li>
-                  </ul>
-                </div>
-              
-                <div className="flex justify-end">
-                  <button
-                    onClick={handleCloseModal}
-                    className="px-4 py-2 bg-red-500/5 text-red-500/90 border border-red-500/20 rounded hover:bg-red-500/10 hover:border-red-500/30 transition-all duration-300 uppercase tracking-wider text-xs backdrop-blur-sm shadow-lg shadow-red-500/5 hover-glow"
-                  >
-                    Close Terminal
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Psychoanalysis Modal */}
+        <PsychoanalysisModal 
+          isOpen={showPsychoanalysis} 
+          onClose={() => setShowPsychoanalysis(false)}
+          analysis={analysis}
+        />
       </div>
-
-      {/* Add PsychoanalysisModal */}
-      <PsychoanalysisModal 
-        isOpen={showPsychoanalysis} 
-        onClose={() => setShowPsychoanalysis(false)}
-        analysis={analysis}
-      />
     </>
   )
 }

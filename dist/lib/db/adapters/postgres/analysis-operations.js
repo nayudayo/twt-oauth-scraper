@@ -107,7 +107,8 @@ class PostgresAnalysisOperations {
             return {
                 status,
                 progress: (processed_chunks / total_chunks) * 100,
-                error
+                error,
+                processed_chunks
             };
         }
         catch (error) {
